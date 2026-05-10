@@ -25,6 +25,28 @@ namespace MTGProxyBuilder.UI.Dialogs
             InitializeComponent();
             _library = library;
             _mpcFill = mpcFill;
+            PopulateSourceFilter();
+            RefreshGrid();
+        }
+
+        private void PopulateSourceFilter()
+        {
+            var sources = _library.Entries
+                .Select(e => e.Source)
+                .Where(s => !string.IsNullOrEmpty(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(s => s)
+                .ToList();
+
+            SourceFilter.Items.Clear();
+            SourceFilter.Items.Add("All Contributors");
+            foreach (var s in sources)
+                SourceFilter.Items.Add(s);
+            SourceFilter.SelectedIndex = 0;
+        }
+
+        private void OnFilterChanged(object sender, object e)
+        {
             RefreshGrid();
         }
 
@@ -33,13 +55,25 @@ namespace MTGProxyBuilder.UI.Dialogs
             LibraryPanel.Children.Clear();
             _selectedEntryId = null;
             RemoveBtn.IsEnabled = false;
+            DefaultBtn.IsEnabled = false;
 
-            var entries = _library.Entries.Where(e => File.Exists(e.FilePath)).ToList();
+            string nameFilter = SearchBox?.Text?.Trim() ?? "";
+            string sourceFilter = SourceFilter?.SelectedItem as string ?? "All Contributors";
+
+            var entries = _library.Entries.Where(e => File.Exists(e.FilePath)).AsEnumerable();
+
+            if (!string.IsNullOrEmpty(nameFilter))
+                entries = entries.Where(e => e.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+
+            if (sourceFilter != "All Contributors")
+                entries = entries.Where(e => e.Source.Equals(sourceFilter, StringComparison.OrdinalIgnoreCase));
+
+            var filteredEntries = entries.ToList();
 
             // Build all tiles immediately with placeholder backgrounds
             var imageTargets = new List<(Image img, string path)>();
 
-            foreach (var entry in entries)
+            foreach (var entry in filteredEntries)
             {
                 var border = new Border
                 {
@@ -74,9 +108,22 @@ namespace MTGProxyBuilder.UI.Dialogs
                     FontSize = 9, TextTrimming = TextTrimming.CharacterEllipsis,
                     FontWeight = isDefault ? FontWeights.Bold : FontWeights.Normal,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    Margin = new Thickness(3, 4, 3, 2)
+                    Margin = new Thickness(3, 4, 3, 0)
                 };
                 stack.Children.Add(lbl);
+
+                if (!string.IsNullOrEmpty(entry.Source) && entry.Source != "Local")
+                {
+                    var srcLbl = new TextBlock
+                    {
+                        Text = entry.Source,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                        FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        Margin = new Thickness(3, 0, 3, 2)
+                    };
+                    stack.Children.Add(srcLbl);
+                }
 
                 if (isDefault)
                     border.BorderBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50));
@@ -91,7 +138,9 @@ namespace MTGProxyBuilder.UI.Dialogs
 
             var defaultEntry = _library.DefaultEntryId != null ? _library.GetById(_library.DefaultEntryId) : null;
             string defaultInfo = defaultEntry != null ? $" | Default: {defaultEntry.Name}" : "";
-            CountLabel.Text = $"{entries.Count} item(s) in library{defaultInfo}";
+            int totalCount = _library.Entries.Count(e => File.Exists(e.FilePath));
+            string filterInfo = filteredEntries.Count < totalCount ? $" (showing {filteredEntries.Count} of {totalCount})" : "";
+            CountLabel.Text = $"{totalCount} item(s) in library{filterInfo}{defaultInfo}";
             StatusLabel.Text = "Loading thumbnails...";
 
             // Load thumbnails on background thread in batches
@@ -227,7 +276,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                     if (cached == null) { skipped++; continue; }
 
                     string displayName = $"{cb.Name} [{cb.Source}]";
-                    var entry = _library.AddFromFile(cached, displayName);
+                    var entry = _library.AddFromFile(cached, displayName, cb.Source);
                     if (entry != null) added++;
                     else skipped++;
 
@@ -235,6 +284,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                 }
 
                 StatusLabel.Text = $"Added {added} card back(s) to library ({skipped} skipped)";
+                PopulateSourceFilter();
                 RefreshGrid();
             }
             catch (Exception ex)

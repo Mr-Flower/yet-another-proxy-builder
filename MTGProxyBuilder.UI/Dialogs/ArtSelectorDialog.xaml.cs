@@ -337,7 +337,7 @@ namespace MTGProxyBuilder.UI.Dialogs
 
                     // Add to library (service handles deduplication by name)
                     string displayName = $"{cb.Name} [{cb.Source}]";
-                    var entry = _backLibrary.AddFromFile(cached, displayName);
+                    var entry = _backLibrary.AddFromFile(cached, displayName, cb.Source);
                     if (entry != null) added++;
                     else skipped++;
 

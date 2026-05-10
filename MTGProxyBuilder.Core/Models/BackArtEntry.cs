@@ -8,6 +8,7 @@ namespace MTGProxyBuilder.Core.Models
         private string _id = Guid.NewGuid().ToString();
         private string _name = string.Empty;
         private string _filePath = string.Empty;
+        private string _source = string.Empty;
         private DateTime _addedDate = DateTime.Now;
 
         public string Id
@@ -26,6 +27,13 @@ namespace MTGProxyBuilder.Core.Models
         {
             get => _filePath;
             set { _filePath = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>The contributor/source this art came from (e.g. MPCFill source name, or "Local" for user files).</summary>
+        public string Source
+        {
+            get => _source;
+            set { _source = value; OnPropertyChanged(); }
         }
 
         public DateTime AddedDate

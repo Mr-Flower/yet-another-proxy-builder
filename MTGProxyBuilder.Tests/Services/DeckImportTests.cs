@@ -94,4 +94,45 @@ public class DeckImportTests
     {
         Assert.Null(ArchidektService.ParseDeckId(url));
     }
+
+    // --- Case sensitivity ---
+
+    [Fact]
+    public void DetectSource_CaseInsensitive()
+    {
+        Assert.Equal(DeckSource.Moxfield, DeckImportService.DetectSource("https://MOXFIELD.COM/decks/abc"));
+        Assert.Equal(DeckSource.Archidekt, DeckImportService.DetectSource("https://ARCHIDEKT.COM/decks/123"));
+    }
+
+    // --- URL with extra path segments ---
+
+    [Fact]
+    public void MoxfieldParseDeckId_WithQueryString()
+    {
+        var id = MoxfieldService.ParseDeckId("https://moxfield.com/decks/abc123?tab=mainboard");
+        Assert.Equal("abc123", id);
+    }
+
+    [Fact]
+    public void ArchidektParseDeckId_WithExtraSegments()
+    {
+        var id = ArchidektService.ParseDeckId("https://archidekt.com/decks/12345/my-deck/edit");
+        Assert.Equal("12345", id);
+    }
+
+    // --- Whitespace handling ---
+
+    [Fact]
+    public void MoxfieldParseDeckId_TrimsWhitespace()
+    {
+        var id = MoxfieldService.ParseDeckId("  https://moxfield.com/decks/abc123  ");
+        Assert.Equal("abc123", id);
+    }
+
+    [Fact]
+    public void ArchidektParseDeckId_TrimsWhitespace()
+    {
+        var id = ArchidektService.ParseDeckId("  12345  ");
+        Assert.Equal("12345", id);
+    }
 }

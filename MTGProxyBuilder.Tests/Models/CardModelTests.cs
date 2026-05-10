@@ -73,4 +73,67 @@ public class CardModelTests
 
         Assert.InRange(card.DateAdded, before, after);
     }
+
+    [Fact]
+    public void OriginalBackArtworkPath_InitiallyNull()
+    {
+        var card = new CardModel();
+        Assert.Null(card.OriginalBackArtworkPath);
+    }
+
+    [Fact]
+    public void OriginalBackArtworkPath_CanBeSet()
+    {
+        var card = new CardModel { OriginalBackArtworkPath = "/original/back.jpg" };
+        Assert.Equal("/original/back.jpg", card.OriginalBackArtworkPath);
+    }
+
+    [Fact]
+    public void OriginalBackArtworkPath_IndependentOfBackArtworkPath()
+    {
+        var card = new CardModel
+        {
+            BackArtworkPath = "/current/back.jpg",
+            OriginalBackArtworkPath = "/original/back.jpg"
+        };
+        card.BackArtworkPath = "/new/back.jpg";
+        Assert.Equal("/new/back.jpg", card.BackArtworkPath);
+        Assert.Equal("/original/back.jpg", card.OriginalBackArtworkPath);
+    }
+
+    [Fact]
+    public void Source_DefaultsToEmpty()
+    {
+        var card = new CardModel();
+        Assert.Equal(string.Empty, card.SetCode);
+        Assert.Equal(string.Empty, card.SetName);
+        Assert.Equal(string.Empty, card.Artist);
+        Assert.Equal(string.Empty, card.Keywords);
+        Assert.Equal(string.Empty, card.Power);
+        Assert.Equal(string.Empty, card.Toughness);
+    }
+
+    [Fact]
+    public void AllMetadata_PropertyChangedFires()
+    {
+        var card = new CardModel();
+        var changed = new List<string>();
+        card.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+
+        card.ManaCost = "{2}{U}";
+        card.CMC = 3;
+        card.TypeLine = "Instant";
+        card.Rarity = "rare";
+        card.Colors = "U";
+        card.SetCode = "m21";
+        card.Artist = "John Avon";
+
+        Assert.Contains("ManaCost", changed);
+        Assert.Contains("CMC", changed);
+        Assert.Contains("TypeLine", changed);
+        Assert.Contains("Rarity", changed);
+        Assert.Contains("Colors", changed);
+        Assert.Contains("SetCode", changed);
+        Assert.Contains("Artist", changed);
+    }
 }

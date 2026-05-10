@@ -164,4 +164,56 @@ public class BackArtLibraryServiceTests : IDisposable
         svc.Remove(entry.Id);
         Assert.Null(svc.DefaultEntryId);
     }
+
+    // --- Source / Contributor Tests ---
+
+    [Fact]
+    public void AddFromFile_NoContributor_DefaultsToLocal()
+    {
+        var svc = new BackArtLibraryService();
+        string uniqueName = $"Src1_{Guid.NewGuid():N}";
+        var entry = svc.AddFromFile(_testImagePath, uniqueName);
+        Assert.NotNull(entry);
+        Assert.Equal("Local", entry!.Source);
+    }
+
+    [Fact]
+    public void AddFromFile_WithContributor_SetsSource()
+    {
+        var svc = new BackArtLibraryService();
+        string uniqueName = $"Src2_{Guid.NewGuid():N}";
+        var entry = svc.AddFromFile(_testImagePath, uniqueName, "Chilli_Axe");
+        Assert.NotNull(entry);
+        Assert.Equal("Chilli_Axe", entry!.Source);
+    }
+
+    [Fact]
+    public void AddFromFile_DifferentContributors_PreservedOnEach()
+    {
+        var svc = new BackArtLibraryService();
+        var entry1 = svc.AddFromFile(_testImagePath, $"C1_{Guid.NewGuid():N}", "MrTeferi");
+        var entry2 = svc.AddFromFile(_testImagePath, $"C2_{Guid.NewGuid():N}", "JohnPrime");
+
+        Assert.Equal("MrTeferi", entry1!.Source);
+        Assert.Equal("JohnPrime", entry2!.Source);
+
+        // Clean up
+        svc.Remove(entry1.Id);
+        svc.Remove(entry2.Id);
+    }
+
+    [Fact]
+    public void GetById_ReturnsEntryWithSource()
+    {
+        var svc = new BackArtLibraryService();
+        string uniqueName = $"Src3_{Guid.NewGuid():N}";
+        var entry = svc.AddFromFile(_testImagePath, uniqueName, "TestContributor");
+        Assert.NotNull(entry);
+
+        var found = svc.GetById(entry!.Id);
+        Assert.NotNull(found);
+        Assert.Equal("TestContributor", found!.Source);
+
+        svc.Remove(entry.Id);
+    }
 }
