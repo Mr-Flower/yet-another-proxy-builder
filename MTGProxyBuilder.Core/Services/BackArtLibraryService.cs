@@ -52,7 +52,7 @@ namespace MTGProxyBuilder.Core.Services
 
         public bool IsDefault(string entryId) => _defaultEntryId == entryId;
 
-        public BackArtEntry? AddFromFile(string sourceFilePath, string? displayName = null)
+        public BackArtEntry? AddFromFile(string sourceFilePath, string? displayName = null, string? contributor = null)
         {
             if (!File.Exists(sourceFilePath))
                 return null;
@@ -76,6 +76,7 @@ namespace MTGProxyBuilder.Core.Services
                 Id = id,
                 Name = name,
                 FilePath = destPath,
+                Source = contributor ?? "Local",
                 AddedDate = DateTime.Now
             };
 
