@@ -36,6 +36,12 @@ public partial class MainWindow : Window
                 vm.OpenArtSelectorForCard(card, isShowingBack);
         };
 
+        GridCanvas.CreateTokenRequested += (sourceCard) =>
+        {
+            if (DataContext is MainViewModel vm)
+                vm.CreateTokenFromCard(sourceCard);
+        };
+
         // Ctrl+Z / Ctrl+Y for undo/redo
         KeyDown += (s, e) =>
         {
