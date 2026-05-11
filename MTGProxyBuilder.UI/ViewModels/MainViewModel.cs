@@ -799,6 +799,55 @@ namespace MTGProxyBuilder.UI.ViewModels
             ShowArtSelector(card, isShowingBack ? Dialogs.ArtSelectorMode.Back : Dialogs.ArtSelectorMode.Front);
         }
 
+        public void CreateTokenFromCard(CardModel sourceCard)
+        {
+            PushUndo();
+
+            var token = new CardModel
+            {
+                Name = sourceCard.Name + " (Token)",
+                ArtworkPath = sourceCard.ArtworkPath, // Use the front face
+                Quantity = 1,
+                ManaCost = sourceCard.ManaCost,
+                TypeLine = sourceCard.TypeLine,
+                SetCode = sourceCard.SetCode,
+                SetName = sourceCard.SetName,
+                DateAdded = DateTime.Now
+            };
+
+            // Determine back art: find the most commonly used back art across the project
+            string? backArt = GetMostCommonBackArt();
+            if (backArt != null)
+            {
+                token.BackArtworkPath = backArt;
+                token.IncludeBack = true;
+            }
+            else
+            {
+                // Fall back to the library default
+                ApplyDefaultBackArt(token);
+            }
+
+            Cards.Add(token);
+            ApplyFilterAndSort();
+            StatusText = $"Created token card for {sourceCard.Name}";
+        }
+
+        /// <summary>
+        /// Finds the most frequently used back art path across all cards in the project.
+        /// Returns null if no cards have back art assigned.
+        /// </summary>
+        private string? GetMostCommonBackArt()
+        {
+            var backPaths = Cards
+                .Where(c => !string.IsNullOrEmpty(c.BackArtworkPath))
+                .GroupBy(c => c.BackArtworkPath!, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(g => g.Sum(c => c.Quantity))
+                .FirstOrDefault();
+
+            return backPaths?.Key;
+        }
+
         private void ShowArtSelector(CardModel card, Dialogs.ArtSelectorMode mode)
         {
             var dialog = new Dialogs.ArtSelectorDialog(

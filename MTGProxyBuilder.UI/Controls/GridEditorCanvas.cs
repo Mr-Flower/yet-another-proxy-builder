@@ -108,6 +108,7 @@ namespace MTGProxyBuilder.UI.Controls
 
         /// <summary>Fired when the user double-clicks a card on the canvas.</summary>
         public event Action<CardModel, bool>? CardDoubleClicked; // (card, isShowingBack)
+        public event Action<CardModel>? CreateTokenRequested; // (sourceCard)
 
         public PageLayout? PageSettings
         {
@@ -464,6 +465,19 @@ namespace MTGProxyBuilder.UI.Controls
                 var flipItem = new MenuItem { Header = hasSelection ? $"Flip Selected{target}" : "Flip Card" };
                 flipItem.Click += (_, _) => FlipCards(cardIndices);
                 menu.Items.Add(flipItem);
+
+                // "Create Token" — for double-faced cards (cards with back art)
+                if (!hasSelection && hasHover)
+                {
+                    var hoverCard = CardsSource![hoverCardIdx];
+                    if (!string.IsNullOrEmpty(hoverCard.BackArtworkPath) || !string.IsNullOrEmpty(hoverCard.OriginalBackArtworkPath))
+                    {
+                        menu.Items.Add(new Separator());
+                        var tokenItem = new MenuItem { Header = "Create Token Card" };
+                        tokenItem.Click += (_, _) => CreateTokenRequested?.Invoke(hoverCard);
+                        menu.Items.Add(tokenItem);
+                    }
+                }
             }
 
             var flipAllItem = new MenuItem { Header = _allFlipped ? "Unflip All Cards" : "Flip All Cards" };
