@@ -1,0 +1,53 @@
+<Window x:Class="MTGProxyBuilder.UI.Dialogs.ImagePreviewDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Image Preview" Height="700" Width="550"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize" MinWidth="300" MinHeight="300"
+        Background="#111" ShowInTaskbar="False">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0" x:Name="ScrollArea"
+                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                      Background="#111" PreviewMouseWheel="OnMouseWheel">
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center" Padding="10">
+                <Image x:Name="PreviewImage" Stretch="Uniform" RenderTransformOrigin="0.5,0.5">
+                    <Image.LayoutTransform>
+                        <ScaleTransform x:Name="ImageScale" ScaleX="1" ScaleY="1"/>
+                    </Image.LayoutTransform>
+                </Image>
+            </Border>
+        </ScrollViewer>
+
+        <Border Grid.Row="1" Background="#1E1E1E" Padding="8,4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="InfoLabel" Foreground="#AAA" FontSize="11" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="-" Padding="8,2" FontSize="14" FontWeight="Bold"
+                            Background="Transparent" Foreground="#CCC" BorderThickness="0" Cursor="Hand"
+                            Click="ZoomOut"/>
+                    <TextBlock x:Name="ZoomLabel" Text="100%" Foreground="#CCC" FontSize="11"
+                               VerticalAlignment="Center" Margin="8,0" MinWidth="40" TextAlignment="Center"/>
+                    <Button Content="+" Padding="8,2" FontSize="14" FontWeight="Bold"
+                            Background="Transparent" Foreground="#CCC" BorderThickness="0" Cursor="Hand"
+                            Click="ZoomIn"/>
+                    <Border Width="1" Background="#444" Margin="6,2"/>
+                    <Button Content="Fit" Padding="6,2" FontSize="11"
+                            Background="Transparent" Foreground="#AAA" BorderThickness="0" Cursor="Hand"
+                            Click="ZoomFit"/>
+                    <Button Content="1:1" Padding="6,2" FontSize="11"
+                            Background="Transparent" Foreground="#AAA" BorderThickness="0" Cursor="Hand"
+                            Click="ZoomReset"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

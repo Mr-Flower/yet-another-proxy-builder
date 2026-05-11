@@ -129,6 +129,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         // Moxfield import
         private string _importDeckUrl = string.Empty;
+        private bool _ignoreDuplicates = true;
 
         public MainViewModel()
         {
@@ -405,6 +406,12 @@ namespace MTGProxyBuilder.UI.ViewModels
         {
             get => _importDeckUrl;
             set => SetProperty(ref _importDeckUrl, value);
+        }
+
+        public bool IgnoreDuplicates
+        {
+            get => _ignoreDuplicates;
+            set => SetProperty(ref _ignoreDuplicates, value);
         }
 
         // Art source toggle
@@ -1339,10 +1346,54 @@ namespace MTGProxyBuilder.UI.ViewModels
                 // Collect cards into a batch to avoid per-card canvas redraws (prevents flashing)
                 var importedCards = new List<CardModel>();
                 int failed = 0;
+                int skippedDupes = 0;
+
+                // Build lookup of existing cards for duplicate detection
+                var existingByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                if (IgnoreDuplicates)
+                {
+                    foreach (var c in Cards)
+                    {
+                        if (existingByName.ContainsKey(c.Name))
+                            existingByName[c.Name] += c.Quantity;
+                        else
+                            existingByName[c.Name] = c.Quantity;
+                    }
+                }
 
                 for (int i = 0; i < deck.Entries.Count; i++)
                 {
                     var entry = deck.Entries[i];
+
+                    // Duplicate check
+                    if (IgnoreDuplicates && existingByName.ContainsKey(entry.CardName))
+                    {
+                        bool isBasicLand = IsBasicLand(entry.CardName);
+                        if (isBasicLand)
+                        {
+                            // Only add the difference if deck needs more than we have
+                            int have = existingByName[entry.CardName];
+                            int need = entry.Quantity;
+                            if (need <= have)
+                            {
+                                skippedDupes++;
+                                continue;
+                            }
+                            // Reduce quantity to only add the extras
+                            entry = new DeckImportEntry
+                            {
+                                CardName = entry.CardName,
+                                Quantity = need - have,
+                                ScryfallId = entry.ScryfallId,
+                                Board = entry.Board
+                            };
+                        }
+                        else
+                        {
+                            skippedDupes++;
+                            continue;
+                        }
+                    }
 
                     BusyMessage = $"Looking up card {i + 1}/{uniqueCards}: {entry.CardName}" +
                         (entry.Quantity > 1 ? $" (x{entry.Quantity})" : "") + "...";
@@ -1374,6 +1425,15 @@ namespace MTGProxyBuilder.UI.ViewModels
                     ApplyDefaultBackArt(card);
                     importedCards.Add(card);
 
+                    // Track what we're adding for subsequent duplicate checks within same import
+                    if (IgnoreDuplicates)
+                    {
+                        if (existingByName.ContainsKey(entry.CardName))
+                            existingByName[entry.CardName] += entry.Quantity;
+                        else
+                            existingByName[entry.CardName] = entry.Quantity;
+                    }
+
                     await Task.Delay(100);
                 }
 
@@ -1392,6 +1452,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
                 int totalAdded = importedCards.Sum(c => c.Quantity);
                 string summary = $"Imported {importedCards.Count} unique card(s) ({totalAdded} total) from \"{deck.Name}\" ({sourceName})";
+                if (skippedDupes > 0) summary += $"\n{skippedDupes} duplicate(s) skipped";
                 if (failed > 0) summary += $"\n{failed} card(s) could not be found on Scryfall";
                 StatusText = summary;
 
@@ -1538,6 +1599,15 @@ namespace MTGProxyBuilder.UI.ViewModels
         /// Applies the default back art from the library to a card,
         /// but only if the card doesn't already have back art assigned.
         /// </summary>
+        private static readonly HashSet<string> BasicLandNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Plains", "Island", "Swamp", "Mountain", "Forest",
+            "Snow-Covered Plains", "Snow-Covered Island", "Snow-Covered Swamp",
+            "Snow-Covered Mountain", "Snow-Covered Forest", "Wastes"
+        };
+
+        private static bool IsBasicLand(string cardName) => BasicLandNames.Contains(cardName);
+
         private void ApplyDefaultBackArt(CardModel card)
         {
             if (!string.IsNullOrEmpty(card.BackArtworkPath)) return;

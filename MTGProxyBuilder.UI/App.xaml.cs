@@ -1,13 +1,19 @@
-﻿using System.Configuration;
-using System.Data;
 using System.Windows;
+using MTGProxyBuilder.Core.Services;
 
 namespace MTGProxyBuilder.UI;
 
-/// <summary>
-/// Interaction logic for App.xaml
-/// </summary>
 public partial class App : Application
 {
-}
+    protected override void OnExit(ExitEventArgs e)
+    {
+        try
+        {
+            var cache = new CacheManager();
+            cache.ClearAllCaches();
+        }
+        catch { }
 
+        base.OnExit(e);
+    }
+}

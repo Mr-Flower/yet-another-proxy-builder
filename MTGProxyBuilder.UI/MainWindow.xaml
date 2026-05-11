@@ -503,6 +503,9 @@
                                     <Button Grid.Column="1" Style="{StaticResource AccentBtn}"
                                             Command="{Binding ImportDeckCommand}" Content="Import" Margin="4,0,0,0" Padding="10,5"/>
                                 </Grid>
+                                <CheckBox IsChecked="{Binding IgnoreDuplicates}" Content="Skip cards already in project (merge basics)"
+                                          Foreground="#999" FontSize="10" Margin="0,2,0,0"
+                                          ToolTip="Cards already in the project are skipped. Basic lands are only added if the deck needs more copies than you already have."/>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>

@@ -131,7 +131,18 @@ namespace MTGProxyBuilder.UI.Dialogs
                 border.Child = stack;
 
                 string entryId = entry.Id;
+                string capturedName = entry.Name;
+                string capturedPath = entry.FilePath;
                 border.MouseLeftButtonUp += (_, _) => SelectEntry(entryId, border);
+                border.MouseLeftButtonDown += (_, ev) =>
+                {
+                    if (ev.ClickCount == 2)
+                    {
+                        var preview = new ImagePreviewDialog(capturedPath, capturedName);
+                        preview.Owner = this;
+                        preview.ShowDialog();
+                    }
+                };
 
                 LibraryPanel.Children.Add(border);
             }
@@ -187,16 +198,107 @@ namespace MTGProxyBuilder.UI.Dialogs
             StatusLabel.Text = "";
         }
 
+        private double _previewZoom = 1.0;
+
         private void SelectEntry(string entryId, Border clickedBorder)
         {
+            // Update selection highlight (preserve default green borders)
             foreach (var child in LibraryPanel.Children)
-                if (child is Border b) b.BorderBrush = Brushes.Transparent;
+            {
+                if (child is Border b && b.Tag is string id)
+                {
+                    b.BorderBrush = _library.IsDefault(id)
+                        ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
+                        : Brushes.Transparent;
+                }
+            }
 
             clickedBorder.BorderBrush = Brushes.DodgerBlue;
             _selectedEntryId = entryId;
             RemoveBtn.IsEnabled = true;
             DefaultBtn.IsEnabled = true;
+
+            // Load preview
+            var entry = _library.GetById(entryId);
+            if (entry != null && File.Exists(entry.FilePath))
+                LoadPreview(entry);
         }
+
+        private void LoadPreview(BackArtEntry entry)
+        {
+            try
+            {
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.UriSource = new Uri(entry.FilePath, UriKind.Absolute);
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.EndInit();
+                bmp.Freeze();
+                PreviewImage.Source = bmp;
+
+                PreviewName.Text = entry.Name;
+
+                // Calculate DPI: standard MTG card is 63x88mm = 2.48x3.46 inches
+                // Generic: assume the image is meant for a 63x88mm card
+                double widthInches = 63.0 / 25.4;
+                double heightInches = 88.0 / 25.4;
+                int dpiW = (int)(bmp.PixelWidth / widthInches);
+                int dpiH = (int)(bmp.PixelHeight / heightInches);
+                int dpi = Math.Min(dpiW, dpiH);
+
+                var fi = new FileInfo(entry.FilePath);
+                string size = fi.Length < 1024 * 1024
+                    ? $"{fi.Length / 1024.0:F0} KB"
+                    : $"{fi.Length / (1024.0 * 1024):F1} MB";
+
+                string sourceInfo = !string.IsNullOrEmpty(entry.Source) && entry.Source != "Local"
+                    ? $"Source: {entry.Source}\n" : "";
+
+                PreviewInfo.Text = $"{bmp.PixelWidth} x {bmp.PixelHeight} px  |  ~{dpi} DPI  |  {size}\n{sourceInfo}{Path.GetFileName(entry.FilePath)}";
+
+                // Auto-fit
+                SetPreviewZoomFit(bmp);
+            }
+            catch
+            {
+                PreviewImage.Source = null;
+                PreviewName.Text = entry.Name;
+                PreviewInfo.Text = "Failed to load image";
+            }
+        }
+
+        private void SetPreviewZoomFit(BitmapImage? bmp = null)
+        {
+            bmp ??= PreviewImage.Source as BitmapImage;
+            if (bmp == null || bmp.PixelWidth == 0) return;
+
+            double fitW = (PreviewScroll.ViewportWidth - 20) / bmp.PixelWidth;
+            double fitH = (PreviewScroll.ViewportHeight - 20) / bmp.PixelHeight;
+            double fit = Math.Min(fitW, fitH);
+            if (fit <= 0) fit = 0.5;
+            SetPreviewZoom(fit);
+        }
+
+        private void SetPreviewZoom(double zoom)
+        {
+            _previewZoom = Math.Clamp(zoom, 0.1, 5.0);
+            PreviewScale.ScaleX = _previewZoom;
+            PreviewScale.ScaleY = _previewZoom;
+            PreviewZoomLabel.Text = $"{(int)(_previewZoom * 100)}%";
+        }
+
+        private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            double delta = e.Delta > 0 ? 0.15 : -0.15;
+            if (_previewZoom < 0.5) delta *= 0.5;
+            SetPreviewZoom(_previewZoom + delta);
+            e.Handled = true;
+        }
+
+        private void PreviewZoomIn(object sender, RoutedEventArgs e) => SetPreviewZoom(_previewZoom + 0.15);
+        private void PreviewZoomOut(object sender, RoutedEventArgs e) => SetPreviewZoom(_previewZoom - 0.15);
+        private void PreviewZoomReset(object sender, RoutedEventArgs e) => SetPreviewZoom(1.0);
+        private void PreviewZoomFit(object sender, RoutedEventArgs e) => SetPreviewZoomFit();
 
         private void OnAddFromFile(object sender, RoutedEventArgs e)
         {

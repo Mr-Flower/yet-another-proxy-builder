@@ -257,6 +257,20 @@ namespace MTGProxyBuilder.UI.Dialogs
                     {
                         if (ev.ClickCount == 2) { SelectOption(capturedName, path, "From library", border); OkClick(null!, null!); }
                     };
+                    border.MouseRightButtonUp += (_, ev) =>
+                    {
+                        var menu = new System.Windows.Controls.ContextMenu();
+                        var previewItem = new System.Windows.Controls.MenuItem { Header = "Preview Full Size" };
+                        previewItem.Click += (_, _) =>
+                        {
+                            var preview = new ImagePreviewDialog(path, capturedName);
+                            preview.Owner = this;
+                            preview.ShowDialog();
+                        };
+                        menu.Items.Add(previewItem);
+                        menu.IsOpen = true;
+                        ev.Handled = true;
+                    };
 
                     OptionsPanel.Children.Add(border);
                 }
@@ -446,6 +460,20 @@ namespace MTGProxyBuilder.UI.Dialogs
                     OkClick(null!, null!);
                 }
             };
+            border.MouseRightButtonUp += (_, e) =>
+            {
+                var menu = new System.Windows.Controls.ContextMenu();
+                var previewItem = new System.Windows.Controls.MenuItem { Header = "Preview Full Size" };
+                previewItem.Click += (_, _) =>
+                {
+                    var preview = new ImagePreviewDialog(path, capturedLabel);
+                    preview.Owner = this;
+                    preview.ShowDialog();
+                };
+                menu.Items.Add(previewItem);
+                menu.IsOpen = true;
+                e.Handled = true;
+            };
 
             OptionsPanel.Children.Add(border);
         }
@@ -487,6 +515,8 @@ namespace MTGProxyBuilder.UI.Dialogs
         //  SELECTION
         // ================================================================
 
+        private double _previewZoom = 1.0;
+
         private void SelectOption(string label, string path, string detail, Border selectedBorder)
         {
             foreach (var child in OptionsPanel.Children)
@@ -495,7 +525,6 @@ namespace MTGProxyBuilder.UI.Dialogs
 
             ResultPath = path;
             SelectedLabel.Text = label;
-            SelectedDetailLabel.Text = detail;
             OkBtn.IsEnabled = true;
 
             try
@@ -504,13 +533,64 @@ namespace MTGProxyBuilder.UI.Dialogs
                 bmp.BeginInit();
                 bmp.UriSource = new Uri(path, UriKind.Absolute);
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.DecodePixelWidth = 100;
                 bmp.EndInit();
                 bmp.Freeze();
-                PreviewImage.Source = bmp;
+                FullPreviewImage.Source = bmp;
+
+                // Calculate DPI assuming 63x88mm card
+                double widthInches = 63.0 / 25.4;
+                double heightInches = 88.0 / 25.4;
+                int dpiW = (int)(bmp.PixelWidth / widthInches);
+                int dpiH = (int)(bmp.PixelHeight / heightInches);
+                int dpi = Math.Min(dpiW, dpiH);
+
+                var fi = new FileInfo(path);
+                string size = fi.Length < 1024 * 1024
+                    ? $"{fi.Length / 1024.0:F0} KB"
+                    : $"{fi.Length / (1024.0 * 1024):F1} MB";
+
+                SelectedDetailLabel.Text = $"{bmp.PixelWidth} x {bmp.PixelHeight} px  |  ~{dpi} DPI  |  {size}\n{detail}";
+
+                SetPreviewZoomFit(bmp);
             }
-            catch { PreviewImage.Source = null; }
+            catch
+            {
+                FullPreviewImage.Source = null;
+                SelectedDetailLabel.Text = detail;
+            }
         }
+
+        private void SetPreviewZoomFit(BitmapImage? bmp = null)
+        {
+            bmp ??= FullPreviewImage.Source as BitmapImage;
+            if (bmp == null || bmp.PixelWidth == 0) return;
+            double fitW = (PreviewScroll.ViewportWidth - 20) / bmp.PixelWidth;
+            double fitH = (PreviewScroll.ViewportHeight - 20) / bmp.PixelHeight;
+            double fit = Math.Min(fitW, fitH);
+            if (fit <= 0) fit = 0.5;
+            SetPreviewZoom(fit);
+        }
+
+        private void SetPreviewZoom(double zoom)
+        {
+            _previewZoom = Math.Clamp(zoom, 0.1, 5.0);
+            PreviewScale.ScaleX = _previewZoom;
+            PreviewScale.ScaleY = _previewZoom;
+            PreviewZoomLabel.Text = $"{(int)(_previewZoom * 100)}%";
+        }
+
+        private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            double delta = e.Delta > 0 ? 0.15 : -0.15;
+            if (_previewZoom < 0.5) delta *= 0.5;
+            SetPreviewZoom(_previewZoom + delta);
+            e.Handled = true;
+        }
+
+        private void PreviewZoomIn(object sender, RoutedEventArgs e) => SetPreviewZoom(_previewZoom + 0.15);
+        private void PreviewZoomOut(object sender, RoutedEventArgs e) => SetPreviewZoom(_previewZoom - 0.15);
+        private void PreviewZoomReset(object sender, RoutedEventArgs e) => SetPreviewZoom(1.0);
+        private void PreviewZoomFit(object sender, RoutedEventArgs e) => SetPreviewZoomFit();
 
         // ================================================================
         //  ACTIONS
@@ -540,7 +620,6 @@ namespace MTGProxyBuilder.UI.Dialogs
 
             ResultPath = dialog.FileName;
             SelectedLabel.Text = Path.GetFileName(dialog.FileName);
-            SelectedDetailLabel.Text = dialog.FileName;
             OkBtn.IsEnabled = true;
 
             try
@@ -549,12 +628,24 @@ namespace MTGProxyBuilder.UI.Dialogs
                 bmp.BeginInit();
                 bmp.UriSource = new Uri(dialog.FileName, UriKind.Absolute);
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.DecodePixelWidth = 100;
                 bmp.EndInit();
                 bmp.Freeze();
-                PreviewImage.Source = bmp;
+                FullPreviewImage.Source = bmp;
+
+                double widthInches = 63.0 / 25.4;
+                double heightInches = 88.0 / 25.4;
+                int dpi = Math.Min((int)(bmp.PixelWidth / widthInches), (int)(bmp.PixelHeight / heightInches));
+                var fi = new FileInfo(dialog.FileName);
+                string size = fi.Length < 1024 * 1024 ? $"{fi.Length / 1024.0:F0} KB" : $"{fi.Length / (1024.0 * 1024):F1} MB";
+                SelectedDetailLabel.Text = $"{bmp.PixelWidth} x {bmp.PixelHeight} px  |  ~{dpi} DPI  |  {size}\nLocal file";
+
+                SetPreviewZoomFit(bmp);
             }
-            catch { PreviewImage.Source = null; }
+            catch
+            {
+                FullPreviewImage.Source = null;
+                SelectedDetailLabel.Text = dialog.FileName;
+            }
         }
 
         private void OkClick(object sender, RoutedEventArgs e)
