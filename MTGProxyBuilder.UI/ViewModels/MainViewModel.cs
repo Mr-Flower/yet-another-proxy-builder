@@ -92,6 +92,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly ArchidektService _archidektService;
         private readonly DeckImportService _deckImportService;
         private readonly MpcFillService _mpcFillService;
+        private readonly MpcFillXmlImportService _mpcXmlImportService;
         private readonly UndoService _undoService = new();
         private readonly CacheManager _cacheManager = new();
 
@@ -143,7 +144,8 @@ namespace MTGProxyBuilder.UI.ViewModels
             _deckImportService = new DeckImportService(_moxfieldService, _archidektService);
             MpcSourceManager = new MpcFillSourceManager();
             _mpcFillService = new MpcFillService(_imageCacheService, MpcSourceManager);
-            _mpcUseFavoritesOnly = MpcSourceManager.HasFavorites; // default on if user has favorites
+            _mpcXmlImportService = new MpcFillXmlImportService(_mpcFillService, _imageCacheService);
+            _mpcUseFavoritesOnly = MpcSourceManager.HasFavorites;
 
             _currentProject = new ProjectModel();
             _currentProject.PageSettings.PropertyChanged += OnPageSettingsChanged;
@@ -195,6 +197,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             LoadMpcSourcesCommand = new RelayCommand(_ => LoadMpcSources());
             ToggleMpcFavoriteFromResultCommand = new RelayCommand(p => ToggleFavoriteFromResult(p));
             ManageMpcSourcesCommand = new RelayCommand(_ => ManageMpcSources());
+            ImportMpcFillXmlCommand = new RelayCommand(_ => ImportMpcFillXml());
             ClearCacheCommand = new RelayCommand(_ => ClearCache());
             ManageBackArtLibraryCommand = new RelayCommand(_ => ManageBackArtLibrary());
 
@@ -451,6 +454,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         public ICommand LoadMpcSourcesCommand { get; private set; } = null!;
         public ICommand ToggleMpcFavoriteFromResultCommand { get; private set; } = null!;
         public ICommand ManageMpcSourcesCommand { get; private set; } = null!;
+        public ICommand ImportMpcFillXmlCommand { get; private set; } = null!;
         public ICommand ClearCacheCommand { get; private set; } = null!;
         public ICommand ManageBackArtLibraryCommand { get; private set; } = null!;
 
@@ -1305,7 +1309,127 @@ namespace MTGProxyBuilder.UI.ViewModels
             finally { ClearBusy(); }
         }
 
-        // --- Moxfield Import ---
+        // --- MPCFill XML Import ---
+
+        private async void ImportMpcFillXml()
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "MPCFill XML (*.xml)|*.xml|All Files (*.*)|*.*",
+                Title = "Import MPCFill Project (cards.xml)"
+            };
+            if (dialog.ShowDialog() != true) return;
+
+            SetBusy("Parsing MPCFill XML...");
+
+            try
+            {
+                var (project, parseError) = _mpcXmlImportService.ParseXml(dialog.FileName);
+                if (project == null || parseError != null)
+                {
+                    ClearBusy();
+                    MessageBox.Show($"Failed to parse XML:\n{parseError}", "Import Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                int totalSlots = project.Fronts.Sum(c => c.Slots.Count);
+                BusyMessage = $"Found {project.Fronts.Count} unique card(s), {totalSlots} total slots";
+                await Task.Delay(500);
+
+                PushUndo();
+
+                // Build a back-image lookup: slot → back card identifier
+                var backsBySlot = new Dictionary<int, MpcFillXmlCard>();
+                foreach (var back in project.Backs)
+                    foreach (var slot in back.Slots)
+                        backsBySlot[slot] = back;
+
+                var importedCards = new List<CardModel>();
+                int downloaded = 0;
+                int failed = 0;
+
+                for (int i = 0; i < project.Fronts.Count; i++)
+                {
+                    var front = project.Fronts[i];
+                    string cardName = MpcFillXmlImportService.CleanCardName(front);
+                    int quantity = front.Slots.Count;
+
+                    BusyMessage = $"Downloading {i + 1}/{project.Fronts.Count}: {cardName}" +
+                        (quantity > 1 ? $" (x{quantity})" : "") + "...";
+                    await Task.Delay(10);
+
+                    // Download front image
+                    string? frontPath = null;
+                    if (!string.IsNullOrEmpty(front.Id))
+                        frontPath = await _mpcXmlImportService.DownloadImageByIdAsync(front.Id);
+
+                    if (frontPath == null) { failed++; continue; }
+
+                    // Check for custom back on any of this card's slots
+                    string? backPath = null;
+                    var firstSlot = front.Slots.FirstOrDefault();
+                    if (backsBySlot.TryGetValue(firstSlot, out var backCard) && !string.IsNullOrEmpty(backCard.Id))
+                    {
+                        BusyMessage = $"Downloading back for: {cardName}...";
+                        backPath = await _mpcXmlImportService.DownloadImageByIdAsync(backCard.Id);
+                    }
+
+                    // If no custom back, try the common cardback
+                    if (backPath == null && !string.IsNullOrEmpty(project.CommonCardbackId))
+                    {
+                        backPath = await _mpcXmlImportService.DownloadImageByIdAsync(project.CommonCardbackId);
+                    }
+
+                    var card = new CardModel
+                    {
+                        Name = cardName,
+                        ArtworkPath = frontPath,
+                        BackArtworkPath = backPath,
+                        IncludeBack = backPath != null,
+                        Quantity = quantity,
+                        DateAdded = DateTime.Now
+                    };
+
+                    // Apply default back art if no back was found
+                    ApplyDefaultBackArt(card);
+                    importedCards.Add(card);
+                    downloaded++;
+
+                    await Task.Delay(50);
+                }
+
+                // Batch-add
+                BusyMessage = $"Adding {importedCards.Count} cards to project...";
+                await Task.Delay(50);
+
+                Cards.CollectionChanged -= OnCardsCollectionChanged;
+                foreach (var c in importedCards) Cards.Add(c);
+                Cards.CollectionChanged += OnCardsCollectionChanged;
+
+                _currentProject.PageSettings.CenterGrid();
+                ApplyFilterAndSort();
+
+                int totalAdded = importedCards.Sum(c => c.Quantity);
+                string summary = $"Imported {downloaded} card(s) ({totalAdded} total) from MPCFill XML";
+                if (failed > 0) summary += $"\n{failed} image(s) failed to download";
+                StatusText = summary;
+
+                MessageBox.Show(summary, "Import Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"Import failed: {ex.Message}";
+                MessageBox.Show($"Import error:\n{ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                ClearBusy();
+            }
+        }
+
+        // --- Deck Import (Moxfield / Archidekt) ---
 
         private async void ImportDeck()
         {
