@@ -506,6 +506,11 @@
                                 <CheckBox IsChecked="{Binding IgnoreDuplicates}" Content="Skip cards already in project (merge basics)"
                                           Foreground="#999" FontSize="10" Margin="0,2,0,0"
                                           ToolTip="Cards already in the project are skipped. Basic lands are only added if the deck needs more copies than you already have."/>
+
+                                <TextBlock Text="Import MPCFill Project" FontWeight="SemiBold" Foreground="#CCC" Margin="0,16,0,6" FontSize="12"/>
+                                <Button Style="{StaticResource AccentBtn}" Command="{Binding ImportMpcFillXmlCommand}"
+                                        Content="Import cards.xml..." HorizontalAlignment="Stretch" Padding="8,6"/>
+                                <TextBlock Text="Import a cards.xml file exported from MPCFill" Foreground="#666" FontSize="10" Margin="0,4,0,0"/>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>
