@@ -1,8 +1,10 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using AvalonDock.Layout;
 using AvalonDock.Layout.Serialization;
 using MTGProxyBuilder.UI.ViewModels;
 
@@ -280,28 +282,55 @@ public partial class MainWindow : Window
 
     // --- Dock layout persistence ---
 
+    // Map ContentId → the XAML-defined content that was in each panel before serialization
+    private Dictionary<string, object>? _panelContents;
+
+    private void CapturePanelContents()
+    {
+        // Save references to the XAML content of each anchorable and the document
+        // so we can reconnect them after layout deserialization
+        _panelContents = new Dictionary<string, object>();
+
+        foreach (var anc in DockManager.Layout.Descendents().OfType<LayoutAnchorable>())
+        {
+            if (!string.IsNullOrEmpty(anc.ContentId) && anc.Content != null)
+                _panelContents[anc.ContentId] = anc.Content;
+        }
+
+        foreach (var doc in DockManager.Layout.Descendents().OfType<LayoutDocument>())
+        {
+            if (!string.IsNullOrEmpty(doc.ContentId) && doc.Content != null)
+                _panelContents[doc.ContentId] = doc.Content;
+        }
+    }
+
     private void LoadDockLayout()
     {
         try
         {
-            if (File.Exists(DockLayoutPath))
+            if (!File.Exists(DockLayoutPath)) return;
+
+            // Capture the XAML-defined content before deserialization destroys it
+            CapturePanelContents();
+
+            var serializer = new XmlLayoutSerializer(DockManager);
+            serializer.LayoutSerializationCallback += (s, args) =>
             {
-                var serializer = new XmlLayoutSerializer(DockManager);
-                serializer.LayoutSerializationCallback += (s, args) =>
+                if (args.Model.ContentId != null && _panelContents != null
+                    && _panelContents.TryGetValue(args.Model.ContentId, out var content))
                 {
-                    // Only restore anchorable panels (Search, Card, Layout, Filter)
-                    // Skip documents — their content is defined in XAML and shouldn't be replaced
-                    if (args.Model is AvalonDock.Layout.LayoutDocument)
-                    {
-                        args.Cancel = true;
-                    }
-                };
-                serializer.Deserialize(DockLayoutPath);
-            }
+                    args.Content = content;
+                }
+                else
+                {
+                    // Unknown panel or missing content — cancel to avoid blank panels
+                    args.Cancel = true;
+                }
+            };
+            serializer.Deserialize(DockLayoutPath);
         }
         catch
         {
-            // Delete corrupt layout file so next launch uses defaults
             try { if (File.Exists(DockLayoutPath)) File.Delete(DockLayoutPath); } catch { }
         }
     }
