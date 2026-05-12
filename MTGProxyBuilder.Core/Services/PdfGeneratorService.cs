@@ -152,6 +152,13 @@ namespace MTGProxyBuilder.Core.Services
                 {
                     DrawCard(gfx, null, cellX + bleedPt, cellY + bleedPt, cardWPt, cardHPt);
                 }
+
+                // Overlay text (e.g. "TOKEN") rendered on front face only
+                if (front && !string.IsNullOrEmpty(card.OverlayText))
+                {
+                    DrawOverlayText(gfx, card.OverlayText,
+                        cellX + bleedPt, cellY + bleedPt, cardWPt, cardHPt);
+                }
             }
 
             // Pass 3: Draw card outlines ON TOP of card art
@@ -336,6 +343,27 @@ namespace MTGProxyBuilder.Core.Services
             gfx.DrawLine(pen, cardRight, cardTop, pageW, cardTop);      // top-right horizontal right
             gfx.DrawLine(pen, 0, cardBottom, cardLeft, cardBottom);     // bottom-left horizontal left
             gfx.DrawLine(pen, cardRight, cardBottom, pageW, cardBottom); // bottom-right horizontal right
+        }
+
+        private void DrawOverlayText(XGraphics gfx, string text, float x, float y, float w, float h)
+        {
+            // Semi-transparent dark banner across the bottom third of the card
+            float bannerH = h * 0.15f;
+            float bannerY = y + h - bannerH - h * 0.08f;
+
+            var bannerBrush = new XSolidBrush(XColor.FromArgb(160, 0, 0, 0));
+            gfx.DrawRectangle(bannerBrush, x, bannerY, w, bannerH);
+
+            // White text centered in the banner
+            var font = new XFont("Arial", Math.Max(8, bannerH * 0.6), XFontStyleEx.Bold);
+            var textBrush = XBrushes.White;
+            var format = new XStringFormat
+            {
+                Alignment = XStringAlignment.Center,
+                LineAlignment = XLineAlignment.Center
+            };
+            gfx.DrawString(text, font, textBrush,
+                new XRect(x, bannerY, w, bannerH), format);
         }
 
         private void DrawCard(XGraphics gfx, string? imagePath, float x, float y, float w, float h)

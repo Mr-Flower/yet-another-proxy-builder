@@ -1,6 +1,9 @@
 using System;
+using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using AvalonDock.Layout.Serialization;
 using MTGProxyBuilder.UI.ViewModels;
 
 namespace MTGProxyBuilder.UI;
@@ -12,47 +15,24 @@ public partial class MainWindow : Window
     private const double ZoomMax = 3.0;
     private const double ZoomStep = 0.1;
 
+    private ShellViewModel Shell => (ShellViewModel)DataContext;
+
+    private static readonly string DockLayoutPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "MTGProxyBuilder", "dock_layout.xml");
+
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = new MainViewModel();
+        DataContext = new ShellViewModel();
         Closing += OnWindowClosing;
+        Loaded += (_, _) => LoadDockLayout();
 
-        ScryfallSearchBox.KeyDown += (s, e) =>
-        {
-            if (e.Key == Key.Enter && DataContext is MainViewModel vm && vm.ScryfallSearchCommand.CanExecute(null))
-                vm.ScryfallSearchCommand.Execute(null);
-        };
-
-        DeckImportUrlBox.KeyDown += (s, e) =>
-        {
-            if (e.Key == Key.Enter && DataContext is MainViewModel vm && vm.ImportDeckCommand.CanExecute(null))
-                vm.ImportDeckCommand.Execute(null);
-        };
-
-        // Double-click card on canvas → open art selector
-        GridCanvas.CardDoubleClicked += (card, isShowingBack) =>
-        {
-            if (DataContext is MainViewModel vm)
-                vm.OpenArtSelectorForCard(card, isShowingBack);
-        };
-
-        GridCanvas.CreateTokenRequested += (sourceCard) =>
-        {
-            if (DataContext is MainViewModel vm)
-                vm.CreateTokenFromCard(sourceCard);
-        };
-
-        GridCanvas.ApplyMajorityBackRequested += (cardIndices) =>
-        {
-            if (DataContext is MainViewModel vm)
-                vm.ApplyMajorityBackToCards(cardIndices);
-        };
-
-        // Ctrl+Z / Ctrl+Y for undo/redo
+        // Wire GridCanvas events once (they route to whichever project is active)
+        // Keyboard shortcuts
         KeyDown += (s, e) =>
         {
-            if (DataContext is not MainViewModel vm) return;
+            if (Shell?.ActiveProject?.Inner is not MainViewModel vm) return;
             if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Z)
             {
                 if (vm.UndoCommand.CanExecute(null)) vm.UndoCommand.Execute(null);
@@ -63,37 +43,122 @@ public partial class MainWindow : Window
                 if (vm.RedoCommand.CanExecute(null)) vm.RedoCommand.Execute(null);
                 e.Handled = true;
             }
+            else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.S)
+            {
+                if (vm.SaveProjectCommand.CanExecute(null)) vm.SaveProjectCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.N)
+            {
+                Shell.NewProject();
+                e.Handled = true;
+            }
+            else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.O)
+            {
+                Shell.OpenProject();
+                e.Handled = true;
+            }
+            else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.W)
+            {
+                Shell.CloseActiveProject();
+                e.Handled = true;
+            }
+            else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.E)
+            {
+                if (vm.ExportPdfCommand.CanExecute(null)) vm.ExportPdfCommand.Execute(null);
+                e.Handled = true;
+            }
+        };
+
+        // Wire GridCanvas events and search box Enter keys after Loaded
+        Loaded += (_, _) =>
+        {
+            ScryfallSearchBox.KeyDown += (s, e) =>
+            {
+                if (e.Key == Key.Enter && Shell?.ActiveProject?.Inner is MainViewModel vm
+                    && vm.ScryfallSearchCommand.CanExecute(null))
+                    vm.ScryfallSearchCommand.Execute(null);
+            };
+
+            DeckImportUrlBox.KeyDown += (s, e) =>
+            {
+                if (e.Key == Key.Enter && Shell?.ActiveProject?.Inner is MainViewModel vm
+                    && vm.ImportDeckCommand.CanExecute(null))
+                    vm.ImportDeckCommand.Execute(null);
+            };
+
+            GridCanvas.CardDoubleClicked += (card, isShowingBack) =>
+            {
+                if (Shell?.ActiveProject?.Inner is MainViewModel vm)
+                    vm.OpenArtSelectorForCard(card, isShowingBack);
+            };
+
+            GridCanvas.CreateTokenRequested += (sourceCard) =>
+            {
+                if (Shell?.ActiveProject?.Inner is MainViewModel vm)
+                    vm.CreateTokenFromCard(sourceCard);
+            };
+
+            GridCanvas.CreateTokensFromCardsRequested += (sourceCards) =>
+            {
+                if (Shell?.ActiveProject?.Inner is MainViewModel vm)
+                    vm.CreateTokensFromCards(sourceCards);
+            };
+
+            GridCanvas.ApplyMajorityBackRequested += (cardIndices) =>
+            {
+                if (Shell?.ActiveProject?.Inner is MainViewModel vm)
+                    vm.ApplyMajorityBackToCards(cardIndices);
+            };
         };
     }
 
+    // --- Tab bar ---
+
+    private void OnTabClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is ProjectViewModel tab)
+        {
+            Shell.ActiveProject = tab;
+        }
+    }
+
+    private void OnTabClose(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is ProjectViewModel tab)
+        {
+            Shell.CloseProject(tab);
+        }
+    }
+
+    // --- Art source radio buttons ---
+
     private void ArtSourceChanged(object sender, RoutedEventArgs e)
     {
-        if (DataContext is MainViewModel vm) vm.UseMpcFill = false;
+        if (Shell?.ActiveProject?.Inner is MainViewModel vm) vm.UseMpcFill = false;
     }
 
     private void ArtSourceMpcChanged(object sender, RoutedEventArgs e)
     {
-        if (DataContext is MainViewModel vm) vm.UseMpcFill = true;
+        if (Shell?.ActiveProject?.Inner is MainViewModel vm) vm.UseMpcFill = true;
     }
 
     // --- Right-click on MPCFill result ---
 
     private void OnMpcFillResultRightClick(object sender, MouseButtonEventArgs e)
     {
-        if (DataContext is not MainViewModel vm || vm.SelectedMpcFillCard == null) return;
+        if (Shell?.ActiveProject?.Inner is not MainViewModel vm || vm.SelectedMpcFillCard == null) return;
 
         var card = vm.SelectedMpcFillCard;
         bool isFav = vm.MpcSourceManager.IsFavorite(card.SourceId);
 
-        var menu = new System.Windows.Controls.ContextMenu();
-
-        var favItem = new System.Windows.Controls.MenuItem
+        var menu = new ContextMenu();
+        var favItem = new MenuItem
         {
             Header = isFav ? $"Remove \"{card.Source}\" from favorites" : $"Add \"{card.Source}\" to favorites"
         };
         favItem.Click += (_, _) => vm.ToggleMpcFavoriteFromResultCommand.Execute(card);
         menu.Items.Add(favItem);
-
         menu.IsOpen = true;
         e.Handled = true;
     }
@@ -102,26 +167,92 @@ public partial class MainWindow : Window
 
     private void OnScryfallDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (DataContext is MainViewModel vm && vm.AddScryfallCardCommand.CanExecute(null))
+        if (Shell?.ActiveProject?.Inner is MainViewModel vm && vm.AddScryfallCardCommand.CanExecute(null))
             vm.AddScryfallCardCommand.Execute(null);
     }
 
     private void OnMpcFillDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (DataContext is MainViewModel vm && vm.AddMpcFillCardCommand.CanExecute(null))
+        if (Shell?.ActiveProject?.Inner is MainViewModel vm && vm.AddMpcFillCardCommand.CanExecute(null))
             vm.AddMpcFillCardCommand.Execute(null);
     }
 
-    // --- Zoom ---
+    // --- Color picker ---
+
+    private void OnOutlineColorClick(object sender, MouseButtonEventArgs e)
+    {
+        if (Shell?.ActiveProject?.Inner is not MainViewModel vm) return;
+        var dialog = new Dialogs.ColorPickerDialog(vm.CurrentProject.PrintSettings.OutlineColor);
+        dialog.Owner = this;
+        if (dialog.ShowDialog() == true)
+            vm.CurrentProject.PrintSettings.OutlineColor = dialog.SelectedHexColor;
+    }
+
+    // --- Scroll & Pan ---
+
+    private bool _isPanning;
+    private Point _panStart;
+    private double _panStartH, _panStartV;
 
     private void OnCanvasMouseWheel(object sender, MouseWheelEventArgs e)
     {
+        // Ctrl+Scroll = zoom
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         {
             double delta = e.Delta > 0 ? ZoomStep : -ZoomStep;
-            // Finer steps at low zoom
             if (_zoom < 0.5) delta *= 0.5;
             SetZoom(_zoom + delta);
+            e.Handled = true;
+            return;
+        }
+
+        // Shift+Scroll = horizontal scroll
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            CanvasScrollViewer.ScrollToHorizontalOffset(
+                CanvasScrollViewer.HorizontalOffset - e.Delta);
+            e.Handled = true;
+            return;
+        }
+
+        // Plain scroll = vertical (default behavior, let ScrollViewer handle it)
+    }
+
+    private void OnCanvasMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // Middle-click = start panning
+        if (e.ChangedButton == MouseButton.Middle)
+        {
+            _isPanning = true;
+            _panStart = e.GetPosition(CanvasScrollViewer);
+            _panStartH = CanvasScrollViewer.HorizontalOffset;
+            _panStartV = CanvasScrollViewer.VerticalOffset;
+            CanvasScrollViewer.Cursor = Cursors.ScrollAll;
+            CanvasScrollViewer.CaptureMouse();
+            e.Handled = true;
+        }
+    }
+
+    private void OnCanvasMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.Middle && _isPanning)
+        {
+            _isPanning = false;
+            CanvasScrollViewer.Cursor = null;
+            CanvasScrollViewer.ReleaseMouseCapture();
+            e.Handled = true;
+        }
+    }
+
+    private void OnCanvasMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_isPanning)
+        {
+            var pos = e.GetPosition(CanvasScrollViewer);
+            double dx = _panStart.X - pos.X;
+            double dy = _panStart.Y - pos.Y;
+            CanvasScrollViewer.ScrollToHorizontalOffset(_panStartH + dx);
+            CanvasScrollViewer.ScrollToVerticalOffset(_panStartV + dy);
             e.Handled = true;
         }
     }
@@ -132,10 +263,9 @@ public partial class MainWindow : Window
 
     private void ZoomFit(object sender, RoutedEventArgs e)
     {
-        // Fit the page width into the scroll viewer viewport
         if (GridCanvas.Width > 0 && CanvasScrollViewer.ViewportWidth > 0)
         {
-            double fitZoom = (CanvasScrollViewer.ViewportWidth - 80) / GridCanvas.Width; // 80 = padding
+            double fitZoom = (CanvasScrollViewer.ViewportWidth - 80) / GridCanvas.Width;
             SetZoom(fitZoom);
         }
     }
@@ -148,40 +278,42 @@ public partial class MainWindow : Window
         ZoomLabel.Text = $"{(int)(_zoom * 100)}%";
     }
 
-    // --- Color picker ---
+    // --- Dock layout persistence ---
 
-    private void OnOutlineColorClick(object sender, MouseButtonEventArgs e)
+    private void LoadDockLayout()
     {
-        if (DataContext is not MainViewModel vm) return;
-        var dialog = new Dialogs.ColorPickerDialog(vm.CurrentProject.PrintSettings.OutlineColor);
-        dialog.Owner = this;
-        if (dialog.ShowDialog() == true)
+        try
         {
-            vm.CurrentProject.PrintSettings.OutlineColor = dialog.SelectedHexColor;
+            if (File.Exists(DockLayoutPath))
+            {
+                var serializer = new XmlLayoutSerializer(DockManager);
+                serializer.Deserialize(DockLayoutPath);
+            }
         }
+        catch { /* ignore corrupt layout files */ }
+    }
+
+    private void SaveDockLayout()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(DockLayoutPath);
+            if (dir != null) Directory.CreateDirectory(dir);
+            var serializer = new XmlLayoutSerializer(DockManager);
+            serializer.Serialize(DockLayoutPath);
+        }
+        catch { }
     }
 
     // --- Unsaved changes prompt ---
 
     private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (DataContext is MainViewModel vm && vm.HasUnsavedChanges)
+        if (!Shell.CanCloseApplication())
         {
-            var result = MessageBox.Show(
-                "You have unsaved changes. Do you want to save before closing?",
-                "Unsaved Changes",
-                MessageBoxButton.YesNoCancel,
-                MessageBoxImage.Warning);
-
-            if (result == MessageBoxResult.Yes)
-            {
-                if (vm.SaveProjectCommand.CanExecute(null))
-                    vm.SaveProjectCommand.Execute(null);
-            }
-            else if (result == MessageBoxResult.Cancel)
-            {
-                e.Cancel = true;
-            }
+            e.Cancel = true;
+            return;
         }
+        SaveDockLayout();
     }
 }

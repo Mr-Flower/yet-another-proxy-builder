@@ -29,12 +29,14 @@ The release is a self-contained single-file executable that includes everything 
 ### Visual Page Editor
 - **Multi-page preview** — all pages displayed vertically in a scrollable, zoomable canvas
 - **Drag and drop** — reorder cards across pages by dragging
-- **Multi-select** — Ctrl+Click to select multiple cards
-- **Right-click context menu** — duplicate, delete, flip, match back art, create token card
+- **Selection** — click to select, Ctrl+Click to toggle individual cards, Shift+Click for range selection across pages
+- **Right-click context menu** — duplicate, delete, flip, match back art, create token cards (single or multi-select)
 - **Flip preview** — view back artwork on the canvas; flip individual, selected, or all cards
 - **Zoom** — Ctrl+Mouse Wheel, +/- buttons, Fit to Width, 1:1 reset (15%-300%)
+- **Pan** — middle-click and drag to pan freely; Shift+Mouse Wheel for horizontal scroll
 - **Double-click card** — opens the art selector dialog (front or back depending on flip state)
-- **Create Token** — right-click a dual-faced card to create a standalone token using its front art
+- **Create Token** — right-click dual-faced cards (cards with unique back art) to create token cards with customizable overlay text; works on single cards or multi-select
+- **Overlay text** — cards can have text overlays (e.g. "TOKEN") rendered on the front face in both preview and PDF; editable per card in the Card panel
 
 ### Art Selection
 - **Art Selector Dialog** — click any card to browse all artwork from Scryfall (all printings) and MPCFill (community art) in a thumbnail grid with an inline zoomable preview panel showing pixel dimensions, estimated DPI, file size, and source
@@ -64,24 +66,39 @@ The release is a self-contained single-file executable that includes everything 
 - **Grid override** — manually set columns and rows, or let the app auto-fit
 
 ### Project Management
+- **Multi-project tabs** — open multiple projects simultaneously, each in its own tab with independent state, undo stack, and file
+- **Null start state** — app opens with a welcome screen; create or open a project to start
+- **Tab management** — click tabs to switch, close button (✕) per tab, unsaved changes indicator (*)
 - **Portable project files** — `.mtgproj` files are self-contained ZIP archives bundling all artwork
-- **Undo / Redo** — 50-level undo stack covering all card operations (Ctrl+Z / Ctrl+Y)
-- **Unsaved changes prompt** — dialog on close with Save/Don't Save/Cancel
+- **Undo / Redo** — 50-level undo stack per project (Ctrl+Z / Ctrl+Y)
+- **Unsaved changes prompt** — each unsaved project prompts individually on close
 - **Sort & Filter** — filter by name, type, rarity, color; sort by CMC, name, set, artist, and more; permanently apply sort order
 - **Full card metadata** — stores mana cost, type line, oracle text, rarity, colors, set, artist, power/toughness, keywords from Scryfall
 - **Auto-cleanup** — bleed cache and extracted project images cleared on startup; image cache cleared on exit
+- **Automatic update check** — checks GitHub releases on startup; amber banner with download link when a new version is available
+
+### Application Settings
+- **Settings dialog** — accessible from the toolbar, persists to `app_settings.json`
+- **Default token text** — customizable text for token card overlays (default: "TOKEN")
+- **Default page size** — A4, A3, Letter, Legal, Tabloid
+- **Default bleed** — default bleed width for new projects
+- **Default card size preset** — applied to new projects automatically
+- **Update check toggle** — enable/disable automatic version checking
 
 ### UX
-- **Dark theme** — modern dark UI
+- **Dark theme** — VS2013 dark theme throughout, including dockable panels
+- **Dockable panels** — Search, Card, Layout, and Filter panels powered by AvalonDock; drag to float, dock to any side, tab together, auto-hide, resize; layout persists across sessions
 - **Busy spinner** — animated overlay with step-by-step progress messages during all network operations (no screen flashing during bulk imports)
 - **Async image loading** — card images load on a background thread; cached in memory for instant redraws
 - **Cache management** — "Clear Cache" button with size display in the Layout tab
+- **Version display** — current version shown in the status bar
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
 | UI Framework | WPF (.NET 10.0-windows) |
+| Docking System | AvalonDock 4.74.1 (VS2013 Dark Theme) |
 | PDF Generation | PdfSharp 6.1.1 |
 | Image Processing | SkiaSharp 3.119.0 |
 | JSON Serialization | Newtonsoft.Json 13.0.3 |
@@ -89,7 +106,7 @@ The release is a self-contained single-file executable that includes everything 
 | Proxy Art | MPCFill.com API |
 | Deck Import | Moxfield API (via curl), Archidekt API |
 | UI Automation Tests | FlaUI (UIA3) |
-| Architecture | MVVM with RelayCommand |
+| Architecture | MVVM (Shell + per-project ViewModels) |
 
 ## Project Structure
 
@@ -105,6 +122,7 @@ MTGProxyBuilder/
 │   │   ├── PrintSettings.cs          # Print mode, cut guides, card outlines
 │   │   └── ProjectModel.cs           # Project container
 │   └── Services/
+│       ├── AppSettingsService.cs       # Persistent application settings
 │       ├── ArchidektService.cs        # Archidekt deck API
 │       ├── BackArtLibraryService.cs   # Persistent back art library with defaults
 │       ├── BleedProcessor.cs          # Edge-pixel bleed extension (SkiaSharp)
@@ -115,12 +133,13 @@ MTGProxyBuilder/
 │       ├── MpcFillService.cs          # MPCFill card art search & download
 │       ├── MpcFillSourceManager.cs    # MPCFill source favorites (persistent)
 │       ├── MpcFillXmlImportService.cs # MPCFill cards.xml import
-│       ├── PdfGeneratorService.cs     # PDF output with bleed, guides, outlines
+│       ├── PdfGeneratorService.cs     # PDF output with bleed, guides, outlines, overlays
 │       ├── ProjectSerializationService.cs  # ZIP-based portable project files
 │       ├── ScryfallService.cs         # Scryfall card search, lookup, image download
-│       └── UndoService.cs            # Snapshot-based undo/redo stack
+│       ├── UndoService.cs            # Snapshot-based undo/redo stack
+│       └── UpdateCheckService.cs      # GitHub release version checker
 ├── MTGProxyBuilder.UI/               # WPF presentation layer
-│   ├── MainWindow.xaml/cs            # Main window with dark theme
+│   ├── MainWindow.xaml/cs            # Shell window with tabs, docking, dark theme
 │   ├── App.xaml/cs                   # App lifecycle, cache cleanup on exit
 │   ├── Controls/
 │   │   └── GridEditorCanvas.cs       # Multi-page canvas with drag-drop, selection, flip, outlines
@@ -130,10 +149,13 @@ MTGProxyBuilder/
 │   │   ├── BackArtLibraryDialog      # Library manager with preview, filter, DPI info
 │   │   ├── ColorPickerDialog         # Color picker with presets, RGB sliders, hex input
 │   │   ├── ImagePreviewDialog        # Standalone zoomable image preview
-│   │   └── MpcSourceManagerDialog    # MPCFill source browser & favorites
+│   │   ├── MpcSourceManagerDialog    # MPCFill source browser & favorites
+│   │   └── SettingsDialog            # Application settings editor
 │   └── ViewModels/
-│       └── MainViewModel.cs          # All commands, state, and business logic
-└── MTGProxyBuilder.Tests/            # Test suite (240+ tests)
+│       ├── ShellViewModel.cs         # Tab management, global commands, update check
+│       ├── ProjectViewModel.cs       # Per-tab wrapper with title and unsaved indicator
+│       └── MainViewModel.cs          # Per-project commands, state, and business logic
+└── MTGProxyBuilder.Tests/            # Test suite (256+ tests)
     ├── Models/                       # Unit tests for all models
     ├── Services/                     # Unit tests for all services
     └── Integration/                  # E2E pipeline tests + UI smoke tests
@@ -173,11 +195,12 @@ dotnet test
 ## Usage Guide
 
 ### Getting Started
-1. Launch the application
-2. Enter a project name in the toolbar
+1. Launch the application — you'll see a welcome screen
+2. Click **"New Project"** or **"Open Project"** (or press Ctrl+N / Ctrl+O)
 3. Add cards using one of the methods below
-4. Configure layout settings in the Layout tab
+4. Configure layout settings in the Layout panel
 5. Export to PDF
+6. Open additional projects in new tabs — each is independent
 
 ### Adding Cards
 
@@ -212,8 +235,9 @@ dotnet test
 
 **Selecting cards:**
 - Click a card to select it (blue highlight)
-- Ctrl+Click to add/remove from selection
-- Click empty space or press Escape to deselect
+- Ctrl+Click to add/remove individual cards to/from selection
+- Shift+Click to select a range from the last clicked card to the current one (works across pages)
+- Click empty space or press Escape to deselect all
 
 **Reordering:**
 - Drag a card to a new position on any page
@@ -231,9 +255,11 @@ dotnet test
 - The art selector shows all Scryfall printings + MPCFill art with a zoomable preview panel displaying dimensions, DPI, file size, and source
 - Check "Apply to all [card name]" to update every copy at once
 
-**Zoom:**
+**Zoom & Pan:**
 - Ctrl+Mouse Wheel to zoom in/out
 - Use +/- buttons, "Fit", or "1:1" in the bottom-right corner
+- Middle-click and drag to pan freely in any direction
+- Shift+Mouse Wheel for horizontal scrolling
 
 ### Configuring Layout
 
@@ -331,22 +357,32 @@ In the Layout tab:
 
 | Shortcut | Action |
 |----------|--------|
+| Ctrl+N | New project |
+| Ctrl+O | Open project |
+| Ctrl+W | Close active project tab |
+| Ctrl+S | Save active project |
+| Ctrl+E | Export PDF |
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
-| Ctrl+S | Save project |
 | Ctrl+Mouse Wheel | Zoom in/out |
+| Shift+Mouse Wheel | Horizontal scroll |
+| Middle-click + drag | Pan canvas |
 | Escape | Deselect all cards |
 | Enter (search box) | Execute search |
 | Enter (import URL) | Import deck |
 | Double-click (search result) | Add card to project |
 | Double-click (canvas card) | Open art selector |
 | Right-click (canvas) | Context menu |
-| Ctrl+Click (canvas) | Toggle card selection |
+| Click (canvas card) | Select single card |
+| Ctrl+Click (canvas) | Toggle card in selection |
+| Shift+Click (canvas) | Range select from last click |
 
 ## File Locations
 
 | Location | Path | Contents |
 |----------|------|----------|
+| App Settings | `%AppData%/MTGProxyBuilder/app_settings.json` | Default token text, page size, bleed, update check |
+| Dock Layout | `%AppData%/MTGProxyBuilder/dock_layout.xml` | Panel positions, sizes, docking state |
 | Image Cache | `%AppData%/MTGProxyBuilder/ImageCache/` | Downloaded card images (cleared on exit) |
 | Bleed Cache | `%AppData%/MTGProxyBuilder/BleedCache/` | Bleed-processed images (cleared on startup) |
 | Extracted Projects | `%AppData%/MTGProxyBuilder/ExtractedProjects/` | Temp images from opened projects (cleared on startup) |

@@ -33,6 +33,7 @@ namespace MTGProxyBuilder.UI.Controls
 
         // Selection state — tracks selected CardModel indices in the Cards collection
         private readonly HashSet<int> _selectedSlots = new();
+        private int _lastSelectedSlot = -1; // anchor for Shift+Click range selection
 
         // Flip state — tracks which cards show back artwork
         private readonly HashSet<int> _flippedCardIndices = new();
@@ -141,6 +142,7 @@ namespace MTGProxyBuilder.UI.Controls
         /// <summary>Fired when the user double-clicks a card on the canvas.</summary>
         public event Action<CardModel, bool>? CardDoubleClicked; // (card, isShowingBack)
         public event Action<CardModel>? CreateTokenRequested; // (sourceCard)
+        public event Action<List<CardModel>>? CreateTokensFromCardsRequested; // (sourceCards)
         public event Action<List<int>>? ApplyMajorityBackRequested; // (cardIndices)
 
         public PageLayout? PageSettings
@@ -383,20 +385,37 @@ namespace MTGProxyBuilder.UI.Controls
                     return;
                 }
 
-                // Ctrl+Click: toggle slot selection
+                // Ctrl+Click: toggle individual slot in selection
                 if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
                 {
                     if (_selectedSlots.Contains(flatSlot))
                         _selectedSlots.Remove(flatSlot);
                     else
                         _selectedSlots.Add(flatSlot);
+                    _lastSelectedSlot = flatSlot;
                     SyncSelectedCard();
                     _ = RedrawAsync();
                     e.Handled = true;
                     return;
                 }
 
-                // Start potential drag
+                // Shift+Click: range select from last selected to current
+                if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) && _lastSelectedSlot >= 0)
+                {
+                    int from = Math.Min(_lastSelectedSlot, flatSlot);
+                    int to = Math.Max(_lastSelectedSlot, flatSlot);
+                    for (int s = from; s <= to; s++)
+                    {
+                        if (s < _expandedSlots.Count)
+                            _selectedSlots.Add(s);
+                    }
+                    SyncSelectedCard();
+                    _ = RedrawAsync();
+                    e.Handled = true;
+                    return;
+                }
+
+                // Start potential drag (plain click selects on mouse-up)
                 _dragSourceCardIndex = cardIdx;
                 _dragStart = pos;
                 _isDragging = false;
@@ -409,6 +428,7 @@ namespace MTGProxyBuilder.UI.Controls
                 if (_selectedSlots.Count > 0)
                 {
                     _selectedSlots.Clear();
+                    _lastSelectedSlot = -1;
                     SyncSelectedCard();
                     _ = RedrawAsync();
                 }
@@ -445,6 +465,7 @@ namespace MTGProxyBuilder.UI.Controls
                 // Simple click without drag — single select this slot
                 _selectedSlots.Clear();
                 _selectedSlots.Add(_pendingSelectSlot);
+                _lastSelectedSlot = _pendingSelectSlot;
                 SyncSelectedCard();
                 _ = RedrawAsync();
             }
@@ -504,17 +525,21 @@ namespace MTGProxyBuilder.UI.Controls
                 matchBackItem.Click += (_, _) => ApplyMajorityBackRequested?.Invoke(cardIndices);
                 menu.Items.Add(matchBackItem);
 
-                // "Create Token" — for double-faced cards (cards with back art)
-                if (!hasSelection && hasHover)
+                // "Create Token" — for cards with unique (non-common) back art
+                menu.Items.Add(new Separator());
+                if (hasSelection)
+                {
+                    var tokenItem = new MenuItem { Header = $"Create Token(s) from Selected{target}" };
+                    tokenItem.Click += (_, _) => CreateTokensFromCardsRequested?.Invoke(
+                        cardIndices.Where(i => i >= 0 && i < CardsSource!.Count).Select(i => CardsSource![i]).ToList());
+                    menu.Items.Add(tokenItem);
+                }
+                else if (hasHover)
                 {
                     var hoverCard = CardsSource![hoverCardIdx];
-                    if (!string.IsNullOrEmpty(hoverCard.BackArtworkPath) || !string.IsNullOrEmpty(hoverCard.OriginalBackArtworkPath))
-                    {
-                        menu.Items.Add(new Separator());
-                        var tokenItem = new MenuItem { Header = "Create Token Card" };
-                        tokenItem.Click += (_, _) => CreateTokenRequested?.Invoke(hoverCard);
-                        menu.Items.Add(tokenItem);
-                    }
+                    var tokenItem = new MenuItem { Header = "Create Token Card" };
+                    tokenItem.Click += (_, _) => CreateTokenRequested?.Invoke(hoverCard);
+                    menu.Items.Add(tokenItem);
                 }
             }
 
@@ -555,6 +580,7 @@ namespace MTGProxyBuilder.UI.Controls
                     ArtworkPath = original.ArtworkPath,
                     BackArtworkPath = original.BackArtworkPath,
                     OriginalBackArtworkPath = original.OriginalBackArtworkPath,
+                    OverlayText = original.OverlayText,
                     ScryfallId = original.ScryfallId,
                     Quantity = original.Quantity,
                     IncludeBack = original.IncludeBack,
@@ -781,6 +807,35 @@ namespace MTGProxyBuilder.UI.Controls
                 Line(cardRight, cardTopY, pageW, cardTopY);
                 Line(0, cardBottomY, cardLeft, cardBottomY);
                 Line(cardRight, cardBottomY, pageW, cardBottomY);
+            }
+
+            // Overlay text (e.g. "TOKEN") — front face only
+            if (!flipped && !string.IsNullOrEmpty(card.OverlayText))
+            {
+                float bannerH = cardH * 0.15f;
+                float bannerY = (y + bleed) + cardH - bannerH - cardH * 0.08f;
+
+                var banner = new Rectangle
+                {
+                    Width = cardW, Height = bannerH,
+                    Fill = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0)),
+                    IsHitTestVisible = false
+                };
+                SetLeft(banner, x + bleed); SetTop(banner, bannerY); Children.Add(banner);
+
+                var overlayTb = new TextBlock
+                {
+                    Text = card.OverlayText,
+                    Foreground = Brushes.White,
+                    FontSize = Math.Max(8, bannerH * 0.55),
+                    FontWeight = FontWeights.Bold,
+                    TextAlignment = TextAlignment.Center,
+                    Width = cardW,
+                    IsHitTestVisible = false
+                };
+                SetLeft(overlayTb, x + bleed);
+                SetTop(overlayTb, bannerY + (bannerH - overlayTb.FontSize) / 2);
+                Children.Add(overlayTb);
             }
 
             // Card outline guides

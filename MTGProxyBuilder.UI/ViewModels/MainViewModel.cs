@@ -97,6 +97,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly UndoService _undoService = new();
         private readonly CacheManager _cacheManager = new();
         private readonly UpdateCheckService _updateService = new();
+        private readonly AppSettingsService _appSettings = new();
         private bool _updateAvailable;
         private string _updateMessage = string.Empty;
         private string _updateDownloadUrl = string.Empty;
@@ -207,6 +208,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             ManageBackArtLibraryCommand = new RelayCommand(_ => ManageBackArtLibrary());
             DownloadUpdateCommand = new RelayCommand(_ => DownloadUpdate());
             DismissUpdateCommand = new RelayCommand(_ => UpdateAvailable = false);
+            OpenSettingsCommand = new RelayCommand(_ => OpenSettings());
 
             // MPCFill / art source
             AddMpcFillCardCommand = new RelayCommand(_ => AddMpcFillCard(), _ => SelectedMpcFillCard != null);
@@ -228,8 +230,6 @@ namespace MTGProxyBuilder.UI.ViewModels
             // Startup cache cleanup
             _cacheManager.CleanupOnStartup();
 
-            // Check for updates in the background
-            _ = CheckForUpdateAsync();
         }
 
         private async Task CheckForUpdateAsync()
@@ -247,6 +247,13 @@ namespace MTGProxyBuilder.UI.ViewModels
                 }
             }
             catch { /* never crash on update check */ }
+        }
+
+        private void OpenSettings()
+        {
+            var dialog = new Dialogs.SettingsDialog(_appSettings);
+            dialog.Owner = Application.Current.MainWindow;
+            dialog.ShowDialog();
         }
 
         private void DownloadUpdate()
@@ -427,10 +434,11 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         public ICommand DownloadUpdateCommand { get; private set; } = null!;
         public ICommand DismissUpdateCommand { get; private set; } = null!;
+        public ICommand OpenSettingsCommand { get; private set; } = null!;
 
         public string AppVersion { get; } = GetAppVersion();
 
-        private static string GetAppVersion()
+        public static string GetAppVersion()
         {
             var asm = System.Reflection.Assembly.GetEntryAssembly();
             if (asm == null) return "dev";
@@ -776,6 +784,23 @@ namespace MTGProxyBuilder.UI.ViewModels
             StatusText = "New project created";
         }
 
+        /// <summary>Load a pre-parsed project into this ViewModel (used by ShellViewModel).</summary>
+        public void LoadFromProject(ProjectModel project, string filePath)
+        {
+            _currentProject = project;
+            _currentProject.PageSettings.PropertyChanged += OnPageSettingsChanged;
+            _currentFilePath = filePath;
+            Cards = new ObservableCollection<CardModel>(project.Cards);
+            SelectedCard = null;
+            HasUnsavedChanges = false;
+            OnPropertyChanged(nameof(CurrentProject));
+            OnPropertyChanged(nameof(ProjectName));
+            OnPropertyChanged(nameof(SelectedPrintMode));
+            OnPropertyChanged(nameof(SelectedOutlineAlignment));
+            OnPropertyChanged(nameof(SelectedOutlineType));
+            OnPropertyChanged(nameof(SelectedLineType));
+        }
+
         private async void OpenProject()
         {
             var dialog = new OpenFileDialog
@@ -948,36 +973,71 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         public void CreateTokenFromCard(CardModel sourceCard)
         {
+            CreateTokensFromCards(new List<CardModel> { sourceCard });
+        }
+
+        public void CreateTokensFromCards(List<CardModel> sourceCards)
+        {
+            string? commonBack = GetMostCommonBackArt();
+            var eligibleCards = sourceCards.Where(c => IsEligibleForToken(c, commonBack)).ToList();
+
+            if (eligibleCards.Count == 0)
+            {
+                MessageBox.Show("None of the selected cards have unique back artwork different from the project's common back.",
+                    "No Tokens to Create", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             PushUndo();
+            string overlayText = _appSettings.Settings.DefaultTokenText;
 
-            var token = new CardModel
+            foreach (var source in eligibleCards)
             {
-                Name = sourceCard.Name + " (Token)",
-                ArtworkPath = sourceCard.ArtworkPath, // Use the front face
-                Quantity = 1,
-                ManaCost = sourceCard.ManaCost,
-                TypeLine = sourceCard.TypeLine,
-                SetCode = sourceCard.SetCode,
-                SetName = sourceCard.SetName,
-                DateAdded = DateTime.Now
-            };
+                var token = new CardModel
+                {
+                    Name = source.Name + " (Token)",
+                    ArtworkPath = source.ArtworkPath,
+                    Quantity = 1,
+                    OverlayText = overlayText,
+                    ManaCost = source.ManaCost,
+                    TypeLine = source.TypeLine,
+                    SetCode = source.SetCode,
+                    SetName = source.SetName,
+                    DateAdded = DateTime.Now
+                };
 
-            // Determine back art: find the most commonly used back art across the project
-            string? backArt = GetMostCommonBackArt();
-            if (backArt != null)
-            {
-                token.BackArtworkPath = backArt;
-                token.IncludeBack = true;
+                if (commonBack != null)
+                {
+                    token.BackArtworkPath = commonBack;
+                    token.IncludeBack = true;
+                }
+                else
+                {
+                    ApplyDefaultBackArt(token);
+                }
+
+                Cards.Add(token);
             }
-            else
-            {
-                // Fall back to the library default
-                ApplyDefaultBackArt(token);
-            }
 
-            Cards.Add(token);
             ApplyFilterAndSort();
-            StatusText = $"Created token card for {sourceCard.Name}";
+            StatusText = $"Created {eligibleCards.Count} token card(s)";
+        }
+
+        /// <summary>
+        /// A card is eligible for token creation if it has back art that differs
+        /// from the project's most common back art (i.e. it's a dual-faced card).
+        /// </summary>
+        private bool IsEligibleForToken(CardModel card, string? commonBack)
+        {
+            // Must have some back art
+            string? back = card.BackArtworkPath ?? card.OriginalBackArtworkPath;
+            if (string.IsNullOrEmpty(back)) return false;
+
+            // Back art must differ from the project's common back
+            if (commonBack != null && string.Equals(back, commonBack, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return true;
         }
 
         /// <summary>
