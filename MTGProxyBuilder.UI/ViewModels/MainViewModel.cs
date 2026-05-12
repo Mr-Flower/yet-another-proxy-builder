@@ -66,6 +66,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         private bool _isSearching;
         private bool _isBusy;
         private string _busyMessage = string.Empty;
+        private bool _hasUnsavedChanges;
 
         // Back art library
         private ObservableCollection<BackArtEntry> _backArtLibrary = new();
@@ -331,6 +332,24 @@ namespace MTGProxyBuilder.UI.ViewModels
             get => _busyMessage;
             set => SetProperty(ref _busyMessage, value);
         }
+
+        public bool HasUnsavedChanges
+        {
+            get => _hasUnsavedChanges;
+            set => SetProperty(ref _hasUnsavedChanges, value);
+        }
+
+        private void MarkDirty() => HasUnsavedChanges = true;
+
+        private int _refreshTrigger;
+        public int RefreshTrigger
+        {
+            get => _refreshTrigger;
+            set => SetProperty(ref _refreshTrigger, value);
+        }
+
+        /// <summary>Forces the canvas to re-render.</summary>
+        private void RefreshCanvas() => RefreshTrigger++;
 
         // Back art library
         public ObservableCollection<BackArtEntry> BackArtLibrary
@@ -613,7 +632,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         // --- Undo / Redo ---
 
-        private void PushUndo() => _undoService.SaveState(Cards);
+        private void PushUndo() { _undoService.SaveState(Cards); MarkDirty(); }
 
         private void Undo()
         {
@@ -654,6 +673,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             OnPropertyChanged(nameof(CurrentProject));
             OnPropertyChanged(nameof(ProjectName));
             OnPropertyChanged(nameof(SelectedPrintMode));
+            HasUnsavedChanges = false;
             StatusText = "New project created";
         }
 
@@ -685,6 +705,7 @@ namespace MTGProxyBuilder.UI.ViewModels
                 OnPropertyChanged(nameof(CurrentProject));
                 OnPropertyChanged(nameof(ProjectName));
                 OnPropertyChanged(nameof(SelectedPrintMode));
+                HasUnsavedChanges = false;
                 StatusText = $"Opened: {Path.GetFileName(dialog.FileName)}";
             }
             catch (Exception ex)
@@ -711,6 +732,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             try
             {
                 bool success = await _serializationService.SaveProjectAsync(_currentProject, _currentFilePath);
+                if (success) HasUnsavedChanges = false;
                 StatusText = success ? "Project saved" : "Failed to save project";
             }
             finally { ClearBusy(); }
@@ -733,6 +755,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             try
             {
                 bool success = await _serializationService.SaveProjectAsync(_currentProject, _currentFilePath);
+                if (success) HasUnsavedChanges = false;
                 StatusText = success ? $"Saved: {Path.GetFileName(dialog.FileName)}" : "Failed to save project";
             }
             finally { ClearBusy(); }
@@ -797,6 +820,31 @@ namespace MTGProxyBuilder.UI.ViewModels
         {
             SelectedCard = card;
             ShowArtSelector(card, isShowingBack ? Dialogs.ArtSelectorMode.Back : Dialogs.ArtSelectorMode.Front);
+        }
+
+        public void ApplyMajorityBackToCards(List<int> cardIndices)
+        {
+            var mostCommon = GetMostCommonBackArt();
+            if (mostCommon == null)
+            {
+                MessageBox.Show("No cards in the project have back art assigned.", "No Back Art",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            PushUndo();
+            int count = 0;
+            foreach (var idx in cardIndices)
+            {
+                if (idx >= 0 && idx < Cards.Count)
+                {
+                    Cards[idx].BackArtworkPath = mostCommon;
+                    Cards[idx].IncludeBack = true;
+                    count++;
+                }
+            }
+            StatusText = $"Applied back art to {count} card(s)";
+            RefreshCanvas();
         }
 
         public void CreateTokenFromCard(CardModel sourceCard)
@@ -897,6 +945,7 @@ namespace MTGProxyBuilder.UI.ViewModels
                     }
                 }
                 RefreshBackArtLibrary();
+                RefreshCanvas();
             }
         }
 
@@ -928,6 +977,7 @@ namespace MTGProxyBuilder.UI.ViewModels
                 }
                 StatusText = $"Back art applied to {targets.Count} card(s)";
                 RefreshBackArtLibrary();
+                RefreshCanvas();
             }
         }
 
@@ -1785,6 +1835,16 @@ namespace MTGProxyBuilder.UI.ViewModels
         {
             if (!string.IsNullOrEmpty(card.BackArtworkPath)) return;
 
+            // First: use whatever back art the majority of existing cards use
+            var mostCommon = GetMostCommonBackArt();
+            if (mostCommon != null)
+            {
+                card.BackArtworkPath = mostCommon;
+                card.IncludeBack = true;
+                return;
+            }
+
+            // Second: fall back to the library default
             var defaultPath = _backArtLibraryService.DefaultBackArtPath;
             if (defaultPath != null)
             {

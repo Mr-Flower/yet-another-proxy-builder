@@ -224,4 +224,61 @@ public class PageLayoutTests
         float usable = layout.GetUsableWidthMm();
         Assert.Equal(layout.PageWidthMm - layout.MarginLeftMm - layout.MarginRightMm, usable);
     }
+
+    [Fact]
+    public void GetUsableHeightMm_SubtractsMargins()
+    {
+        var layout = new PageLayout();
+        float usable = layout.GetUsableHeightMm();
+        Assert.Equal(layout.PageHeightMm - layout.MarginTopMm - layout.MarginBottomMm, usable);
+    }
+
+    [Fact]
+    public void ApplyPagePreset_InvalidName_DefaultsToA4()
+    {
+        var layout = new PageLayout();
+        layout.ApplyPagePreset("InvalidPreset");
+        Assert.Equal(210f, layout.PageWidthMm);
+        Assert.Equal(297f, layout.PageHeightMm);
+    }
+
+    [Fact]
+    public void CenterGrid_CalledOnConstruction()
+    {
+        var layout = new PageLayout();
+        // Margins should already be set (constructor calls CenterGrid)
+        Assert.True(layout.MarginLeftMm >= 0);
+        Assert.True(layout.MarginTopMm >= 0);
+    }
+
+    [Fact]
+    public void AutoCardsPerColumn_MinimumIsOne()
+    {
+        var layout = new PageLayout
+        {
+            PageHeightMm = 10,
+            CardHeightMm = 100,
+            BleedWidthMm = 0
+        };
+        Assert.Equal(1, layout.AutoCardsPerColumn);
+    }
+
+    [Fact]
+    public void IsLandscape_SetTwice_NoOp()
+    {
+        var layout = new PageLayout();
+        layout.IsLandscape = true;
+        float w = layout.PageWidthMm;
+        float h = layout.PageHeightMm;
+        layout.IsLandscape = true; // same value again
+        Assert.Equal(w, layout.PageWidthMm);
+        Assert.Equal(h, layout.PageHeightMm);
+    }
+
+    [Fact]
+    public void CardsPerPage_WithOverrides()
+    {
+        var layout = new PageLayout { ColumnsOverride = 4, RowsOverride = 5 };
+        Assert.Equal(20, layout.CardsPerPage);
+    }
 }

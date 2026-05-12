@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = new MainViewModel();
+        Closing += OnWindowClosing;
 
         ScryfallSearchBox.KeyDown += (s, e) =>
         {
@@ -40,6 +41,12 @@ public partial class MainWindow : Window
         {
             if (DataContext is MainViewModel vm)
                 vm.CreateTokenFromCard(sourceCard);
+        };
+
+        GridCanvas.ApplyMajorityBackRequested += (cardIndices) =>
+        {
+            if (DataContext is MainViewModel vm)
+                vm.ApplyMajorityBackToCards(cardIndices);
         };
 
         // Ctrl+Z / Ctrl+Y for undo/redo
@@ -139,5 +146,29 @@ public partial class MainWindow : Window
         CanvasScale.ScaleX = _zoom;
         CanvasScale.ScaleY = _zoom;
         ZoomLabel.Text = $"{(int)(_zoom * 100)}%";
+    }
+
+    // --- Unsaved changes prompt ---
+
+    private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (DataContext is MainViewModel vm && vm.HasUnsavedChanges)
+        {
+            var result = MessageBox.Show(
+                "You have unsaved changes. Do you want to save before closing?",
+                "Unsaved Changes",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                if (vm.SaveProjectCommand.CanExecute(null))
+                    vm.SaveProjectCommand.Execute(null);
+            }
+            else if (result == MessageBoxResult.Cancel)
+            {
+                e.Cancel = true;
+            }
+        }
     }
 }

@@ -97,6 +97,16 @@ namespace MTGProxyBuilder.UI.Controls
             DependencyProperty.Register("SelectedCard", typeof(CardModel), typeof(GridEditorCanvas),
                 new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
 
+        public static readonly DependencyProperty RefreshTriggerProperty =
+            DependencyProperty.Register("RefreshTrigger", typeof(int), typeof(GridEditorCanvas),
+                new PropertyMetadata(0, (d, _) => ((GridEditorCanvas)d).ScheduleRedraw()));
+
+        public int RefreshTrigger
+        {
+            get => (int)GetValue(RefreshTriggerProperty);
+            set => SetValue(RefreshTriggerProperty, value);
+        }
+
         public static readonly DependencyProperty UndoServiceProperty =
             DependencyProperty.Register("UndoSvc", typeof(UndoService), typeof(GridEditorCanvas));
 
@@ -109,6 +119,7 @@ namespace MTGProxyBuilder.UI.Controls
         /// <summary>Fired when the user double-clicks a card on the canvas.</summary>
         public event Action<CardModel, bool>? CardDoubleClicked; // (card, isShowingBack)
         public event Action<CardModel>? CreateTokenRequested; // (sourceCard)
+        public event Action<List<int>>? ApplyMajorityBackRequested; // (cardIndices)
 
         public PageLayout? PageSettings
         {
@@ -465,6 +476,11 @@ namespace MTGProxyBuilder.UI.Controls
                 var flipItem = new MenuItem { Header = hasSelection ? $"Flip Selected{target}" : "Flip Card" };
                 flipItem.Click += (_, _) => FlipCards(cardIndices);
                 menu.Items.Add(flipItem);
+
+                // "Match Back Art" — apply the most common back art to selected/hovered cards
+                var matchBackItem = new MenuItem { Header = hasSelection ? $"Match Back Art{target}" : "Match Back Art" };
+                matchBackItem.Click += (_, _) => ApplyMajorityBackRequested?.Invoke(cardIndices);
+                menu.Items.Add(matchBackItem);
 
                 // "Create Token" — for double-faced cards (cards with back art)
                 if (!hasSelection && hasHover)

@@ -150,6 +150,7 @@
                                     ShowCutGuides="{Binding CurrentProject.PrintSettings.ShowCutGuides}"
                                     SelectedCard="{Binding SelectedCard}"
                                     UndoSvc="{Binding UndoServiceInstance}"
+                                    RefreshTrigger="{Binding RefreshTrigger}"
                                     Cursor="Hand">
                                     <controls:GridEditorCanvas.LayoutTransform>
                                         <ScaleTransform x:Name="CanvasScale" ScaleX="1" ScaleY="1"/>
