@@ -189,4 +189,46 @@ public class MpcFillSourceManagerTests : IDisposable
         mgr.AddFavorite(1);
         Assert.Equal(1, mgr.FavoritePks.Count);
     }
+
+    [Fact]
+    public void SetSources_EmptyDictionary()
+    {
+        var mgr = new MpcFillSourceManager();
+        mgr.SetSources(new Dictionary<string, (string name, string description)>());
+        Assert.True(mgr.IsLoaded);
+        Assert.Empty(mgr.AllSources);
+    }
+
+    [Fact]
+    public void IsFavorite_NonexistentPk_ReturnsFalse()
+    {
+        var mgr = CreateWithSources();
+        Assert.False(mgr.IsFavorite(999));
+    }
+
+    [Fact]
+    public void GetByName_NotFound_ReturnsNull_AfterLoad()
+    {
+        var mgr = CreateWithSources();
+        Assert.Null(mgr.GetByName(""));
+    }
+
+    [Fact]
+    public void BuildSourcesArray_EmptySelection_AllEnabled()
+    {
+        var mgr = CreateWithSources();
+        var arr = mgr.BuildSourcesArray(Enumerable.Empty<int>());
+        Assert.All(arr, entry => Assert.Equal(true, entry[1]));
+    }
+
+    [Fact]
+    public void AllSources_HaveCorrectProperties()
+    {
+        var mgr = CreateWithSources();
+        foreach (var src in mgr.AllSources)
+        {
+            Assert.True(src.Pk > 0);
+            Assert.False(string.IsNullOrEmpty(src.Name));
+        }
+    }
 }

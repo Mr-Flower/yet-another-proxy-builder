@@ -20,6 +20,27 @@ namespace MTGProxyBuilder.Core.Services
 
                     var settings = project.PageSettings;
                     var printSettings = project.PrintSettings;
+
+                    // Pre-process all unique images for bleed (avoids re-processing duplicates)
+                    int bleedPx = settings.BleedWidthMm > 0
+                        ? Math.Max(1, (int)(settings.BleedWidthMm / settings.CardWidthMm * 600))
+                        : 0;
+                    var bleedCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    if (bleedPx > 0)
+                    {
+                        var uniquePaths = project.Cards
+                            .SelectMany(c => new[] { c.ArtworkPath, c.BackArtworkPath })
+                            .Where(p => !string.IsNullOrEmpty(p) && File.Exists(p))
+                            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+                        foreach (var path in uniquePaths)
+                        {
+                            var result = _bleedProcessor.GetBleedExtendedImage(path!, bleedPx);
+                            if (result != null)
+                                bleedCache[path!] = result;
+                        }
+                    }
+
                     var expandedFronts = ExpandCards(project.Cards);
                     var expandedBacks = ExpandCards(project.Cards.Where(c => c.IncludeBack).ToList());
 
@@ -31,21 +52,21 @@ namespace MTGProxyBuilder.Core.Services
 
                         for (int i = 0; i < totalPages; i++)
                         {
-                            AddPage(document, settings, printSettings, expandedFronts, i, true);
-                            AddPage(document, settings, printSettings, expandedBacks, i, false);
+                            AddPage(document, settings, printSettings, expandedFronts, i, true, bleedCache);
+                            AddPage(document, settings, printSettings, expandedBacks, i, false, bleedCache);
                         }
                     }
                     else if (printSettings.PrintMode == PrintMode.FrontsOnly)
                     {
                         int pageCount = CalcPageCount(expandedFronts.Count, settings);
                         for (int i = 0; i < pageCount; i++)
-                            AddPage(document, settings, printSettings, expandedFronts, i, true);
+                            AddPage(document, settings, printSettings, expandedFronts, i, true, bleedCache);
                     }
                     else
                     {
                         int pageCount = CalcPageCount(expandedBacks.Count, settings);
                         for (int i = 0; i < pageCount; i++)
-                            AddPage(document, settings, printSettings, expandedBacks, i, false);
+                            AddPage(document, settings, printSettings, expandedBacks, i, false, bleedCache);
                     }
 
                     if (document.PageCount == 0)
@@ -66,7 +87,8 @@ namespace MTGProxyBuilder.Core.Services
         }
 
         private void AddPage(PdfDocument doc, PageLayout settings, PrintSettings printSettings,
-            List<CardModel> cards, int pageIndex, bool front)
+            List<CardModel> cards, int pageIndex, bool front,
+            Dictionary<string, string> bleedCache)
         {
             var page = doc.AddPage();
             SetPageSize(page, settings);
@@ -89,9 +111,6 @@ namespace MTGProxyBuilder.Core.Services
 
             int cols = settings.CardsPerRow;
 
-            // Calculate bleed in pixels for image processing (based on card image resolution)
-            int bleedPx = Math.Max(1, (int)(settings.BleedWidthMm / settings.CardWidthMm * 600));
-
             for (int i = 0; i < perPage && (startIdx + i) < cards.Count; i++)
             {
                 var card = cards[startIdx + i];
@@ -104,16 +123,17 @@ namespace MTGProxyBuilder.Core.Services
 
                 string imagePath = front ? card.ArtworkPath : (card.BackArtworkPath ?? card.ArtworkPath);
 
-                if (settings.BleedWidthMm > 0 && !string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
+                if (bleedCache.Count > 0 && !string.IsNullOrEmpty(imagePath) && bleedCache.TryGetValue(imagePath, out var bleedImage))
                 {
-                    // Process image with edge-extended bleed
-                    var bleedImage = _bleedProcessor.GetBleedExtendedImage(imagePath, bleedPx);
-                    DrawCard(gfx, bleedImage ?? imagePath, cellX, cellY, cellW, cellH);
+                    DrawCard(gfx, bleedImage, cellX, cellY, cellW, cellH);
+                }
+                else if (!string.IsNullOrEmpty(imagePath))
+                {
+                    DrawCard(gfx, imagePath, cellX + bleedPt, cellY + bleedPt, cardWPt, cardHPt);
                 }
                 else
                 {
-                    // No bleed: draw card image at card size, centered in cell
-                    DrawCard(gfx, imagePath, cellX + bleedPt, cellY + bleedPt, cardWPt, cardHPt);
+                    DrawCard(gfx, null, cellX + bleedPt, cellY + bleedPt, cardWPt, cardHPt);
                 }
 
                 // Cut guides — extend from card edge to page edge

@@ -38,7 +38,7 @@ namespace MTGProxyBuilder.Core.Services
             try
             {
                 string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedPixels}";
-                string outputPath = Path.Combine(_cacheDir, $"{hash}.png");
+                string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
 
                 if (File.Exists(outputPath))
                 {
@@ -114,9 +114,9 @@ namespace MTGProxyBuilder.Core.Services
                 paint.Color = bottomRight;
                 canvas.DrawRect(bleedPixels + srcW, bleedPixels + srcH, bleedPixels, bleedPixels, paint);
 
-                // Save
+                // Save as JPEG (much faster than PNG, fine for print)
                 using var stream = File.OpenWrite(outputPath);
-                output.Encode(stream, SKEncodedImageFormat.Png, 95);
+                output.Encode(stream, SKEncodedImageFormat.Jpeg, 95);
 
                 _processedCache[cacheKey] = outputPath;
                 return outputPath;
