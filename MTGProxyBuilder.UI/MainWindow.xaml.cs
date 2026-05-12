@@ -287,10 +287,23 @@ public partial class MainWindow : Window
             if (File.Exists(DockLayoutPath))
             {
                 var serializer = new XmlLayoutSerializer(DockManager);
+                serializer.LayoutSerializationCallback += (s, args) =>
+                {
+                    // Only restore anchorable panels (Search, Card, Layout, Filter)
+                    // Skip documents — their content is defined in XAML and shouldn't be replaced
+                    if (args.Model is AvalonDock.Layout.LayoutDocument)
+                    {
+                        args.Cancel = true;
+                    }
+                };
                 serializer.Deserialize(DockLayoutPath);
             }
         }
-        catch { /* ignore corrupt layout files */ }
+        catch
+        {
+            // Delete corrupt layout file so next launch uses defaults
+            try { if (File.Exists(DockLayoutPath)) File.Delete(DockLayoutPath); } catch { }
+        }
     }
 
     private void SaveDockLayout()

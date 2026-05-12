@@ -231,7 +231,7 @@
 
                         <!-- CENTER: Canvas document -->
                         <avalonDock:LayoutDocumentPane>
-                            <avalonDock:LayoutDocument Title="Page Preview" CanClose="False">
+                            <avalonDock:LayoutDocument Title="Page Preview" ContentId="PagePreview" CanClose="False">
                                 <Border Background="#252526">
                 <Grid>
                     <ScrollViewer x:Name="CanvasScrollViewer"
