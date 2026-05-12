@@ -96,6 +96,10 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly MpcFillXmlImportService _mpcXmlImportService;
         private readonly UndoService _undoService = new();
         private readonly CacheManager _cacheManager = new();
+        private readonly UpdateCheckService _updateService = new();
+        private bool _updateAvailable;
+        private string _updateMessage = string.Empty;
+        private string _updateDownloadUrl = string.Empty;
 
         // Art source toggle
         private bool _useMpcFill;
@@ -201,6 +205,8 @@ namespace MTGProxyBuilder.UI.ViewModels
             ImportMpcFillXmlCommand = new RelayCommand(_ => ImportMpcFillXml());
             ClearCacheCommand = new RelayCommand(_ => ClearCache());
             ManageBackArtLibraryCommand = new RelayCommand(_ => ManageBackArtLibrary());
+            DownloadUpdateCommand = new RelayCommand(_ => DownloadUpdate());
+            DismissUpdateCommand = new RelayCommand(_ => UpdateAvailable = false);
 
             // MPCFill / art source
             AddMpcFillCardCommand = new RelayCommand(_ => AddMpcFillCard(), _ => SelectedMpcFillCard != null);
@@ -221,6 +227,42 @@ namespace MTGProxyBuilder.UI.ViewModels
 
             // Startup cache cleanup
             _cacheManager.CleanupOnStartup();
+
+            // Check for updates in the background
+            _ = CheckForUpdateAsync();
+        }
+
+        private async Task CheckForUpdateAsync()
+        {
+            try
+            {
+                string currentVersion = GetAppVersion();
+
+                var update = await _updateService.CheckForUpdateAsync(currentVersion);
+                if (update?.IsUpdateAvailable == true)
+                {
+                    UpdateAvailable = true;
+                    UpdateMessage = $"Version {update.LatestVersion} is available (you have {update.CurrentVersion})";
+                    UpdateDownloadUrl = update.DownloadUrl;
+                }
+            }
+            catch { /* never crash on update check */ }
+        }
+
+        private void DownloadUpdate()
+        {
+            if (!string.IsNullOrEmpty(UpdateDownloadUrl))
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = UpdateDownloadUrl,
+                        UseShellExecute = true
+                    });
+                }
+                catch { }
+            }
         }
 
         // --- Properties ---
@@ -363,6 +405,40 @@ namespace MTGProxyBuilder.UI.ViewModels
         }
 
         private void MarkDirty() => HasUnsavedChanges = true;
+
+        // --- Update check ---
+        public bool UpdateAvailable
+        {
+            get => _updateAvailable;
+            set => SetProperty(ref _updateAvailable, value);
+        }
+
+        public string UpdateMessage
+        {
+            get => _updateMessage;
+            set => SetProperty(ref _updateMessage, value);
+        }
+
+        public string UpdateDownloadUrl
+        {
+            get => _updateDownloadUrl;
+            set => SetProperty(ref _updateDownloadUrl, value);
+        }
+
+        public ICommand DownloadUpdateCommand { get; private set; } = null!;
+        public ICommand DismissUpdateCommand { get; private set; } = null!;
+
+        public string AppVersion { get; } = GetAppVersion();
+
+        private static string GetAppVersion()
+        {
+            var asm = System.Reflection.Assembly.GetEntryAssembly();
+            if (asm == null) return "dev";
+            var attrs = asm.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false);
+            if (attrs.Length > 0 && attrs[0] is System.Reflection.AssemblyInformationalVersionAttribute attr)
+                return attr.InformationalVersion?.Split('+')[0] ?? "dev";
+            return asm.GetName().Version?.ToString(3) ?? "dev";
+        }
 
         private int _refreshTrigger;
         public int RefreshTrigger

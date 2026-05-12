@@ -48,6 +48,9 @@ jobs:
         -p:FileVersion=${{ steps.version.outputs.version }}
         -o publish
 
+    - name: Remove PDB files
+      run: Remove-Item publish/*.pdb -ErrorAction SilentlyContinue
+
     - name: Zip release
       run: Compress-Archive -Path publish/* -DestinationPath TCGProxyBuilder-${{ github.ref_name }}-win-x64.zip
 

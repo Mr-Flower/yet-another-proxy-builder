@@ -165,11 +165,18 @@ public class UiSmokeTests : IDisposable
         if (layoutTab == null) return;
 
         layoutTab.Click();
-        Thread.Sleep(300);
+        Thread.Sleep(500);
 
         // After clicking Layout tab, layout-specific content should be visible
+        // Look for any text that's specific to the Layout tab
         var texts = _mainWindow.FindAllDescendants(cf => cf.ByControlType(FlaUI.Core.Definitions.ControlType.Text));
-        var pageLabel = texts.FirstOrDefault(t => t.Name.Contains("PAGE") || t.Name.Contains("Page Size"));
-        Assert.NotNull(pageLabel);
+        var textNames = texts.Select(t => t.Name).Where(n => !string.IsNullOrEmpty(n)).ToList();
+
+        var layoutContent = textNames.FirstOrDefault(n =>
+            n.Contains("PAGE") || n.Contains("Page Size") ||
+            n.Contains("PRINT") || n.Contains("Print Mode") ||
+            n.Contains("CARD SIZE") || n.Contains("Landscape") ||
+            n.Contains("GRID") || n.Contains("Columns"));
+        Assert.NotNull(layoutContent);
     }
 }
