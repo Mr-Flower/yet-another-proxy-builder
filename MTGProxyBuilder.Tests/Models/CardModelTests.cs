@@ -136,4 +136,30 @@ public class CardModelTests
         Assert.Contains("SetCode", changed);
         Assert.Contains("Artist", changed);
     }
+
+    // --- Overlay Text ---
+
+    [Fact]
+    public void OverlayText_DefaultsToEmpty()
+    {
+        var card = new CardModel();
+        Assert.Equal(string.Empty, card.OverlayText);
+    }
+
+    [Fact]
+    public void OverlayText_CanBeSet()
+    {
+        var card = new CardModel { OverlayText = "TOKEN" };
+        Assert.Equal("TOKEN", card.OverlayText);
+    }
+
+    [Fact]
+    public void OverlayText_PropertyChangedFires()
+    {
+        var card = new CardModel();
+        string? changed = null;
+        card.PropertyChanged += (_, e) => changed = e.PropertyName;
+        card.OverlayText = "PROXY";
+        Assert.Equal("OverlayText", changed);
+    }
 }

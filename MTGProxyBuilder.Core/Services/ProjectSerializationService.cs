@@ -207,9 +207,27 @@ namespace MTGProxyBuilder.Core.Services
                     Name = c.Name,
                     ArtworkPath = Rel(c.ArtworkPath),
                     BackArtworkPath = string.IsNullOrEmpty(c.BackArtworkPath) ? null : Rel(c.BackArtworkPath),
+                    OriginalBackArtworkPath = string.IsNullOrEmpty(c.OriginalBackArtworkPath) ? null : Rel(c.OriginalBackArtworkPath),
                     ScryfallId = c.ScryfallId,
                     Quantity = c.Quantity,
-                    IncludeBack = c.IncludeBack
+                    IncludeBack = c.IncludeBack,
+                    OverlayText = c.OverlayText,
+                    ManaCost = c.ManaCost,
+                    CMC = c.CMC,
+                    TypeLine = c.TypeLine,
+                    OracleText = c.OracleText,
+                    Rarity = c.Rarity,
+                    Colors = c.Colors,
+                    ColorIdentity = c.ColorIdentity,
+                    SetCode = c.SetCode,
+                    SetName = c.SetName,
+                    CollectorNumber = c.CollectorNumber,
+                    Artist = c.Artist,
+                    Power = c.Power,
+                    Toughness = c.Toughness,
+                    Loyalty = c.Loyalty,
+                    Keywords = c.Keywords,
+                    DateAdded = c.DateAdded
                 }).ToList()
             };
         }

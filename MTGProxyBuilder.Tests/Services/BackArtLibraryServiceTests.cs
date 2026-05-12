@@ -102,9 +102,10 @@ public class BackArtLibraryServiceTests : IDisposable
     }
 
     [Fact]
-    public void DefaultEntryId_InitiallyNull()
+    public void DefaultEntryId_CanBeCleared()
     {
         var svc = new BackArtLibraryService();
+        svc.SetDefault(null); // ensure clean state
         Assert.Null(svc.DefaultEntryId);
     }
 

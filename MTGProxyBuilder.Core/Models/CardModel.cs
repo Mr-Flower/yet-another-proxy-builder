@@ -31,6 +31,7 @@ namespace MTGProxyBuilder.Core.Models
         private string _loyalty = string.Empty;
         private string _keywords = string.Empty;
         private DateTime _dateAdded = DateTime.Now;
+        private string _overlayText = string.Empty;
 
         public string CardId
         {
@@ -184,6 +185,13 @@ namespace MTGProxyBuilder.Core.Models
         {
             get => _dateAdded;
             set { _dateAdded = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>Text overlay rendered on the card (e.g. "TOKEN"). Empty = no overlay.</summary>
+        public string OverlayText
+        {
+            get => _overlayText;
+            set { _overlayText = value; OnPropertyChanged(); }
         }
 
         /// <summary>Helper: primary card type (Creature, Instant, Sorcery, etc.)</summary>
