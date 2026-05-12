@@ -83,6 +83,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -129,8 +130,31 @@
             </Grid>
         </Border>
 
+        <!-- ==================== UPDATE BANNER ==================== -->
+        <Border Grid.Row="1" Background="#4A3800" Padding="10,6"
+                Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVisibility}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="&#x26A0;" Foreground="#FFB800" FontSize="14"
+                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="1" Text="{Binding UpdateMessage}" Foreground="#FFD" FontSize="12"
+                           VerticalAlignment="Center"/>
+                <Button Grid.Column="2" Content="Download" Padding="10,4" Margin="8,0"
+                        Background="#0078D4" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"
+                        Command="{Binding DownloadUpdateCommand}"/>
+                <Button Grid.Column="3" Content="&#x2715;" Padding="6,2"
+                        Background="Transparent" Foreground="#AA9" BorderThickness="0" Cursor="Hand" FontSize="12"
+                        Command="{Binding DismissUpdateCommand}" ToolTip="Dismiss"/>
+            </Grid>
+        </Border>
+
         <!-- ==================== MAIN AREA ==================== -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="290"/>
@@ -825,7 +849,7 @@
         </Grid>
 
         <!-- ==================== STATUS BAR ==================== -->
-        <Border Grid.Row="2" Background="#007ACC" Padding="8,3">
+        <Border Grid.Row="3" Background="#007ACC" Padding="8,3">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -833,13 +857,13 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding StatusText}" Foreground="White" FontSize="11"/>
                 <TextBlock Grid.Column="1" Foreground="#CCE8FF" FontSize="11">
-                    <Run Text="{Binding Cards.Count, Mode=OneWay}"/> cards
+                    <Run Text="{Binding Cards.Count, Mode=OneWay}"/> cards  |  v<Run Text="{Binding AppVersion, Mode=OneTime}"/>
                 </TextBlock>
             </Grid>
         </Border>
 
         <!-- ==================== BUSY OVERLAY ==================== -->
-        <Border Grid.RowSpan="3" Background="#CC000000"
+        <Border Grid.RowSpan="4" Background="#CC000000"
                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
             <Border Background="#2D2D30" CornerRadius="8" Padding="30,24"
                     HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="300"
