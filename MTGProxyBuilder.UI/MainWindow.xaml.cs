@@ -148,6 +148,19 @@ public partial class MainWindow : Window
         ZoomLabel.Text = $"{(int)(_zoom * 100)}%";
     }
 
+    // --- Color picker ---
+
+    private void OnOutlineColorClick(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+        var dialog = new Dialogs.ColorPickerDialog(vm.CurrentProject.PrintSettings.OutlineColor);
+        dialog.Owner = this;
+        if (dialog.ShowDialog() == true)
+        {
+            vm.CurrentProject.PrintSettings.OutlineColor = dialog.SelectedHexColor;
+        }
+    }
+
     // --- Unsaved changes prompt ---
 
     private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)

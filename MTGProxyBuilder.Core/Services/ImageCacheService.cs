@@ -54,7 +54,10 @@ namespace MTGProxyBuilder.Core.Services
             if (Directory.Exists(_cacheDirectory))
             {
                 foreach (var file in Directory.GetFiles(_cacheDirectory))
-                    File.Delete(file);
+                {
+                    try { File.Delete(file); }
+                    catch { /* skip locked files */ }
+                }
             }
         }
     }

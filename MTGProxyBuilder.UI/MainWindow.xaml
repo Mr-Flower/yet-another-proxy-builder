@@ -148,6 +148,7 @@
                                     PageSettings="{Binding CurrentProject.PageSettings}"
                                     CardsSource="{Binding Cards}"
                                     ShowCutGuides="{Binding CurrentProject.PrintSettings.ShowCutGuides}"
+                                    PrintSettingsSource="{Binding CurrentProject.PrintSettings}"
                                     SelectedCard="{Binding SelectedCard}"
                                     UndoSvc="{Binding UndoServiceInstance}"
                                     RefreshTrigger="{Binding RefreshTrigger}"
@@ -612,7 +613,81 @@
                                 <TextBlock Text="Print Mode" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
                                 <ComboBox ItemsSource="{Binding PrintModeValues}" SelectedItem="{Binding SelectedPrintMode}"
                                           Padding="4" Margin="0,0,0,6" FontSize="11"/>
-                                <CheckBox Content="Cutting guides" IsChecked="{Binding CurrentProject.PrintSettings.ShowCutGuides}" Foreground="#CCC" Margin="0,0,0,10"/>
+                                <CheckBox Content="Cutting guides (edge-to-edge)" IsChecked="{Binding CurrentProject.PrintSettings.ShowCutGuides}" Foreground="#CCC" Margin="0,0,0,6"/>
+
+                                <!-- Card Outline Guides -->
+                                <TextBlock Text="CARD OUTLINE" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,6,0,6"/>
+                                <CheckBox Content="Show card outline guides" IsChecked="{Binding CurrentProject.PrintSettings.ShowCardOutline}" Foreground="#CCC" Margin="0,0,0,6"/>
+
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Color" Foreground="#999" FontSize="9"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0" Width="24" Height="24" CornerRadius="3" Margin="0,0,4,0"
+                                                    BorderBrush="#555" BorderThickness="1" Cursor="Hand"
+                                                    Background="{Binding CurrentProject.PrintSettings.OutlineColor}"
+                                                    MouseLeftButtonUp="OnOutlineColorClick"/>
+                                            <TextBox Grid.Column="1" Text="{Binding CurrentProject.PrintSettings.OutlineColor, UpdateSourceTrigger=LostFocus}" Padding="4,3" FontSize="11"
+                                                     Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                        </Grid>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Line Weight (pt)" Foreground="#999" FontSize="9"/>
+                                        <TextBox Text="{Binding CurrentProject.PrintSettings.LineWeight, UpdateSourceTrigger=LostFocus}" Padding="4,3" FontSize="11"
+                                                 Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Margin="0,4,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Alignment" Foreground="#999" FontSize="9"/>
+                                        <ComboBox ItemsSource="{Binding OutlineAlignmentOptions}" SelectedItem="{Binding SelectedOutlineAlignment}" Padding="3" FontSize="10"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Outline Type" Foreground="#999" FontSize="9"/>
+                                        <ComboBox ItemsSource="{Binding OutlineTypeOptions}" SelectedItem="{Binding SelectedOutlineType}" Padding="3" FontSize="10"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Corner Radius (mm)" Foreground="#999" FontSize="9"/>
+                                        <TextBox Text="{Binding CurrentProject.PrintSettings.CornerRadiusMm, UpdateSourceTrigger=LostFocus}" Padding="4,3" FontSize="11"
+                                                 Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Line Type" Foreground="#999" FontSize="9"/>
+                                        <ComboBox ItemsSource="{Binding LineTypeOptions}" SelectedItem="{Binding SelectedLineType}" Padding="3" FontSize="10"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="4">
+                                        <TextBlock Text="Corner Length (mm)" Foreground="#999" FontSize="9"/>
+                                        <TextBox Text="{Binding CurrentProject.PrintSettings.CornerLengthMm, UpdateSourceTrigger=LostFocus}" Padding="4,3" FontSize="11"
+                                                 Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Separator Margin="0,4"/>
 
                                 <!-- Card Size -->
                                 <TextBlock Text="CARD SIZE" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,6,0,6"/>

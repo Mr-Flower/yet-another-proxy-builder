@@ -93,6 +93,28 @@ namespace MTGProxyBuilder.UI.Controls
             DependencyProperty.Register("ShowCutGuides", typeof(bool), typeof(GridEditorCanvas),
                 new PropertyMetadata(true, (d, _) => ((GridEditorCanvas)d).ScheduleRedraw()));
 
+        public static readonly DependencyProperty PrintSettingsSourceProperty =
+            DependencyProperty.Register("PrintSettingsSource", typeof(PrintSettings), typeof(GridEditorCanvas),
+                new PropertyMetadata(null, OnPrintSettingsChanged));
+
+        public PrintSettings? PrintSettingsSource
+        {
+            get => (PrintSettings?)GetValue(PrintSettingsSourceProperty);
+            set => SetValue(PrintSettingsSourceProperty, value);
+        }
+
+        private static void OnPrintSettingsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is GridEditorCanvas canvas)
+            {
+                if (e.OldValue is PrintSettings old) old.PropertyChanged -= canvas.OnPrintSettingsPropChanged;
+                if (e.NewValue is PrintSettings nw) nw.PropertyChanged += canvas.OnPrintSettingsPropChanged;
+                canvas.ScheduleRedraw();
+            }
+        }
+
+        private void OnPrintSettingsPropChanged(object? s, System.ComponentModel.PropertyChangedEventArgs e) => ScheduleRedraw();
+
         public static readonly DependencyProperty SelectedCardProperty =
             DependencyProperty.Register("SelectedCard", typeof(CardModel), typeof(GridEditorCanvas),
                 new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
@@ -761,6 +783,147 @@ namespace MTGProxyBuilder.UI.Controls
                 Line(cardRight, cardBottomY, pageW, cardBottomY);
             }
 
+            // Card outline guides
+            var ps = PrintSettingsSource;
+            if (ps != null && ps.ShowCardOutline)
+            {
+                DrawCardOutlinePreview(x, y, cellW, cellH, bleed, cardW, cardH, ps);
+            }
+
+        }
+
+        private void DrawCardOutlinePreview(float cellX, float cellY,
+            float cellW, float cellH, float bleed, float cardW, float cardH, PrintSettings ps)
+        {
+            // Parse color
+            SolidColorBrush brush;
+            try
+            {
+                string hex = ps.OutlineColor.TrimStart('#');
+                byte r = Convert.ToByte(hex[..2], 16);
+                byte g = Convert.ToByte(hex[2..4], 16);
+                byte b = Convert.ToByte(hex[4..6], 16);
+                brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+            }
+            catch { brush = new SolidColorBrush(Color.FromRgb(0x66, 0xFF, 0x00)); }
+            brush.Freeze();
+
+            float weight = ps.LineWeight * 0.5f; // scale down for preview (points → screen)
+            float radiusPx = ps.CornerRadiusMm * MmToPx;
+            float cornerLenPx = ps.CornerLengthMm * MmToPx;
+
+            float cardLeft = cellX + bleed;
+            float cardTop = cellY + bleed;
+            float offset = weight / 2;
+
+            float ox, oy, ow, oh;
+            switch (ps.OutlineAlignment)
+            {
+                case OutlineAlignment.Inside:
+                    ox = cardLeft + offset; oy = cardTop + offset;
+                    ow = cardW - 2 * offset; oh = cardH - 2 * offset;
+                    break;
+                case OutlineAlignment.Outside:
+                    ox = cardLeft - offset; oy = cardTop - offset;
+                    ow = cardW + 2 * offset; oh = cardH + 2 * offset;
+                    break;
+                default:
+                    ox = cardLeft; oy = cardTop; ow = cardW; oh = cardH;
+                    break;
+            }
+
+            if (ps.OutlineType == OutlineType.Full)
+            {
+                var rect = new Rectangle
+                {
+                    Width = ow, Height = oh,
+                    Stroke = brush, StrokeThickness = weight,
+                    RadiusX = radiusPx, RadiusY = radiusPx,
+                    Fill = Brushes.Transparent, IsHitTestVisible = false
+                };
+                if (ps.OutlineLineType == LineType.Dashed)
+                    rect.StrokeDashArray = new DoubleCollection { 4, 2 };
+                SetLeft(rect, ox); SetTop(rect, oy);
+                Children.Add(rect);
+            }
+            else // Corners
+            {
+                float r = Math.Min(radiusPx, Math.Min(ow / 2, oh / 2));
+                float len = Math.Min(cornerLenPx, Math.Min(ow / 2 - r, oh / 2 - r));
+                if (len <= 0) len = 5;
+
+                DoubleCollection? dashArray = ps.OutlineLineType == LineType.Dashed
+                    ? new DoubleCollection { 4, 2 } : null;
+
+                void AddLine(float x1, float y1, float x2, float y2)
+                {
+                    var l = new Line
+                    {
+                        X1 = x1, Y1 = y1, X2 = x2, Y2 = y2,
+                        Stroke = brush, StrokeThickness = weight, IsHitTestVisible = false
+                    };
+                    if (dashArray != null) l.StrokeDashArray = dashArray;
+                    Children.Add(l);
+                }
+
+                if (r > 0)
+                {
+                    void AddCornerPath(Point lineStart, Point arcStart, Point arcEnd, Point lineEnd, SweepDirection sweep)
+                    {
+                        var fig = new PathFigure { StartPoint = lineStart, IsClosed = false, IsFilled = false };
+                        fig.Segments.Add(new LineSegment(arcStart, true));
+                        fig.Segments.Add(new ArcSegment(arcEnd, new Size(r, r), 0, false, sweep, true));
+                        fig.Segments.Add(new LineSegment(lineEnd, true));
+                        var geom = new PathGeometry(new[] { fig });
+                        var path = new System.Windows.Shapes.Path
+                        {
+                            Data = geom, Stroke = brush, StrokeThickness = weight, IsHitTestVisible = false
+                        };
+                        if (dashArray != null) path.StrokeDashArray = dashArray;
+                        Children.Add(path);
+                    }
+
+                    // Top-left: line up → arc → line right
+                    AddCornerPath(
+                        new Point(ox, oy + r + len),
+                        new Point(ox, oy + r),
+                        new Point(ox + r, oy),
+                        new Point(ox + r + len, oy),
+                        SweepDirection.Clockwise);
+
+                    // Top-right: line left → arc → line down
+                    AddCornerPath(
+                        new Point(ox + ow - r - len, oy),
+                        new Point(ox + ow - r, oy),
+                        new Point(ox + ow, oy + r),
+                        new Point(ox + ow, oy + r + len),
+                        SweepDirection.Clockwise);
+
+                    // Bottom-right: line up → arc → line left
+                    AddCornerPath(
+                        new Point(ox + ow, oy + oh - r - len),
+                        new Point(ox + ow, oy + oh - r),
+                        new Point(ox + ow - r, oy + oh),
+                        new Point(ox + ow - r - len, oy + oh),
+                        SweepDirection.Clockwise);
+
+                    // Bottom-left: line right → arc → line up
+                    AddCornerPath(
+                        new Point(ox + r + len, oy + oh),
+                        new Point(ox + r, oy + oh),
+                        new Point(ox, oy + oh - r),
+                        new Point(ox, oy + oh - r - len),
+                        SweepDirection.Clockwise);
+                }
+                else
+                {
+                    // Sharp L-corners
+                    AddLine(ox, oy + len, ox, oy); AddLine(ox, oy, ox + len, oy);
+                    AddLine(ox + ow - len, oy, ox + ow, oy); AddLine(ox + ow, oy, ox + ow, oy + len);
+                    AddLine(ox + ow, oy + oh - len, ox + ow, oy + oh); AddLine(ox + ow, oy + oh, ox + ow - len, oy + oh);
+                    AddLine(ox + len, oy + oh, ox, oy + oh); AddLine(ox, oy + oh, ox, oy + oh - len);
+                }
+            }
         }
 
         private void DrawNoBackPlaceholder(float x, float y, float w, float h, string cardName)

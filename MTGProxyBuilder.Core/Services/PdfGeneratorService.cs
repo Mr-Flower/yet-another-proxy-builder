@@ -110,7 +110,24 @@ namespace MTGProxyBuilder.Core.Services
             float cellH = cardHPt + 2 * bleedPt;
 
             int cols = settings.CardsPerRow;
+            float pageWPt = settings.PageWidthMm * MmToPt;
+            float pageHPt = settings.PageHeightMm * MmToPt;
 
+            // Pass 1: Draw cut guides BEHIND card art
+            if (printSettings.ShowCutGuides)
+            {
+                for (int i = 0; i < perPage && (startIdx + i) < cards.Count; i++)
+                {
+                    int row = i / cols;
+                    int col = front ? (i % cols) : (cols - 1 - (i % cols));
+                    float cellX = startX + col * cellW;
+                    float cellY = startY + row * cellH;
+
+                    DrawCutGuides(gfx, cellX, cellY, cellW, cellH, bleedPt, cardWPt, cardHPt, pageWPt, pageHPt);
+                }
+            }
+
+            // Pass 2: Draw card images ON TOP of cut guides
             for (int i = 0; i < perPage && (startIdx + i) < cards.Count; i++)
             {
                 var card = cards[startIdx + i];
@@ -135,14 +152,165 @@ namespace MTGProxyBuilder.Core.Services
                 {
                     DrawCard(gfx, null, cellX + bleedPt, cellY + bleedPt, cardWPt, cardHPt);
                 }
+            }
 
-                // Cut guides — extend from card edge to page edge
-                if (printSettings.ShowCutGuides)
+            // Pass 3: Draw card outlines ON TOP of card art
+            if (printSettings.ShowCardOutline)
+            {
+                for (int i = 0; i < perPage && (startIdx + i) < cards.Count; i++)
                 {
-                    float pageWPt = settings.PageWidthMm * MmToPt;
-                    float pageHPt = settings.PageHeightMm * MmToPt;
-                    DrawCutGuides(gfx, cellX, cellY, cellW, cellH, bleedPt, cardWPt, cardHPt, pageWPt, pageHPt);
+                    int row = i / cols;
+                    int col = front ? (i % cols) : (cols - 1 - (i % cols));
+                    float cellX = startX + col * cellW;
+                    float cellY = startY + row * cellH;
+
+                    DrawCardOutline(gfx, cellX, cellY, cellW, cellH, bleedPt, cardWPt, cardHPt, printSettings);
                 }
+            }
+        }
+
+        private void DrawCardOutline(XGraphics gfx, float cellX, float cellY,
+            float cellW, float cellH, float bleed, float cardW, float cardH,
+            PrintSettings ps)
+        {
+            // Parse outline color
+            XColor color;
+            try
+            {
+                string hex = ps.OutlineColor.TrimStart('#');
+                int r = Convert.ToInt32(hex[..2], 16);
+                int g = Convert.ToInt32(hex[2..4], 16);
+                int b = Convert.ToInt32(hex[4..6], 16);
+                color = XColor.FromArgb(r, g, b);
+            }
+            catch { color = XColor.FromArgb(0x66, 0xFF, 0x00); }
+
+            var pen = new XPen(color, ps.LineWeight);
+            if (ps.OutlineLineType == LineType.Dashed)
+                pen.DashStyle = XDashStyle.Dash;
+
+            float radiusPt = ps.CornerRadiusMm * MmToPt;
+            float cornerLenPt = ps.CornerLengthMm * MmToPt;
+
+            // Calculate card rect position based on alignment
+            float cardLeft = cellX + bleed;
+            float cardTop = cellY + bleed;
+            float offset = ps.LineWeight / 2; // half the line weight for alignment
+
+            float x, y, w, h;
+            switch (ps.OutlineAlignment)
+            {
+                case OutlineAlignment.Inside:
+                    x = cardLeft + offset;
+                    y = cardTop + offset;
+                    w = cardW - 2 * offset;
+                    h = cardH - 2 * offset;
+                    break;
+                case OutlineAlignment.Outside:
+                    x = cardLeft - offset;
+                    y = cardTop - offset;
+                    w = cardW + 2 * offset;
+                    h = cardH + 2 * offset;
+                    break;
+                default: // Center
+                    x = cardLeft;
+                    y = cardTop;
+                    w = cardW;
+                    h = cardH;
+                    break;
+            }
+
+            if (ps.OutlineType == OutlineType.Full)
+            {
+                // Full rounded rectangle
+                if (radiusPt > 0)
+                    DrawRoundedRect(gfx, pen, x, y, w, h, radiusPt);
+                else
+                    gfx.DrawRectangle(pen, x, y, w, h);
+            }
+            else // Corners only
+            {
+                DrawCornerMarks(gfx, pen, x, y, w, h, radiusPt, cornerLenPt);
+            }
+        }
+
+        private void DrawRoundedRect(XGraphics gfx, XPen pen, float x, float y, float w, float h, float r)
+        {
+            r = Math.Min(r, Math.Min(w / 2, h / 2));
+
+            var path = new XGraphicsPath();
+            // Top-left arc
+            path.AddArc(x, y, 2 * r, 2 * r, 180, 90);
+            // Top edge
+            path.AddLine(x + r, y, x + w - r, y);
+            // Top-right arc
+            path.AddArc(x + w - 2 * r, y, 2 * r, 2 * r, 270, 90);
+            // Right edge
+            path.AddLine(x + w, y + r, x + w, y + h - r);
+            // Bottom-right arc
+            path.AddArc(x + w - 2 * r, y + h - 2 * r, 2 * r, 2 * r, 0, 90);
+            // Bottom edge
+            path.AddLine(x + w - r, y + h, x + r, y + h);
+            // Bottom-left arc
+            path.AddArc(x, y + h - 2 * r, 2 * r, 2 * r, 90, 90);
+            // Left edge
+            path.AddLine(x, y + h - r, x, y + r);
+            path.CloseFigure();
+
+            gfx.DrawPath(pen, path);
+        }
+
+        private void DrawCornerMarks(XGraphics gfx, XPen pen, float x, float y, float w, float h, float r, float len)
+        {
+            r = Math.Min(r, Math.Min(w / 2, h / 2));
+            len = Math.Min(len, Math.Min(w / 2 - r, h / 2 - r));
+            if (len <= 0) len = 5;
+
+            if (r > 0)
+            {
+                // Top-left corner: arc + straight stubs
+                var path = new XGraphicsPath();
+                path.AddLine(x, y + r + len, x, y + r);
+                path.AddArc(x, y, 2 * r, 2 * r, 180, 90);
+                path.AddLine(x + r, y, x + r + len, y);
+                gfx.DrawPath(pen, path);
+
+                // Top-right corner
+                path = new XGraphicsPath();
+                path.AddLine(x + w - r - len, y, x + w - r, y);
+                path.AddArc(x + w - 2 * r, y, 2 * r, 2 * r, 270, 90);
+                path.AddLine(x + w, y + r, x + w, y + r + len);
+                gfx.DrawPath(pen, path);
+
+                // Bottom-right corner
+                path = new XGraphicsPath();
+                path.AddLine(x + w, y + h - r - len, x + w, y + h - r);
+                path.AddArc(x + w - 2 * r, y + h - 2 * r, 2 * r, 2 * r, 0, 90);
+                path.AddLine(x + w - r, y + h, x + w - r - len, y + h);
+                gfx.DrawPath(pen, path);
+
+                // Bottom-left corner
+                path = new XGraphicsPath();
+                path.AddLine(x + r + len, y + h, x + r, y + h);
+                path.AddArc(x, y + h - 2 * r, 2 * r, 2 * r, 90, 90);
+                path.AddLine(x, y + h - r, x, y + h - r - len);
+                gfx.DrawPath(pen, path);
+            }
+            else
+            {
+                // Sharp corners — just L-shaped marks
+                // Top-left
+                gfx.DrawLine(pen, x, y + len, x, y);
+                gfx.DrawLine(pen, x, y, x + len, y);
+                // Top-right
+                gfx.DrawLine(pen, x + w - len, y, x + w, y);
+                gfx.DrawLine(pen, x + w, y, x + w, y + len);
+                // Bottom-right
+                gfx.DrawLine(pen, x + w, y + h - len, x + w, y + h);
+                gfx.DrawLine(pen, x + w, y + h, x + w - len, y + h);
+                // Bottom-left
+                gfx.DrawLine(pen, x + len, y + h, x, y + h);
+                gfx.DrawLine(pen, x, y + h, x, y + h - len);
             }
         }
 

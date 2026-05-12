@@ -265,4 +265,175 @@ public class ServicePipelineTests : IDisposable
             Assert.True(layout.MarginTopMm >= 0, $"{preset}: negative top margin");
         }
     }
+
+    // --- Card Outline Guide Integration Tests ---
+
+    [Fact]
+    public async Task PdfGeneration_WithFullOutline()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Swamp");
+        Assert.NotNull(card);
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "Outline Full Test" };
+        var model = card!.ToCardModel(artPath ?? "", null);
+        model.Quantity = 4;
+        project.Cards.Add(model);
+
+        project.PrintSettings.ShowCardOutline = true;
+        project.PrintSettings.OutlineType = OutlineType.Full;
+        project.PrintSettings.OutlineColor = "#66FF00";
+        project.PrintSettings.CornerRadiusMm = 3f;
+        project.PrintSettings.OutlineAlignment = OutlineAlignment.Center;
+        project.PrintSettings.OutlineLineType = LineType.Solid;
+        project.PrintSettings.LineWeight = 2f;
+
+        string pdfPath = Path.Combine(_testOutputDir, "outline_full.pdf");
+        bool success = await _pdfGenerator.GeneratePdfAsync(project, pdfPath);
+
+        Assert.True(success);
+        Assert.True(File.Exists(pdfPath));
+        Assert.True(new FileInfo(pdfPath).Length > 1000);
+    }
+
+    [Fact]
+    public async Task PdfGeneration_WithCornerOutline()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Forest");
+        Assert.NotNull(card);
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "Outline Corners Test" };
+        var model = card!.ToCardModel(artPath ?? "", null);
+        model.Quantity = 2;
+        project.Cards.Add(model);
+
+        project.PrintSettings.ShowCardOutline = true;
+        project.PrintSettings.OutlineType = OutlineType.Corners;
+        project.PrintSettings.OutlineColor = "#FF0000";
+        project.PrintSettings.CornerRadiusMm = 3f;
+        project.PrintSettings.OutlineAlignment = OutlineAlignment.Outside;
+        project.PrintSettings.CornerLengthMm = 5f;
+        project.PrintSettings.LineWeight = 2f;
+
+        string pdfPath = Path.Combine(_testOutputDir, "outline_corners.pdf");
+        bool success = await _pdfGenerator.GeneratePdfAsync(project, pdfPath);
+
+        Assert.True(success);
+        Assert.True(File.Exists(pdfPath));
+    }
+
+    [Fact]
+    public async Task PdfGeneration_WithSharpCorners()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Mountain");
+        Assert.NotNull(card);
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "Sharp Corners Test" };
+        var model = card!.ToCardModel(artPath ?? "", null);
+        model.Quantity = 1;
+        project.Cards.Add(model);
+
+        project.PrintSettings.ShowCardOutline = true;
+        project.PrintSettings.OutlineType = OutlineType.Corners;
+        project.PrintSettings.CornerRadiusMm = 0f; // sharp corners
+        project.PrintSettings.OutlineAlignment = OutlineAlignment.Inside;
+        project.PrintSettings.OutlineLineType = LineType.Dashed;
+        project.PrintSettings.CornerLengthMm = 8f;
+        project.PrintSettings.LineWeight = 1f;
+
+        string pdfPath = Path.Combine(_testOutputDir, "outline_sharp.pdf");
+        bool success = await _pdfGenerator.GeneratePdfAsync(project, pdfPath);
+
+        Assert.True(success);
+        Assert.True(File.Exists(pdfPath));
+    }
+
+    [Fact]
+    public async Task PdfGeneration_OutlineDisabled()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Plains");
+        Assert.NotNull(card);
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "No Outline Test" };
+        var model = card!.ToCardModel(artPath ?? "", null);
+        model.Quantity = 1;
+        project.Cards.Add(model);
+
+        project.PrintSettings.ShowCardOutline = false;
+
+        string pdfPath = Path.Combine(_testOutputDir, "no_outline.pdf");
+        bool success = await _pdfGenerator.GeneratePdfAsync(project, pdfPath);
+
+        Assert.True(success);
+        Assert.True(File.Exists(pdfPath));
+    }
+
+    [Fact]
+    public async Task PdfGeneration_OutlineWithDashedFullAndAllAlignments()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Island");
+        Assert.NotNull(card);
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        foreach (var alignment in Enum.GetValues<OutlineAlignment>())
+        {
+            var project = new ProjectModel { ProjectName = $"Outline {alignment}" };
+            var model = card!.ToCardModel(artPath ?? "", null);
+            model.Quantity = 1;
+            project.Cards.Add(model);
+
+            project.PrintSettings.ShowCardOutline = true;
+            project.PrintSettings.OutlineType = OutlineType.Full;
+            project.PrintSettings.OutlineAlignment = alignment;
+            project.PrintSettings.OutlineLineType = LineType.Dashed;
+            project.PrintSettings.CornerRadiusMm = 2f;
+            project.PrintSettings.LineWeight = 3f;
+
+            string pdfPath = Path.Combine(_testOutputDir, $"outline_{alignment}.pdf");
+            bool success = await _pdfGenerator.GeneratePdfAsync(project, pdfPath);
+
+            Assert.True(success, $"Failed for alignment {alignment}");
+            Assert.True(File.Exists(pdfPath));
+        }
+    }
+
+    [Fact]
+    public async Task SaveLoad_PreservesOutlineSettings()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Mountain");
+        Assert.NotNull(card);
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "Outline Persist Test" };
+        project.Cards.Add(card!.ToCardModel(artPath ?? "", null));
+
+        project.PrintSettings.ShowCardOutline = true;
+        project.PrintSettings.OutlineColor = "#FF00AA";
+        project.PrintSettings.OutlineAlignment = OutlineAlignment.Inside;
+        project.PrintSettings.CornerRadiusMm = 5f;
+        project.PrintSettings.OutlineType = OutlineType.Corners;
+        project.PrintSettings.OutlineLineType = LineType.Dashed;
+        project.PrintSettings.CornerLengthMm = 7f;
+        project.PrintSettings.LineWeight = 4f;
+
+        string projPath = Path.Combine(_testOutputDir, "outline_persist.mtgproj");
+        bool saved = await _serializer.SaveProjectAsync(project, projPath);
+        Assert.True(saved);
+
+        var loaded = await _serializer.LoadProjectAsync(projPath);
+        Assert.NotNull(loaded);
+
+        var ps = loaded!.PrintSettings;
+        Assert.True(ps.ShowCardOutline);
+        Assert.Equal("#FF00AA", ps.OutlineColor);
+        Assert.Equal(OutlineAlignment.Inside, ps.OutlineAlignment);
+        Assert.Equal(5f, ps.CornerRadiusMm);
+        Assert.Equal(OutlineType.Corners, ps.OutlineType);
+        Assert.Equal(LineType.Dashed, ps.OutlineLineType);
+        Assert.Equal(7f, ps.CornerLengthMm);
+        Assert.Equal(4f, ps.LineWeight);
+    }
 }

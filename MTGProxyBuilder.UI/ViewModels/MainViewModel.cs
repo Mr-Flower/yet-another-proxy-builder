@@ -296,6 +296,29 @@ namespace MTGProxyBuilder.UI.ViewModels
             set { _currentProject.PrintSettings.PrintMode = value; OnPropertyChanged(); }
         }
 
+        // Card outline enum bindings
+        public ObservableCollection<OutlineAlignment> OutlineAlignmentOptions { get; } = new(Enum.GetValues<OutlineAlignment>());
+        public ObservableCollection<OutlineType> OutlineTypeOptions { get; } = new(Enum.GetValues<OutlineType>());
+        public ObservableCollection<LineType> LineTypeOptions { get; } = new(Enum.GetValues<LineType>());
+
+        public OutlineAlignment SelectedOutlineAlignment
+        {
+            get => _currentProject.PrintSettings.OutlineAlignment;
+            set { _currentProject.PrintSettings.OutlineAlignment = value; OnPropertyChanged(); }
+        }
+
+        public OutlineType SelectedOutlineType
+        {
+            get => _currentProject.PrintSettings.OutlineType;
+            set { _currentProject.PrintSettings.OutlineType = value; OnPropertyChanged(); }
+        }
+
+        public LineType SelectedLineType
+        {
+            get => _currentProject.PrintSettings.OutlineLineType;
+            set { _currentProject.PrintSettings.OutlineLineType = value; OnPropertyChanged(); }
+        }
+
         // Scryfall
         public string ScryfallSearchQuery
         {
