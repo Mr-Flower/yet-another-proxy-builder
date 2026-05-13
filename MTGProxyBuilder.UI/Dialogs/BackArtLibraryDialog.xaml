@@ -75,7 +75,10 @@
                     <!-- Image preview (zoomable) -->
                     <ScrollViewer Grid.Row="0" x:Name="PreviewScroll"
                                   HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                                  Background="#111" PreviewMouseWheel="OnPreviewMouseWheel">
+                                  Background="#111" PreviewMouseWheel="OnPreviewMouseWheel"
+                                  PreviewMouseDown="OnPreviewMouseDown"
+                                  PreviewMouseUp="OnPreviewMouseUp"
+                                  MouseMove="OnPreviewMouseMove">
                         <Border HorizontalAlignment="Center" VerticalAlignment="Center" Padding="6">
                             <Image x:Name="PreviewImage" Stretch="Uniform" RenderTransformOrigin="0.5,0.5">
                                 <Image.LayoutTransform>

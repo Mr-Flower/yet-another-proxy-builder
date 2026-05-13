@@ -11,6 +11,9 @@ namespace MTGProxyBuilder.Core.Services
         [JsonProperty("has_more")]
         public bool HasMore { get; set; }
 
+        [JsonProperty("next_page")]
+        public string? NextPage { get; set; }
+
         [JsonProperty("total_cards")]
         public int TotalCards { get; set; }
     }
@@ -181,19 +184,32 @@ namespace MTGProxyBuilder.Core.Services
             try
             {
                 string encoded = System.Net.WebUtility.UrlEncode(cardName);
-                var response = await _httpClient.GetAsync(
-                    $"https://api.scryfall.com/cards/search?q={encoded}");
+                string? url = $"https://api.scryfall.com/cards/search?q={encoded}";
+                var allCards = new List<ScryfallCard>();
 
-                if (!response.IsSuccessStatusCode)
+                while (url != null)
                 {
-                    string body = await response.Content.ReadAsStringAsync();
-                    return (new(), $"Scryfall returned {(int)response.StatusCode}: {body[..Math.Min(body.Length, 200)]}");
+                    var response = await _httpClient.GetAsync(url);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        string body = await response.Content.ReadAsStringAsync();
+                        if (allCards.Count > 0) break; // return what we have from prior pages
+                        return (new(), $"Scryfall returned {(int)response.StatusCode}: {body[..Math.Min(body.Length, 200)]}");
+                    }
+
+                    var content = await response.Content.ReadAsStringAsync();
+                    var result = JsonConvert.DeserializeObject<ScryfallCardSearchResult>(content);
+                    if (result?.Data != null)
+                        allCards.AddRange(result.Data);
+
+                    // Scryfall requires 50-100ms between requests
+                    url = result is { HasMore: true, NextPage: not null } ? result.NextPage : null;
+                    if (url != null)
+                        await Task.Delay(100);
                 }
 
-                var content = await response.Content.ReadAsStringAsync();
-                var result = JsonConvert.DeserializeObject<ScryfallCardSearchResult>(content);
-                var cards = result?.Data ?? new();
-                return (cards, null);
+                return (allCards, null);
             }
             catch (HttpRequestException ex)
             {
@@ -209,14 +225,15 @@ namespace MTGProxyBuilder.Core.Services
             }
         }
 
-        public async Task<string?> DownloadAndCacheImageAsync(ScryfallCard card, bool back = false)
+        public async Task<string?> DownloadAndCacheImageAsync(ScryfallCard card, bool back = false, string size = "large")
         {
-            string cacheKey = back ? $"{card.Id}_back" : card.Id;
+            string sizeSuffix = size == "large" ? "" : $"_{size}";
+            string cacheKey = back ? $"{card.Id}_back{sizeSuffix}" : $"{card.Id}{sizeSuffix}";
 
             var cached = _imageCache.GetCachedImagePath(cacheKey);
             if (cached != null) return cached;
 
-            string? imageUrl = back ? card.GetBackImageUrl() : card.GetImageUrl();
+            string? imageUrl = back ? card.GetBackImageUrl(size) : card.GetImageUrl(size);
             if (imageUrl == null) return null;
 
             return await _imageCache.CacheImageFromUrlAsync(_httpClient, imageUrl, cacheKey);

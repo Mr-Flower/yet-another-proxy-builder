@@ -52,6 +52,26 @@ namespace MTGProxyBuilder.Core.Services
 
         public bool IsDefault(string entryId) => _defaultEntryId == entryId;
 
+        private bool _batchMode;
+        private HashSet<string>? _batchNameIndex;
+
+        /// <summary>Begin a batch operation. Suppresses Save() until EndBatch() is called.</summary>
+        public void BeginBatch()
+        {
+            _batchMode = true;
+            _batchNameIndex = new HashSet<string>(
+                _entries.Select(e => e.Name),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>End a batch operation and persist all changes at once.</summary>
+        public void EndBatch()
+        {
+            _batchMode = false;
+            _batchNameIndex = null;
+            Save();
+        }
+
         public BackArtEntry? AddFromFile(string sourceFilePath, string? displayName = null, string? contributor = null)
         {
             if (!File.Exists(sourceFilePath))
@@ -59,10 +79,19 @@ namespace MTGProxyBuilder.Core.Services
 
             string name = displayName ?? Path.GetFileNameWithoutExtension(sourceFilePath);
 
-            var existing = _entries.FirstOrDefault(e =>
-                string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
-            if (existing != null)
-                return existing;
+            if (_batchNameIndex != null)
+            {
+                if (!_batchNameIndex.Add(name))
+                    return _entries.FirstOrDefault(e =>
+                        string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                var existing = _entries.FirstOrDefault(e =>
+                    string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (existing != null)
+                    return existing;
+            }
 
             string id = Guid.NewGuid().ToString("N")[..12];
             string ext = Path.GetExtension(sourceFilePath);
@@ -81,7 +110,8 @@ namespace MTGProxyBuilder.Core.Services
             };
 
             _entries.Add(entry);
-            Save();
+            if (!_batchMode)
+                Save();
             return entry;
         }
 

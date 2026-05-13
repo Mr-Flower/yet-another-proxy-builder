@@ -25,8 +25,12 @@ namespace MTGProxyBuilder.UI.Dialogs
         private readonly ImageCacheService _imageCache;
         private readonly BackArtLibraryService? _backLibrary;
         private readonly IList<CardModel>? _allCards;
+        private readonly object[][]? _mpcSourcesOverride;
 
         public string? ResultPath { get; private set; }
+
+        // Maps normal-size Scryfall tile paths to their card data for full-size upgrade on selection
+        private readonly Dictionary<string, ScryfallCard> _scryfallCardsByPath = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>When true, the result should be applied to all cards with matching name.</summary>
         public bool ApplyToSameName { get; private set; }
@@ -41,7 +45,8 @@ namespace MTGProxyBuilder.UI.Dialogs
             MpcFillService mpcFill,
             ImageCacheService imageCache,
             BackArtLibraryService? backLibrary = null,
-            IList<CardModel>? allCards = null)
+            IList<CardModel>? allCards = null,
+            object[][]? mpcSourcesOverride = null)
         {
             InitializeComponent();
             _card = card;
@@ -51,6 +56,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             _imageCache = imageCache;
             _backLibrary = backLibrary;
             _allCards = allCards;
+            _mpcSourcesOverride = mpcSourcesOverride;
 
             bool isFront = mode == ArtSelectorMode.Front;
             TitleLabel.Text = isFront ? "Select Front Artwork" : "Select Card Back";
@@ -109,72 +115,114 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private async Task LoadFrontOptions(HashSet<string> shown)
         {
-            // Search Scryfall for exact name matches (all printings)
-            if (!string.IsNullOrEmpty(_card.Name))
+            if (string.IsNullOrEmpty(_card.Name))
             {
-                StatusLabel.Text = $"Searching Scryfall for \"{_card.Name}\"...";
-                await Task.Delay(10);
-
-                try
-                {
-                    var (results, _) = await _scryfall.SearchCardAsync($"!\"{_card.Name}\"");
-                    int scryfallCount = 0;
-                    foreach (var sc in results.Take(20))
-                    {
-                        string? imgUrl = sc.GetImageUrl();
-                        if (imgUrl == null) continue;
-
-                        StatusLabel.Text = $"Downloading Scryfall art {++scryfallCount}...";
-                        await Task.Delay(5);
-
-                        string cacheKey = sc.Id;
-                        var cached = _imageCache.GetCachedImagePath(cacheKey);
-                        if (cached == null)
-                        {
-                            using var http = new System.Net.Http.HttpClient();
-                            http.DefaultRequestHeaders.Add("User-Agent", "MTGProxyBuilder/1.0");
-                            http.DefaultRequestHeaders.Add("Accept", "application/json");
-                            cached = await _imageCache.CacheImageFromUrlAsync(http, imgUrl, cacheKey);
-                        }
-
-                        if (cached != null && !shown.Contains(cached))
-                        {
-                            string label = $"{sc.SetName} #{sc.CollectorNumber}";
-                            AddOption(label, cached, false, $"Scryfall | {sc.Artist ?? ""}");
-                            shown.Add(cached);
-                        }
-                        await Task.Delay(80);
-                    }
-                }
-                catch { }
+                AddActionTile("Browse File...", OnBrowseFile);
+                return;
             }
 
-            // Search MPCFill for matching front art
-            if (!string.IsNullOrEmpty(_card.Name))
+            // Kick off both API searches concurrently
+            StatusLabel.Text = $"Searching for \"{_card.Name}\"...";
+            var scryfallTask = Task.Run(async () =>
             {
-                StatusLabel.Text = $"Searching MPCFill for \"{_card.Name}\"...";
-                await Task.Delay(10);
-
+                try { return (await _scryfall.SearchCardAsync($"!\"{_card.Name}\"")).Cards; }
+                catch { return new List<ScryfallCard>(); }
+            });
+            var mpcTask = Task.Run(async () =>
+            {
                 try
                 {
-                    var (results, _) = await _mpcFill.SearchAsync(_card.Name, 50);
-                    var filtered = results
+                    var (results, _) = await _mpcFill.SearchAsync(
+                        _card.Name, fuzzySearch: false, sourcesOverride: _mpcSourcesOverride);
+                    return results
                         .Where(mc => mc.Name.Contains(_card.Name, StringComparison.OrdinalIgnoreCase))
-                        .Take(20);
-                    int mpcCount = 0;
-                    foreach (var mc in filtered)
-                    {
-                        StatusLabel.Text = $"Downloading MPCFill art {++mpcCount}...";
-                        var cached = await _mpcFill.DownloadAndCacheImageAsync(mc);
-                        if (cached != null && !shown.Contains(cached))
-                        {
-                            AddOption(mc.Name, cached, false, $"MPCFill | {mc.Source} | {mc.Dpi} DPI");
-                            shown.Add(cached);
-                        }
-                        await Task.Delay(30);
-                    }
+                        .ToList();
                 }
-                catch { }
+                catch { return new List<MpcFillCard>(); }
+            });
+
+            await Task.WhenAll(scryfallTask, mpcTask);
+            var scryfallResults = scryfallTask.Result;
+            var mpcResults = mpcTask.Result;
+
+            int totalImages = scryfallResults.Count + mpcResults.Count;
+
+            // Warn the user if there are a lot of results to cache
+            if (totalImages > 200)
+            {
+                var answer = MessageBox.Show(
+                    $"Found {totalImages} art options ({scryfallResults.Count} Scryfall, {mpcResults.Count} MPCFill).\n\n" +
+                    "Downloading and caching all of these may take a while. Continue?",
+                    "Large Number of Results",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (answer != MessageBoxResult.Yes)
+                {
+                    StatusLabel.Text = $"{totalImages} results found (download skipped)";
+                    SpinnerDot.Visibility = Visibility.Collapsed;
+                    AddActionTile("Browse File...", OnBrowseFile);
+                    return;
+                }
+            }
+
+            // Download all images in parallel
+            int completed = 0;
+            var semaphore = new System.Threading.SemaphoreSlim(8);
+
+            // Build download tasks for Scryfall results (use "normal" size for fast tile loading)
+            var scryfallDownloads = scryfallResults
+                .Where(sc => sc.GetImageUrl() != null)
+                .Select(async sc =>
+                {
+                    await semaphore.WaitAsync();
+                    try
+                    {
+                        var cached = await _scryfall.DownloadAndCacheImageAsync(sc, size: "normal");
+                        var done = System.Threading.Interlocked.Increment(ref completed);
+                        _ = Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Downloading art {done}/{totalImages}...");
+                        if (cached != null)
+                            return (Label: $"{sc.SetName} #{sc.CollectorNumber}",
+                                    Path: cached,
+                                    Detail: $"Scryfall | {sc.Artist ?? ""}",
+                                    ScryfallCard: (ScryfallCard?)sc);
+                        return default;
+                    }
+                    finally { semaphore.Release(); }
+                }).ToList();
+
+            // Build download tasks for MPCFill results (already full-size)
+            var mpcDownloads = mpcResults.Select(async mc =>
+            {
+                await semaphore.WaitAsync();
+                try
+                {
+                    var cached = await _mpcFill.DownloadAndCacheImageAsync(mc);
+                    var done = System.Threading.Interlocked.Increment(ref completed);
+                    _ = Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Downloading art {done}/{totalImages}...");
+                    if (cached != null)
+                        return (Label: mc.Name,
+                                Path: cached,
+                                Detail: $"MPCFill | {mc.Source} | {mc.Dpi} DPI",
+                                ScryfallCard: (ScryfallCard?)null);
+                    return default;
+                }
+                finally { semaphore.Release(); }
+            }).ToList();
+
+            // Await all downloads concurrently
+            var allDownloads = scryfallDownloads.Concat(mpcDownloads).ToList();
+            var downloadResults = await Task.WhenAll(allDownloads);
+
+            // Add tiles in order (Scryfall first, then MPCFill)
+            // Track Scryfall cards so we can upgrade to full-size on selection
+            foreach (var result in downloadResults)
+            {
+                if (result.Path != null && !shown.Contains(result.Path))
+                {
+                    AddOption(result.Label, result.Path, false, result.Detail);
+                    shown.Add(result.Path);
+                    if (result.ScryfallCard != null)
+                        _scryfallCardsByPath[result.Path] = result.ScryfallCard;
+                }
             }
 
             AddActionTile("Browse File...", OnBrowseFile);
@@ -337,26 +385,28 @@ namespace MTGProxyBuilder.UI.Dialogs
                     return;
                 }
 
+                StatusLabel.Text = $"Downloading {cardbacks.Count} card backs...";
+                var results = await _mpcFill.DownloadAndCacheImagesAsync(
+                    cardbacks,
+                    maxConcurrency: 8,
+                    onProgress: (done, total, name) =>
+                        Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Downloading card back {done}/{total}: {name}..."));
+
                 int added = 0;
                 int skipped = 0;
-                for (int i = 0; i < cardbacks.Count; i++)
+                _backLibrary.BeginBatch();
+                try
                 {
-                    var cb = cardbacks[i];
-                    StatusLabel.Text = $"Downloading card back {i + 1}/{cardbacks.Count}: {cb.Name}...";
-                    await Task.Delay(5);
-
-                    // Download the image
-                    var cached = await _mpcFill.DownloadAndCacheImageAsync(cb);
-                    if (cached == null) { skipped++; continue; }
-
-                    // Add to library (service handles deduplication by name)
-                    string displayName = $"{cb.Name} [{cb.Source}]";
-                    var entry = _backLibrary.AddFromFile(cached, displayName, cb.Source);
-                    if (entry != null) added++;
-                    else skipped++;
-
-                    await Task.Delay(20);
+                    foreach (var (cb, cached) in results)
+                    {
+                        if (cached == null) { skipped++; continue; }
+                        string displayName = $"{cb.Name} [{cb.Source}]";
+                        var entry = _backLibrary.AddFromFile(cached, displayName, cb.Source);
+                        if (entry != null) added++;
+                        else skipped++;
+                    }
                 }
+                finally { _backLibrary.EndBatch(); }
 
                 StatusLabel.Text = $"Added {added} card back(s) to library ({skipped} already existed or failed)";
 
@@ -516,6 +566,9 @@ namespace MTGProxyBuilder.UI.Dialogs
         // ================================================================
 
         private double _previewZoom = 1.0;
+        private bool _isPanning;
+        private Point _panStart;
+        private double _panStartH, _panStartV;
 
         private void SelectOption(string label, string path, string detail, Border selectedBorder)
         {
@@ -564,8 +617,9 @@ namespace MTGProxyBuilder.UI.Dialogs
         {
             bmp ??= FullPreviewImage.Source as BitmapImage;
             if (bmp == null || bmp.PixelWidth == 0) return;
-            double fitW = (PreviewScroll.ViewportWidth - 20) / bmp.PixelWidth;
-            double fitH = (PreviewScroll.ViewportHeight - 20) / bmp.PixelHeight;
+            // Use DIP dimensions (bmp.Width/Height) not raw pixels — accounts for source DPI
+            double fitW = (PreviewScroll.ViewportWidth - 20) / bmp.Width;
+            double fitH = (PreviewScroll.ViewportHeight - 20) / bmp.Height;
             double fit = Math.Min(fitW, fitH);
             if (fit <= 0) fit = 0.5;
             SetPreviewZoom(fit);
@@ -581,10 +635,56 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            double delta = e.Delta > 0 ? 0.15 : -0.15;
-            if (_previewZoom < 0.5) delta *= 0.5;
-            SetPreviewZoom(_previewZoom + delta);
-            e.Handled = true;
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                double delta = e.Delta > 0 ? 0.15 : -0.15;
+                if (_previewZoom < 0.5) delta *= 0.5;
+                SetPreviewZoom(_previewZoom + delta);
+                e.Handled = true;
+                return;
+            }
+
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                PreviewScroll.ScrollToHorizontalOffset(PreviewScroll.HorizontalOffset - e.Delta);
+                e.Handled = true;
+            }
+        }
+
+        private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Middle)
+            {
+                _isPanning = true;
+                _panStart = e.GetPosition(PreviewScroll);
+                _panStartH = PreviewScroll.HorizontalOffset;
+                _panStartV = PreviewScroll.VerticalOffset;
+                PreviewScroll.Cursor = Cursors.ScrollAll;
+                PreviewScroll.CaptureMouse();
+                e.Handled = true;
+            }
+        }
+
+        private void OnPreviewMouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Middle && _isPanning)
+            {
+                _isPanning = false;
+                PreviewScroll.Cursor = null;
+                PreviewScroll.ReleaseMouseCapture();
+                e.Handled = true;
+            }
+        }
+
+        private void OnPreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (_isPanning)
+            {
+                var pos = e.GetPosition(PreviewScroll);
+                PreviewScroll.ScrollToHorizontalOffset(_panStartH + (_panStart.X - pos.X));
+                PreviewScroll.ScrollToVerticalOffset(_panStartV + (_panStart.Y - pos.Y));
+                e.Handled = true;
+            }
         }
 
         private void PreviewZoomIn(object sender, RoutedEventArgs e) => SetPreviewZoom(_previewZoom + 0.15);
@@ -648,8 +748,19 @@ namespace MTGProxyBuilder.UI.Dialogs
             }
         }
 
-        private void OkClick(object sender, RoutedEventArgs e)
+        private async void OkClick(object sender, RoutedEventArgs e)
         {
+            // If the selected path is a normal-size Scryfall thumbnail, upgrade to full-size
+            if (ResultPath != null && _scryfallCardsByPath.TryGetValue(ResultPath, out var sc))
+            {
+                OkBtn.IsEnabled = false;
+                StatusLabel.Text = "Downloading full resolution...";
+                var fullPath = await _scryfall.DownloadAndCacheImageAsync(sc, size: "large");
+                if (fullPath != null)
+                    ResultPath = fullPath;
+                OkBtn.IsEnabled = true;
+            }
+
             ApplyToSameName = ApplySameNameChk.IsChecked == true;
             ApplyToNoBack = ApplyNoBackChk.IsChecked == true;
             DialogResult = true;

@@ -18,6 +18,9 @@ namespace MTGProxyBuilder.Core.Services
 
         [JsonProperty("checkForUpdates")]
         public bool CheckForUpdates { get; set; } = true;
+
+        [JsonProperty("mpcFillUseFavoritesOnly")]
+        public bool MpcFillUseFavoritesOnly { get; set; }
     }
 
     public class AppSettingsService

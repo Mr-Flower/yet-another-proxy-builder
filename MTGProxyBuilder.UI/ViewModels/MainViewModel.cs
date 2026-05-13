@@ -151,7 +151,10 @@ namespace MTGProxyBuilder.UI.ViewModels
             MpcSourceManager = new MpcFillSourceManager();
             _mpcFillService = new MpcFillService(_imageCacheService, MpcSourceManager);
             _mpcXmlImportService = new MpcFillXmlImportService(_mpcFillService, _imageCacheService);
-            _mpcUseFavoritesOnly = MpcSourceManager.HasFavorites;
+            _mpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
+
+            // Pre-fetch MPCFill sources in the background so they're ready when needed
+            _ = _mpcFillService.EnsureSourcesLoadedAsync();
 
             _currentProject = new ProjectModel();
             _currentProject.PageSettings.PropertyChanged += OnPageSettingsChanged;
@@ -251,9 +254,13 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         private void OpenSettings()
         {
-            var dialog = new Dialogs.SettingsDialog(_appSettings);
+            var dialog = new Dialogs.SettingsDialog(_appSettings, MpcSourceManager);
             dialog.Owner = Application.Current.MainWindow;
-            dialog.ShowDialog();
+            if (dialog.ShowDialog() == true)
+            {
+                // Sync the persisted favorites setting to the VM property
+                MpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
+            }
         }
 
         private void DownloadUpdate()
@@ -572,7 +579,18 @@ namespace MTGProxyBuilder.UI.ViewModels
         public string MpcAdvName { get => _mpcAdvName; set => SetProperty(ref _mpcAdvName, value); }
         public int MpcAdvMinDpi { get => _mpcAdvMinDpi; set => SetProperty(ref _mpcAdvMinDpi, value); }
         public bool MpcFuzzySearch { get => _mpcFuzzySearch; set => SetProperty(ref _mpcFuzzySearch, value); }
-        public bool MpcUseFavoritesOnly { get => _mpcUseFavoritesOnly; set => SetProperty(ref _mpcUseFavoritesOnly, value); }
+        public bool MpcUseFavoritesOnly
+        {
+            get => _mpcUseFavoritesOnly;
+            set
+            {
+                if (SetProperty(ref _mpcUseFavoritesOnly, value))
+                {
+                    _appSettings.Settings.MpcFillUseFavoritesOnly = value;
+                    _appSettings.Save();
+                }
+            }
+        }
         public ObservableCollection<int> MpcDpiOptions { get; } = new() { 0, 300, 600, 800, 1200 };
         public MpcFillSourceManager MpcSourceManager { get; }
         public ObservableCollection<MpcFillSource> MpcSourceList { get; } = new();
@@ -1059,7 +1077,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         {
             var dialog = new Dialogs.ArtSelectorDialog(
                 card, mode, _scryfallService, _mpcFillService, _imageCacheService,
-                _backArtLibraryService, Cards);
+                _backArtLibraryService, Cards, GetMpcFillSources());
             dialog.Owner = Application.Current.MainWindow;
 
             if (dialog.ShowDialog() == true && dialog.ResultPath != null)
@@ -1119,7 +1137,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             var dialog = new Dialogs.ArtSelectorDialog(
                 targetCards.First(), Dialogs.ArtSelectorMode.Back,
                 _scryfallService, _mpcFillService, _imageCacheService,
-                _backArtLibraryService, Cards);
+                _backArtLibraryService, Cards, GetMpcFillSources());
             dialog.Owner = Application.Current.MainWindow;
 
             if (dialog.ShowDialog() == true && dialog.ResultPath != null)
@@ -1195,18 +1213,21 @@ namespace MTGProxyBuilder.UI.ViewModels
             }
         }
 
+        /// <summary>Build the MPCFill sources array respecting the user's favorites setting.</summary>
+        private object[][]? GetMpcFillSources()
+        {
+            return MpcUseFavoritesOnly && MpcSourceManager.HasFavorites
+                ? MpcSourceManager.BuildFavoritesArray()
+                : null; // null = all sources
+        }
+
         private async Task SearchMpcFill()
         {
             SetBusy("Searching MPCFill...");
             try
             {
-                // Build sources array based on favorites preference
-                object[][]? sources = MpcUseFavoritesOnly && MpcSourceManager.HasFavorites
-                    ? MpcSourceManager.BuildFavoritesArray()
-                    : null; // null = all sources
-
                 var (results, error) = await _mpcFillService.SearchAsync(
-                    ScryfallSearchQuery, 50, MpcAdvMinDpi, MpcFuzzySearch, sources);
+                    ScryfallSearchQuery, 50, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources(), maxResults: 50);
                 if (error != null)
                 {
                     MpcFillResults.Clear();
@@ -1538,7 +1559,8 @@ namespace MTGProxyBuilder.UI.ViewModels
                     BusyMessage = $"Searching MPCFill {i + 1}/{Cards.Count}: {card.Name}...";
                     await Task.Delay(10);
 
-                    var (results, error) = await _mpcFillService.SearchAsync(card.Name, 5);
+                    var (results, error) = await _mpcFillService.SearchAsync(
+                        card.Name, 5, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources());
                     if (error != null || results.Count == 0) { failed++; continue; }
 
                     // Use the first result
@@ -1797,8 +1819,29 @@ namespace MTGProxyBuilder.UI.ViewModels
                     BusyMessage = $"Downloading artwork {i + 1}/{uniqueCards}: {entry.CardName}...";
                     await Task.Delay(10);
 
-                    var frontPath = await _scryfallService.DownloadAndCacheImageAsync(scryfallCard);
+                    string? frontPath = null;
                     string? backPath = null;
+
+                    if (UseMpcFill)
+                    {
+                        // Use MPCFill for front art with the user's selected options
+                        var (mpcResults, _) = await _mpcFillService.SearchAsync(
+                            entry.CardName, 10, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources(), maxResults: 10);
+                        var bestMatch = mpcResults.FirstOrDefault(mc =>
+                            mc.Name.Contains(entry.CardName, StringComparison.OrdinalIgnoreCase));
+                        if (bestMatch != null)
+                            frontPath = await _mpcFillService.DownloadAndCacheImageAsync(bestMatch);
+
+                        // Fall back to Scryfall if MPCFill had no match
+                        if (frontPath == null)
+                            frontPath = await _scryfallService.DownloadAndCacheImageAsync(scryfallCard);
+                    }
+                    else
+                    {
+                        frontPath = await _scryfallService.DownloadAndCacheImageAsync(scryfallCard);
+                    }
+
+                    // Always get back art from Scryfall (for double-faced cards)
                     if (scryfallCard.GetBackImageUrl() != null)
                         backPath = await _scryfallService.DownloadAndCacheImageAsync(scryfallCard, back: true);
 

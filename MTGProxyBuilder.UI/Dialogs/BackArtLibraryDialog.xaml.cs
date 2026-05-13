@@ -199,6 +199,9 @@ namespace MTGProxyBuilder.UI.Dialogs
         }
 
         private double _previewZoom = 1.0;
+        private bool _isPanning;
+        private Point _panStart;
+        private double _panStartH, _panStartV;
 
         private void SelectEntry(string entryId, Border clickedBorder)
         {
@@ -272,8 +275,9 @@ namespace MTGProxyBuilder.UI.Dialogs
             bmp ??= PreviewImage.Source as BitmapImage;
             if (bmp == null || bmp.PixelWidth == 0) return;
 
-            double fitW = (PreviewScroll.ViewportWidth - 20) / bmp.PixelWidth;
-            double fitH = (PreviewScroll.ViewportHeight - 20) / bmp.PixelHeight;
+            // Use DIP dimensions (bmp.Width/Height) not raw pixels — accounts for source DPI
+            double fitW = (PreviewScroll.ViewportWidth - 20) / bmp.Width;
+            double fitH = (PreviewScroll.ViewportHeight - 20) / bmp.Height;
             double fit = Math.Min(fitW, fitH);
             if (fit <= 0) fit = 0.5;
             SetPreviewZoom(fit);
@@ -289,10 +293,56 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            double delta = e.Delta > 0 ? 0.15 : -0.15;
-            if (_previewZoom < 0.5) delta *= 0.5;
-            SetPreviewZoom(_previewZoom + delta);
-            e.Handled = true;
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                double delta = e.Delta > 0 ? 0.15 : -0.15;
+                if (_previewZoom < 0.5) delta *= 0.5;
+                SetPreviewZoom(_previewZoom + delta);
+                e.Handled = true;
+                return;
+            }
+
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                PreviewScroll.ScrollToHorizontalOffset(PreviewScroll.HorizontalOffset - e.Delta);
+                e.Handled = true;
+            }
+        }
+
+        private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Middle)
+            {
+                _isPanning = true;
+                _panStart = e.GetPosition(PreviewScroll);
+                _panStartH = PreviewScroll.HorizontalOffset;
+                _panStartV = PreviewScroll.VerticalOffset;
+                PreviewScroll.Cursor = Cursors.ScrollAll;
+                PreviewScroll.CaptureMouse();
+                e.Handled = true;
+            }
+        }
+
+        private void OnPreviewMouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Middle && _isPanning)
+            {
+                _isPanning = false;
+                PreviewScroll.Cursor = null;
+                PreviewScroll.ReleaseMouseCapture();
+                e.Handled = true;
+            }
+        }
+
+        private void OnPreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (_isPanning)
+            {
+                var pos = e.GetPosition(PreviewScroll);
+                PreviewScroll.ScrollToHorizontalOffset(_panStartH + (_panStart.X - pos.X));
+                PreviewScroll.ScrollToVerticalOffset(_panStartV + (_panStart.Y - pos.Y));
+                e.Handled = true;
+            }
         }
 
         private void PreviewZoomIn(object sender, RoutedEventArgs e) => SetPreviewZoom(_previewZoom + 0.15);
@@ -367,23 +417,27 @@ namespace MTGProxyBuilder.UI.Dialogs
                     return;
                 }
 
+                StatusLabel.Text = $"Downloading {cardbacks.Count} card backs...";
+                var results = await _mpcFill.DownloadAndCacheImagesAsync(
+                    cardbacks,
+                    maxConcurrency: 8,
+                    onProgress: (done, total, name) =>
+                        Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Downloading {done}/{total}: {name}..."));
+
                 int added = 0, skipped = 0;
-                for (int i = 0; i < cardbacks.Count; i++)
+                _library.BeginBatch();
+                try
                 {
-                    var cb = cardbacks[i];
-                    StatusLabel.Text = $"Downloading {i + 1}/{cardbacks.Count}: {cb.Name}...";
-                    await Task.Delay(5);
-
-                    var cached = await _mpcFill.DownloadAndCacheImageAsync(cb);
-                    if (cached == null) { skipped++; continue; }
-
-                    string displayName = $"{cb.Name} [{cb.Source}]";
-                    var entry = _library.AddFromFile(cached, displayName, cb.Source);
-                    if (entry != null) added++;
-                    else skipped++;
-
-                    await Task.Delay(20);
+                    foreach (var (cb, cached) in results)
+                    {
+                        if (cached == null) { skipped++; continue; }
+                        string displayName = $"{cb.Name} [{cb.Source}]";
+                        var entry = _library.AddFromFile(cached, displayName, cb.Source);
+                        if (entry != null) added++;
+                        else skipped++;
+                    }
                 }
+                finally { _library.EndBatch(); }
 
                 StatusLabel.Text = $"Added {added} card back(s) to library ({skipped} skipped)";
                 PopulateSourceFilter();

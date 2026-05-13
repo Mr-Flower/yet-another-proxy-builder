@@ -82,10 +82,13 @@ namespace MTGProxyBuilder.Core.Services
             }
         }
 
-        /// <summary>Search MPCFill for card art.</summary>
+        /// <summary>Search MPCFill for card art. Paginates automatically to fetch all results.</summary>
+        /// <summary>Search MPCFill for card art. Paginates automatically to fetch all results.</summary>
+        /// <param name="maxResults">Maximum total results to return. 0 = unlimited.</param>
         public async Task<(List<MpcFillCard> Cards, string? Error)> SearchAsync(
-            string query, int pageSize = 30, int minimumDpi = 0,
-            bool fuzzySearch = true, object[][]? sourcesOverride = null)
+            string query, int pageSize = 60, int minimumDpi = 0,
+            bool fuzzySearch = true, object[][]? sourcesOverride = null,
+            int maxResults = 0)
         {
             try
             {
@@ -93,49 +96,54 @@ namespace MTGProxyBuilder.Core.Services
                 // null = all sources enabled; caller passes favorites array explicitly when wanted
                 var sources = sourcesOverride ?? _sourceManager.BuildSourcesArray();
 
-                var payload = new
+                var allCards = new List<MpcFillCard>();
+                int pageStart = 0;
+
+                while (true)
                 {
-                    query,
-                    cardTypes = new[] { "CARD" },
-                    sortBy = "nameAscending",
-                    pageStart = 0,
-                    pageSize,
-                    searchSettings = new
+                    var payload = new
                     {
-                        searchTypeSettings = new { fuzzySearch, filterCardbacks = false },
-                        filterSettings = new
+                        query,
+                        cardTypes = new[] { "CARD" },
+                        sortBy = "nameAscending",
+                        pageStart,
+                        pageSize,
+                        searchSettings = new
                         {
-                            languages = Array.Empty<string>(),
-                            includesTags = Array.Empty<string>(),
-                            excludesTags = Array.Empty<string>(),
-                            minimumDPI = minimumDpi,
-                            maximumDPI = 1500,
-                            maximumSize = 30
-                        },
-                        sourceSettings = new { sources }
+                            searchTypeSettings = new { fuzzySearch, filterCardbacks = false },
+                            filterSettings = new
+                            {
+                                languages = Array.Empty<string>(),
+                                includesTags = Array.Empty<string>(),
+                                excludesTags = Array.Empty<string>(),
+                                minimumDPI = minimumDpi,
+                                maximumDPI = 1500,
+                                maximumSize = 30
+                            },
+                            sourceSettings = new { sources }
+                        }
+                    };
+
+                    var json = JsonConvert.SerializeObject(payload);
+                    var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+                    var response = await _httpClient.PostAsync("https://mpcfill.com/2/exploreSearch/", content);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var body = await response.Content.ReadAsStringAsync();
+                        if (allCards.Count > 0) break; // return what we have from prior pages
+                        return (new(), $"MPCFill returned {(int)response.StatusCode}: {body[..Math.Min(body.Length, 200)]}");
                     }
-                };
 
-                var json = JsonConvert.SerializeObject(payload);
-                var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync("https://mpcfill.com/2/exploreSearch/", content);
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    var root = JObject.Parse(responseJson);
 
-                if (!response.IsSuccessStatusCode)
-                {
-                    var body = await response.Content.ReadAsStringAsync();
-                    return (new(), $"MPCFill returned {(int)response.StatusCode}: {body[..Math.Min(body.Length, 200)]}");
-                }
+                    var cardsArray = root["cards"] as JArray;
+                    if (cardsArray == null || cardsArray.Count == 0) break;
 
-                var responseJson = await response.Content.ReadAsStringAsync();
-                var root = JObject.Parse(responseJson);
-                var cards = new List<MpcFillCard>();
-
-                var cardsArray = root["cards"] as JArray;
-                if (cardsArray != null)
-                {
                     foreach (var c in cardsArray)
                     {
-                        cards.Add(new MpcFillCard
+                        allCards.Add(new MpcFillCard
                         {
                             Identifier = c["identifier"]?.ToString() ?? string.Empty,
                             Name = c["name"]?.ToString() ?? string.Empty,
@@ -148,9 +156,15 @@ namespace MTGProxyBuilder.Core.Services
                             DownloadLink = c["downloadLink"]?.ToString() ?? string.Empty
                         });
                     }
+
+                    // Stop if we hit the limit or got fewer than pageSize results (no more pages)
+                    if (maxResults > 0 && allCards.Count >= maxResults) break;
+                    if (cardsArray.Count < pageSize) break;
+
+                    pageStart += cardsArray.Count;
                 }
 
-                return (cards, null);
+                return (allCards, null);
             }
             catch (HttpRequestException ex) { return (new(), $"Network error: {ex.Message}"); }
             catch (TaskCanceledException) { return (new(), "Request timed out"); }
@@ -167,6 +181,43 @@ namespace MTGProxyBuilder.Core.Services
             if (string.IsNullOrEmpty(url)) return null;
 
             return await _imageCache.CacheImageFromUrlAsync(_httpClient, url, $"mpc_{card.Identifier}");
+        }
+
+        /// <summary>Download and cache multiple card images in parallel with bounded concurrency.</summary>
+        /// <param name="cards">Cards to download.</param>
+        /// <param name="maxConcurrency">Max simultaneous downloads.</param>
+        /// <param name="onProgress">Called on each completion with (completed, total, card name).</param>
+        /// <returns>List of (card, cachedPath) pairs. cachedPath is null on failure.</returns>
+        public async Task<List<(MpcFillCard Card, string? CachedPath)>> DownloadAndCacheImagesAsync(
+            IReadOnlyList<MpcFillCard> cards,
+            int maxConcurrency = 8,
+            Action<int, int, string>? onProgress = null)
+        {
+            var results = new (MpcFillCard Card, string? CachedPath)[cards.Count];
+            int completed = 0;
+            var semaphore = new SemaphoreSlim(maxConcurrency);
+
+            var tasks = cards.Select(async (card, index) =>
+            {
+                await semaphore.WaitAsync();
+                try
+                {
+                    results[index] = (card, await DownloadAndCacheImageAsync(card));
+                }
+                catch
+                {
+                    results[index] = (card, null);
+                }
+                finally
+                {
+                    semaphore.Release();
+                    var count = Interlocked.Increment(ref completed);
+                    onProgress?.Invoke(count, cards.Count, card.Name);
+                }
+            });
+
+            await Task.WhenAll(tasks);
+            return results.ToList();
         }
 
         /// <summary>Fetches all cardback art from MPCFill using the /cardbacks/ + /cards/ endpoints.</summary>
@@ -210,29 +261,31 @@ namespace MTGProxyBuilder.Core.Services
                 if (identifiers.Count == 0)
                     return (new(), "No card backs found on MPCFill.");
 
-                // Step 2: Fetch card details in batches via /2/cards/
-                var cards = new List<MpcFillCard>();
+                // Step 2: Fetch card details in parallel batches via /2/cards/
                 const int batchSize = 50;
-
+                var batches = new List<List<string>>();
                 for (int i = 0; i < identifiers.Count; i += batchSize)
+                    batches.Add(identifiers.Skip(i).Take(batchSize).ToList());
+
+                var batchTasks = batches.Select(async batch =>
                 {
-                    var batch = identifiers.Skip(i).Take(batchSize).ToList();
                     var detailPayload = new { cardIdentifiers = batch };
                     var detailJson = JsonConvert.SerializeObject(detailPayload);
                     var detailContent = new StringContent(detailJson, System.Text.Encoding.UTF8, "application/json");
 
                     var detailResponse = await _httpClient.PostAsync("https://mpcfill.com/2/cards/", detailContent);
-                    if (!detailResponse.IsSuccessStatusCode) continue;
+                    if (!detailResponse.IsSuccessStatusCode) return new List<MpcFillCard>();
 
                     var detailResponseJson = await detailResponse.Content.ReadAsStringAsync();
                     var detailRoot = JObject.Parse(detailResponseJson);
                     var results = detailRoot["results"] as JObject;
-                    if (results == null) continue;
+                    if (results == null) return new List<MpcFillCard>();
 
+                    var batchCards = new List<MpcFillCard>();
                     foreach (var prop in results.Properties())
                     {
                         var c = prop.Value;
-                        cards.Add(new MpcFillCard
+                        batchCards.Add(new MpcFillCard
                         {
                             Identifier = prop.Name,
                             Name = c["name"]?.ToString() ?? string.Empty,
@@ -245,7 +298,11 @@ namespace MTGProxyBuilder.Core.Services
                             DownloadLink = c["downloadLink"]?.ToString() ?? string.Empty
                         });
                     }
-                }
+                    return batchCards;
+                });
+
+                var batchResults = await Task.WhenAll(batchTasks);
+                var cards = batchResults.SelectMany(b => b).ToList();
 
                 return (cards, null);
             }

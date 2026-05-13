@@ -12,7 +12,10 @@
 
         <ScrollViewer Grid.Row="0" x:Name="ScrollArea"
                       HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                      Background="#111" PreviewMouseWheel="OnMouseWheel">
+                      Background="#111" PreviewMouseWheel="OnMouseWheel"
+                      PreviewMouseDown="OnMouseDown"
+                      PreviewMouseUp="OnMouseUp"
+                      MouseMove="OnMouseMove">
             <Border HorizontalAlignment="Center" VerticalAlignment="Center" Padding="10">
                 <Image x:Name="PreviewImage" Stretch="Uniform" RenderTransformOrigin="0.5,0.5">
                     <Image.LayoutTransform>
