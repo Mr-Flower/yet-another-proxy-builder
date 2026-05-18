@@ -19,6 +19,7 @@ The release is a self-contained single-file executable that includes everything 
 - **Scryfall Integration** — search by name, type, color, mana cost, set, rarity, artist, format legality, and more using Scryfall's full query syntax
 - **Scryfall Advanced Search** — visual query builder with dropdowns for all filter fields (colors, CMC, rarity, power/toughness, format, set, artist, keywords, card properties)
 - **MPCFill Integration** — search community-contributed high-DPI proxy art from MPCFill.com with source management, favorites, and DPI filtering
+- **MPCFill Filter Settings** — full control over search parameters in the Settings dialog: sort order, DPI range, max file size, fuzzy/exact match, card types (Cards/Tokens/Card Backs), 11 languages, content filters (NSFW, AI Art), and cardback filtering
 - **Moxfield Import** — paste a Moxfield deck URL to auto-import an entire deck with artwork
 - **Archidekt Import** — paste an Archidekt deck URL (auto-detected from URL)
 - **MPCFill XML Import** — import a `cards.xml` project file exported from MPCFill's editor
@@ -38,12 +39,17 @@ The release is a self-contained single-file executable that includes everything 
 - **Create Token** — right-click dual-faced cards (cards with unique back art) to create token cards with customizable overlay text; works on single cards or multi-select
 - **Overlay text** — cards can have text overlays (e.g. "TOKEN") rendered on the front face in both preview and PDF; editable per card in the Card panel
 
-### Art Selection
-- **Art Selector Dialog** — click any card to browse all artwork from Scryfall (all printings) and MPCFill (community art) in a thumbnail grid with an inline zoomable preview panel showing pixel dimensions, estimated DPI, file size, and source
+### Art Selection & Libraries
+- **Art Selector Dialog** — click any card to browse all artwork from Scryfall (all printings) and MPCFill (community art) in a thumbnail grid with a zoomable preview panel showing pixel dimensions, estimated DPI, file size, and source
+- **Local-first search** — the Art Selector checks your front art library before querying online APIs; art already in the library is not re-downloaded
+- **Inline MPCFill filter panel** — collapsible panel in the Art Selector with sort order, DPI range, file size, fuzzy search, card types, 11 languages, and content filters; clear all filters or re-search with one click
+- **Save to Library** — right-click any MPCFill result tile to save it to the front art library; cards added from MPCFill search are auto-saved to the library
+- **Import Downloaded Art** — bulk-import all previously downloaded MPCFill art into the front art library with proper card names and source attribution
 - **Back Art Selector** — choose card backs from Scryfall originals, a persistent library, or custom files with the same preview panel
 - **Bulk apply** — checkbox to apply front art to all cards with the same name, or back art to all cards without one
-- **MPCFill Source Manager** — browse 271+ community art sources, favorite your preferred ones, filter searches to favorites only; favorites persist across sessions
-- **Back Art Library Manager** — standalone dialog with thumbnail grid, zoomable preview with DPI info, contributor filter dropdown, search box, set default back art, download all MPCFill card backs into the library
+- **MPCFill Source Manager** — browse 271+ community art sources, favorite by clicking the star, filter searches to favorites only; Refresh button to reload from the API; favorites persist across sessions
+- **Front Art Library** — persistent library of saved card art with thumbnail grid, zoomable preview, search by name, filter by source, add from file, import from cache, and remove; accessible from the global toolbar without an open project
+- **Back Art Library** — standalone dialog with thumbnail grid, zoomable preview with DPI info, contributor filter dropdown, search box, set default back art, download all MPCFill card backs into the library; accessible from the global toolbar
 - **Default back art** — set a default in the library; new cards automatically get the most common back art from the project (or the library default if the project is empty)
 - **Match Back Art** — right-click context menu to apply the project's most common back art to selected cards
 
@@ -84,6 +90,11 @@ The release is a self-contained single-file executable that includes everything 
 - **Default bleed** — default bleed width for new projects
 - **Default card size preset** — applied to new projects automatically
 - **Update check toggle** — enable/disable automatic version checking
+- **MPCFill search defaults** — default sort order, min/max DPI, max file size, fuzzy search, cardback filtering
+- **MPCFill card types** — choose which types to search: Cards, Tokens, Card Backs
+- **MPCFill languages** — filter by any combination of 11 languages (EN, JA, FR, DE, ES, IT, PT, ZH, RU, AR, SA)
+- **MPCFill content filters** — exclude NSFW content and/or AI-generated art
+- **MPCFill source favorites** — use only favorited sources for searches
 
 ### UX
 - **Dark theme** — VS2013 dark theme throughout, including dockable panels
@@ -122,15 +133,16 @@ MTGProxyBuilder/
 │   │   ├── PrintSettings.cs          # Print mode, cut guides, card outlines
 │   │   └── ProjectModel.cs           # Project container
 │   └── Services/
-│       ├── AppSettingsService.cs       # Persistent application settings
+│       ├── AppSettingsService.cs       # Persistent application settings (incl. MPCFill filters)
 │       ├── ArchidektService.cs        # Archidekt deck API
 │       ├── BackArtLibraryService.cs   # Persistent back art library with defaults
 │       ├── BleedProcessor.cs          # Edge-pixel bleed extension (SkiaSharp)
 │       ├── CacheManager.cs            # Cache size tracking & cleanup
 │       ├── DeckImportService.cs       # Unified deck import (auto-detects source)
-│       ├── ImageCacheService.cs       # Download & cache card images
+│       ├── FrontArtLibraryService.cs  # Persistent front art library with card name search
+│       ├── ImageCacheService.cs       # Download & cache card images with metadata
 │       ├── MoxfieldService.cs         # Moxfield deck API (via curl)
-│       ├── MpcFillService.cs          # MPCFill card art search & download
+│       ├── MpcFillService.cs          # MPCFill card art search & download (configurable filters)
 │       ├── MpcFillSourceManager.cs    # MPCFill source favorites (persistent)
 │       ├── MpcFillXmlImportService.cs # MPCFill cards.xml import
 │       ├── PdfGeneratorService.cs     # PDF output with bleed, guides, outlines, overlays
@@ -142,22 +154,24 @@ MTGProxyBuilder/
 │   ├── MainWindow.xaml/cs            # Shell window with tabs, docking, dark theme
 │   ├── App.xaml/cs                   # App lifecycle, cache cleanup on exit
 │   ├── Controls/
-│   │   └── GridEditorCanvas.cs       # Multi-page canvas with drag-drop, selection, flip, outlines
+│   │   ├── GridEditorCanvas.cs       # Multi-page canvas with drag-drop, selection, flip, outlines
+│   │   └── ImagePreviewPanel.xaml    # Reusable zoomable image preview with DPI info
 │   ├── Converters/                   # WPF value converters
 │   ├── Dialogs/
-│   │   ├── ArtSelectorDialog         # Front/back art picker with inline preview
-│   │   ├── BackArtLibraryDialog      # Library manager with preview, filter, DPI info
+│   │   ├── ArtSelectorDialog         # Front/back art picker with library, filters, preview
+│   │   ├── BackArtLibraryDialog      # Back art library manager with preview & filters
 │   │   ├── ColorPickerDialog         # Color picker with presets, RGB sliders, hex input
+│   │   ├── FrontArtLibraryDialog     # Front art library manager with preview & filters
 │   │   ├── ImagePreviewDialog        # Standalone zoomable image preview
-│   │   ├── MpcSourceManagerDialog    # MPCFill source browser & favorites
-│   │   └── SettingsDialog            # Application settings editor
+│   │   ├── MpcSourceManagerDialog    # MPCFill source browser with clickable stars
+│   │   └── SettingsDialog            # Application settings incl. MPCFill filters
 │   └── ViewModels/
 │       ├── ShellViewModel.cs         # Tab management, global commands, update check
 │       ├── ProjectViewModel.cs       # Per-tab wrapper with title and unsaved indicator
 │       └── MainViewModel.cs          # Per-project commands, state, and business logic
-└── MTGProxyBuilder.Tests/            # Test suite (256+ tests)
+└── MTGProxyBuilder.Tests/            # Test suite (300+ tests)
     ├── Models/                       # Unit tests for all models
-    ├── Services/                     # Unit tests for all services
+    ├── Services/                     # Unit tests for services (incl. libraries, search options, serialization)
     └── Integration/                  # E2E pipeline tests + UI smoke tests
 ```
 
@@ -252,7 +266,9 @@ dotnet test
 **Changing artwork:**
 - Double-click a card on the canvas to open the art selector
 - Or select a card and use the Card tab's "Select Art..." / "Select Card Back..." buttons
-- The art selector shows all Scryfall printings + MPCFill art with a zoomable preview panel displaying dimensions, DPI, file size, and source
+- The art selector shows library matches first (instant), then Scryfall printings + MPCFill community art; art already in the library is not re-downloaded
+- Expand "MPCFill Filters" to adjust sort order, DPI range, languages, card types, and content filters inline; click "Re-search MPCFill" to apply
+- Right-click any MPCFill tile to "Save to Library" for future local-first access
 - Check "Apply to all [card name]" to update every copy at once
 
 **Zoom & Pan:**
@@ -289,14 +305,24 @@ In the Layout tab:
 
 **Back Art:**
 - **Select Back for All Cards** — opens the back art selector to apply one back to every card
-- **Manage Back Art Library** — browse, add, remove, preview, and set a default back art; download all MPCFill card backs; filter by contributor
 
 **Storage:**
 - View cache size and clear downloaded images
 
-### Managing Back Art
+### Managing Art Libraries
 
-1. Go to Layout tab → "Manage Back Art Library..."
+Both libraries are accessible from the global toolbar — no project needs to be open.
+
+**Front Art Library:**
+1. Click "Front Art Library" in the top toolbar
+2. Art is automatically added when you add cards from MPCFill search results
+3. Click "Import Downloaded Art" to bulk-import all previously cached MPCFill art with proper card names
+4. Click "Add from File..." to import images manually
+5. Use the search box and source dropdown to filter
+6. When selecting art for a card, the library is searched first — matching art loads instantly without network calls
+
+**Back Art Library:**
+1. Click "Back Art Library" in the top toolbar
 2. Click "Download MPCFill Card Backs" to populate the library (~460 card backs)
 3. Click a tile to see it in the preview panel (shows DPI, dimensions, source)
 4. Click "Set as Default" to auto-apply it to new cards
@@ -381,11 +407,12 @@ In the Layout tab:
 
 | Location | Path | Contents |
 |----------|------|----------|
-| App Settings | `%AppData%/MTGProxyBuilder/app_settings.json` | Default token text, page size, bleed, update check |
+| App Settings | `%AppData%/MTGProxyBuilder/app_settings.json` | Default token text, page size, bleed, update check, MPCFill filters |
 | Dock Layout | `%AppData%/MTGProxyBuilder/dock_layout.xml` | Panel positions, sizes, docking state |
-| Image Cache | `%AppData%/MTGProxyBuilder/ImageCache/` | Downloaded card images (cleared on exit) |
+| Image Cache | `%AppData%/MTGProxyBuilder/ImageCache/` | Downloaded card images + metadata.json (cleared on exit) |
 | Bleed Cache | `%AppData%/MTGProxyBuilder/BleedCache/` | Bleed-processed images (cleared on startup) |
 | Extracted Projects | `%AppData%/MTGProxyBuilder/ExtractedProjects/` | Temp images from opened projects (cleared on startup) |
+| Front Art Library | `%AppData%/MTGProxyBuilder/FrontArtLibrary/` | User's saved front art + catalog.json |
 | Back Art Library | `%AppData%/MTGProxyBuilder/BackArtLibrary/` | User's saved back art + catalog.json |
 | MPCFill Favorites | `%AppData%/MTGProxyBuilder/mpcfill_favorite_sources.json` | Favorited source PKs |
 | Projects | User-chosen location | `.mtgproj` ZIP archives |
@@ -401,9 +428,12 @@ In the Layout tab:
 - Scryfall rate-limits to ~10 req/s (the app respects this automatically)
 
 ### MPCFill search returns no results
-- The app fetches all 271 sources on first search; ensure you're online
+- The app fetches all 271+ sources on first search; ensure you're online
 - Uncheck "Favs only" if no favorites are set
 - Try unchecking "Fuzzy" for exact name matches
+- Check Settings → MPCFill for active filters (languages, card types, content filters) that may be excluding results
+- In the Art Selector, expand "MPCFill Filters" and click "Clear All Filters" then "Re-search MPCFill"
+- In the Source Manager, click "Refresh" if the source list is empty
 
 ### Moxfield import fails with 403
 - Moxfield uses Cloudflare protection; the app uses curl to bypass this
