@@ -869,6 +869,11 @@
                                             Content="Clear Cache" Padding="8,3" FontSize="10"/>
                                 </Grid>
 
+                                <!-- Front Art Library -->
+                                <TextBlock Text="FRONT ART" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,6,0,6"/>
+                                <Button Style="{StaticResource ToolBtn}" Command="{Binding ManageFrontArtLibraryCommand}"
+                                        Content="Manage Front Art Library..." HorizontalAlignment="Stretch" Padding="8,4" Margin="0,0,0,4"/>
+
                                 <!-- Back Art Library -->
                                 <TextBlock Text="BACK ART" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,6,0,6"/>
                                 <Button Style="{StaticResource AccentBtn}" Command="{Binding SelectBackArtForAllCommand}"

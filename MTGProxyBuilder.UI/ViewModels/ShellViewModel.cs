@@ -19,6 +19,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         private ProjectViewModel? _activeProject;
         private readonly AppSettingsService _appSettings = new();
         private readonly MpcFillSourceManager _mpcSourceManager = new();
+        private readonly MpcFillService _mpcFillService;
         private readonly UpdateCheckService _updateService = new();
         private bool _updateAvailable;
         private string _updateMessage = string.Empty;
@@ -26,6 +27,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         public ShellViewModel()
         {
+            _mpcFillService = new MpcFillService(new ImageCacheService(), _mpcSourceManager);
             Projects = new ObservableCollection<ProjectViewModel>();
 
             NewProjectCommand = new RelayCommand(_ => NewProject());
@@ -208,7 +210,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         private void OpenSettings()
         {
-            var dialog = new Dialogs.SettingsDialog(_appSettings, _mpcSourceManager);
+            var dialog = new Dialogs.SettingsDialog(_appSettings, _mpcSourceManager, _mpcFillService);
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
         }

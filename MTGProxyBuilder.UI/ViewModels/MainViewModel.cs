@@ -89,6 +89,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly ScryfallService _scryfallService;
         private readonly ImageCacheService _imageCacheService;
         private readonly BackArtLibraryService _backArtLibraryService;
+        private readonly FrontArtLibraryService _frontArtLibraryService;
         private readonly MoxfieldService _moxfieldService;
         private readonly ArchidektService _archidektService;
         private readonly DeckImportService _deckImportService;
@@ -145,6 +146,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             _pdfGeneratorService = new PdfGeneratorService();
             _scryfallService = new ScryfallService(_imageCacheService);
             _backArtLibraryService = new BackArtLibraryService();
+            _frontArtLibraryService = new FrontArtLibraryService();
             _moxfieldService = new MoxfieldService();
             _archidektService = new ArchidektService();
             _deckImportService = new DeckImportService(_moxfieldService, _archidektService);
@@ -152,6 +154,8 @@ namespace MTGProxyBuilder.UI.ViewModels
             _mpcFillService = new MpcFillService(_imageCacheService, MpcSourceManager);
             _mpcXmlImportService = new MpcFillXmlImportService(_mpcFillService, _imageCacheService);
             _mpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
+            _mpcAdvMinDpi = _appSettings.Settings.MpcFillDefaultMinDpi;
+            _mpcFuzzySearch = _appSettings.Settings.MpcFillDefaultFuzzySearch;
 
             // Pre-fetch MPCFill sources in the background so they're ready when needed
             _ = _mpcFillService.EnsureSourcesLoadedAsync();
@@ -209,6 +213,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             ImportMpcFillXmlCommand = new RelayCommand(_ => ImportMpcFillXml());
             ClearCacheCommand = new RelayCommand(_ => ClearCache());
             ManageBackArtLibraryCommand = new RelayCommand(_ => ManageBackArtLibrary());
+            ManageFrontArtLibraryCommand = new RelayCommand(_ => ManageFrontArtLibrary());
             DownloadUpdateCommand = new RelayCommand(_ => DownloadUpdate());
             DismissUpdateCommand = new RelayCommand(_ => UpdateAvailable = false);
             OpenSettingsCommand = new RelayCommand(_ => OpenSettings());
@@ -254,12 +259,14 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         private void OpenSettings()
         {
-            var dialog = new Dialogs.SettingsDialog(_appSettings, MpcSourceManager);
+            var dialog = new Dialogs.SettingsDialog(_appSettings, MpcSourceManager, _mpcFillService);
             dialog.Owner = Application.Current.MainWindow;
             if (dialog.ShowDialog() == true)
             {
-                // Sync the persisted favorites setting to the VM property
+                // Sync the persisted settings to VM properties
                 MpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
+                MpcAdvMinDpi = _appSettings.Settings.MpcFillDefaultMinDpi;
+                MpcFuzzySearch = _appSettings.Settings.MpcFillDefaultFuzzySearch;
             }
         }
 
@@ -601,6 +608,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         public ICommand ImportMpcFillXmlCommand { get; private set; } = null!;
         public ICommand ClearCacheCommand { get; private set; } = null!;
         public ICommand ManageBackArtLibraryCommand { get; private set; } = null!;
+        public ICommand ManageFrontArtLibraryCommand { get; private set; } = null!;
 
         public string CacheSizeText
         {
@@ -1077,7 +1085,8 @@ namespace MTGProxyBuilder.UI.ViewModels
         {
             var dialog = new Dialogs.ArtSelectorDialog(
                 card, mode, _scryfallService, _mpcFillService, _imageCacheService,
-                _backArtLibraryService, Cards, GetMpcFillSources());
+                _backArtLibraryService, Cards, GetMpcFillSources(), BuildMpcFillSearchOptions(),
+                _frontArtLibraryService);
             dialog.Owner = Application.Current.MainWindow;
 
             if (dialog.ShowDialog() == true && dialog.ResultPath != null)
@@ -1137,7 +1146,8 @@ namespace MTGProxyBuilder.UI.ViewModels
             var dialog = new Dialogs.ArtSelectorDialog(
                 targetCards.First(), Dialogs.ArtSelectorMode.Back,
                 _scryfallService, _mpcFillService, _imageCacheService,
-                _backArtLibraryService, Cards, GetMpcFillSources());
+                _backArtLibraryService, Cards, GetMpcFillSources(), BuildMpcFillSearchOptions(),
+                _frontArtLibraryService);
             dialog.Owner = Application.Current.MainWindow;
 
             if (dialog.ShowDialog() == true && dialog.ResultPath != null)
@@ -1213,6 +1223,15 @@ namespace MTGProxyBuilder.UI.ViewModels
             }
         }
 
+        /// <summary>Build MpcFillSearchOptions from settings with per-search overrides applied.</summary>
+        private MpcFillSearchOptions BuildMpcFillSearchOptions()
+        {
+            var opts = MpcFillSearchOptions.FromSettings(_appSettings.Settings);
+            opts.MinimumDpi = MpcAdvMinDpi;
+            opts.FuzzySearch = MpcFuzzySearch;
+            return opts;
+        }
+
         /// <summary>Build the MPCFill sources array respecting the user's favorites setting.</summary>
         private object[][]? GetMpcFillSources()
         {
@@ -1227,7 +1246,8 @@ namespace MTGProxyBuilder.UI.ViewModels
             try
             {
                 var (results, error) = await _mpcFillService.SearchAsync(
-                    ScryfallSearchQuery, 50, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources(), maxResults: 50);
+                    ScryfallSearchQuery, 50, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources(),
+                    maxResults: 50, options: BuildMpcFillSearchOptions());
                 if (error != null)
                 {
                     MpcFillResults.Clear();
@@ -1441,7 +1461,7 @@ namespace MTGProxyBuilder.UI.ViewModels
                     return;
                 }
 
-                var dialog = new Dialogs.MpcSourceManagerDialog(MpcSourceManager);
+                var dialog = new Dialogs.MpcSourceManagerDialog(MpcSourceManager, _mpcFillService);
                 dialog.Owner = Application.Current.MainWindow;
                 dialog.ShowDialog();
 
@@ -1506,6 +1526,14 @@ namespace MTGProxyBuilder.UI.ViewModels
             try
             {
                 var path = await _mpcFillService.DownloadAndCacheImageAsync(SelectedMpcFillCard);
+
+                // Save to front art library for future local-first searches
+                if (path != null)
+                {
+                    string libName = $"{SelectedMpcFillCard.Name} [{SelectedMpcFillCard.Source}]";
+                    _frontArtLibraryService.AddFromFile(path, libName, SelectedMpcFillCard.Source);
+                }
+
                 PushUndo();
                 var card = new CardModel
                 {
@@ -1560,7 +1588,8 @@ namespace MTGProxyBuilder.UI.ViewModels
                     await Task.Delay(10);
 
                     var (results, error) = await _mpcFillService.SearchAsync(
-                        card.Name, 5, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources());
+                        card.Name, 5, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources(),
+                        options: BuildMpcFillSearchOptions());
                     if (error != null || results.Count == 0) { failed++; continue; }
 
                     // Use the first result
@@ -1826,7 +1855,8 @@ namespace MTGProxyBuilder.UI.ViewModels
                     {
                         // Use MPCFill for front art with the user's selected options
                         var (mpcResults, _) = await _mpcFillService.SearchAsync(
-                            entry.CardName, 10, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources(), maxResults: 10);
+                            entry.CardName, 10, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources(),
+                            maxResults: 10, options: BuildMpcFillSearchOptions());
                         var bestMatch = mpcResults.FirstOrDefault(mc =>
                             mc.Name.Contains(entry.CardName, StringComparison.OrdinalIgnoreCase));
                         if (bestMatch != null)
@@ -2062,6 +2092,14 @@ namespace MTGProxyBuilder.UI.ViewModels
             dialog.ShowDialog();
             RefreshBackArtLibrary();
             StatusText = $"Back art library: {_backArtLibraryService.Entries.Count} item(s)";
+        }
+
+        private void ManageFrontArtLibrary()
+        {
+            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService);
+            dialog.Owner = Application.Current.MainWindow;
+            dialog.ShowDialog();
+            StatusText = $"Front art library: {_frontArtLibraryService.Entries.Count} item(s)";
         }
 
         private void ClearCache()

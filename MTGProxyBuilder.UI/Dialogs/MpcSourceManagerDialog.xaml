@@ -20,9 +20,16 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <TextBlock Grid.Row="0" Text="MPCFill Art Sources" Foreground="White" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,4"/>
-        <TextBlock Grid.Row="0" Foreground="#888" FontSize="11" Margin="0,24,0,8"
-                   x:Name="CountLabel"/>
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+            <Grid>
+                <TextBlock Text="MPCFill Art Sources" Foreground="White" FontSize="18" FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+                <Button x:Name="RefreshBtn" Content="Refresh" Padding="8,3" FontSize="10"
+                        Background="#0078D4" Foreground="White" BorderThickness="0" Cursor="Hand"
+                        HorizontalAlignment="Right" VerticalAlignment="Center" Click="OnRefresh"/>
+            </Grid>
+            <TextBlock x:Name="CountLabel" Foreground="#888" FontSize="11" Margin="0,4,0,0"/>
+        </StackPanel>
 
         <!-- Filter -->
         <Grid Grid.Row="1" Margin="0,4,0,8">
@@ -50,24 +57,22 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <!-- Favorite star -->
-                        <TextBlock Grid.Column="0" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"
-                                   Foreground="{Binding IsFavorite, Converter={StaticResource FavBrush}}"
-                                   Text="{Binding IsFavorite, Converter={StaticResource FavStar}}"/>
+                        <!-- Clickable favorite star -->
+                        <Button Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Padding="2"
+                                Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                Tag="{Binding Pk}" Click="OnToggleFavorite"
+                                ToolTip="{Binding IsFavorite, Converter={StaticResource FavAction}}">
+                            <TextBlock FontSize="16"
+                                       Foreground="{Binding IsFavorite, Converter={StaticResource FavBrush}}"
+                                       Text="{Binding IsFavorite, Converter={StaticResource FavStar}}"/>
+                        </Button>
                         <!-- Name + description -->
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="{Binding Name}" Foreground="#DDD" FontSize="12" FontWeight="SemiBold"/>
                             <TextBlock Text="{Binding Description}" Foreground="#777" FontSize="9.5"
-                                       TextTrimming="CharacterEllipsis" MaxWidth="320"/>
+                                       TextTrimming="CharacterEllipsis" MaxWidth="380"/>
                         </StackPanel>
-                        <!-- Toggle button -->
-                        <Button Grid.Column="2" VerticalAlignment="Center" Padding="8,3" Cursor="Hand"
-                                Background="Transparent" BorderThickness="0" FontSize="10"
-                                Foreground="{Binding IsFavorite, Converter={StaticResource FavBrush}}"
-                                Content="{Binding IsFavorite, Converter={StaticResource FavAction}}"
-                                Tag="{Binding Pk}" Click="OnToggleFavorite"/>
                     </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>

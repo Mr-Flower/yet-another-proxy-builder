@@ -3,6 +3,48 @@ using Newtonsoft.Json.Linq;
 
 namespace MTGProxyBuilder.Core.Services
 {
+    public class MpcFillSearchOptions
+    {
+        public string[] CardTypes { get; set; } = new[] { "CARD" };
+        public string SortBy { get; set; } = "nameAscending";
+        public int MinimumDpi { get; set; }
+        public int MaximumDpi { get; set; } = 1500;
+        public int MaximumSize { get; set; } = 30;
+        public bool FuzzySearch { get; set; } = true;
+        public bool FilterCardbacks { get; set; }
+        public string[] Languages { get; set; } = Array.Empty<string>();
+        public string[] IncludesTags { get; set; } = Array.Empty<string>();
+        public string[] ExcludesTags { get; set; } = Array.Empty<string>();
+
+        public static MpcFillSearchOptions FromSettings(AppSettings settings)
+        {
+            var rawExclude = settings.MpcFillExcludeTags ?? new List<string>();
+            var excludeTags = new List<string>(rawExclude);
+            if (settings.MpcFillExcludeNsfw && !excludeTags.Contains("NSFW"))
+                excludeTags.Add("NSFW");
+            if (settings.MpcFillExcludeAiArt && !excludeTags.Contains("AI Art"))
+                excludeTags.Add("AI Art");
+
+            var cardTypes = settings.MpcFillCardTypes ?? new List<string>();
+            var languages = settings.MpcFillLanguages ?? new List<string>();
+            var includeTags = settings.MpcFillIncludeTags ?? new List<string>();
+
+            return new MpcFillSearchOptions
+            {
+                CardTypes = cardTypes.Count > 0 ? cardTypes.ToArray() : new[] { "CARD" },
+                SortBy = settings.MpcFillDefaultSortBy ?? "nameAscending",
+                MinimumDpi = settings.MpcFillDefaultMinDpi,
+                MaximumDpi = settings.MpcFillDefaultMaxDpi > 0 ? settings.MpcFillDefaultMaxDpi : 1500,
+                MaximumSize = settings.MpcFillMaximumSize > 0 ? settings.MpcFillMaximumSize : 30,
+                FuzzySearch = settings.MpcFillDefaultFuzzySearch,
+                FilterCardbacks = settings.MpcFillFilterCardbacks,
+                Languages = languages.ToArray(),
+                IncludesTags = includeTags.ToArray(),
+                ExcludesTags = excludeTags.ToArray()
+            };
+        }
+    }
+
     public class MpcFillCard
     {
         public string Identifier { get; set; } = string.Empty;
@@ -36,11 +78,11 @@ namespace MTGProxyBuilder.Core.Services
 
         public MpcFillSourceManager SourceManager => _sourceManager;
 
-        /// <summary>Ensures sources are loaded from the API. Call before first search.</summary>
         /// <summary>Loads sources from the API. Returns error message on failure, null on success.</summary>
-        public async Task<string?> EnsureSourcesLoadedAsync()
+        /// <param name="forceReload">When true, re-fetches even if previously loaded.</param>
+        public async Task<string?> EnsureSourcesLoadedAsync(bool forceReload = false)
         {
-            if (_sourcesLoaded) return null;
+            if (_sourcesLoaded && !forceReload) return null;
 
             try
             {
@@ -83,18 +125,28 @@ namespace MTGProxyBuilder.Core.Services
         }
 
         /// <summary>Search MPCFill for card art. Paginates automatically to fetch all results.</summary>
-        /// <summary>Search MPCFill for card art. Paginates automatically to fetch all results.</summary>
         /// <param name="maxResults">Maximum total results to return. 0 = unlimited.</param>
         public async Task<(List<MpcFillCard> Cards, string? Error)> SearchAsync(
             string query, int pageSize = 60, int minimumDpi = 0,
             bool fuzzySearch = true, object[][]? sourcesOverride = null,
-            int maxResults = 0)
+            int maxResults = 0, MpcFillSearchOptions? options = null)
         {
             try
             {
                 await EnsureSourcesLoadedAsync();
-                // null = all sources enabled; caller passes favorites array explicitly when wanted
-                var sources = sourcesOverride ?? _sourceManager.BuildSourcesArray();
+                // Rebuild sources after ensuring they're loaded — sourcesOverride may have been
+                // captured before sources finished loading, producing a stale empty array.
+                var sources = (sourcesOverride != null && sourcesOverride.Length > 0)
+                    ? sourcesOverride
+                    : _sourceManager.BuildSourcesArray();
+
+                var opts = options ?? new MpcFillSearchOptions();
+                // Per-call overrides take precedence when explicitly passed
+                if (options == null)
+                {
+                    opts.MinimumDpi = minimumDpi;
+                    opts.FuzzySearch = fuzzySearch;
+                }
 
                 var allCards = new List<MpcFillCard>();
                 int pageStart = 0;
@@ -104,21 +156,21 @@ namespace MTGProxyBuilder.Core.Services
                     var payload = new
                     {
                         query,
-                        cardTypes = new[] { "CARD" },
-                        sortBy = "nameAscending",
+                        cardTypes = opts.CardTypes,
+                        sortBy = opts.SortBy,
                         pageStart,
                         pageSize,
                         searchSettings = new
                         {
-                            searchTypeSettings = new { fuzzySearch, filterCardbacks = false },
+                            searchTypeSettings = new { fuzzySearch = opts.FuzzySearch, filterCardbacks = opts.FilterCardbacks },
                             filterSettings = new
                             {
-                                languages = Array.Empty<string>(),
-                                includesTags = Array.Empty<string>(),
-                                excludesTags = Array.Empty<string>(),
-                                minimumDPI = minimumDpi,
-                                maximumDPI = 1500,
-                                maximumSize = 30
+                                languages = opts.Languages,
+                                includesTags = opts.IncludesTags,
+                                excludesTags = opts.ExcludesTags,
+                                minimumDPI = opts.MinimumDpi,
+                                maximumDPI = opts.MaximumDpi,
+                                maximumSize = opts.MaximumSize
                             },
                             sourceSettings = new { sources }
                         }
@@ -221,27 +273,29 @@ namespace MTGProxyBuilder.Core.Services
         }
 
         /// <summary>Fetches all cardback art from MPCFill using the /cardbacks/ + /cards/ endpoints.</summary>
-        public async Task<(List<MpcFillCard> Cards, string? Error)> SearchCardbacksAsync(int pageSize = 500)
+        public async Task<(List<MpcFillCard> Cards, string? Error)> SearchCardbacksAsync(
+            int pageSize = 500, MpcFillSearchOptions? options = null)
         {
             try
             {
                 await EnsureSourcesLoadedAsync();
                 var sources = _sourceManager.BuildSourcesArray();
+                var opts = options ?? new MpcFillSearchOptions();
 
                 // Step 1: Get cardback identifiers from /2/cardbacks/
                 var searchPayload = new
                 {
                     searchSettings = new
                     {
-                        searchTypeSettings = new { fuzzySearch = true, filterCardbacks = false },
+                        searchTypeSettings = new { fuzzySearch = opts.FuzzySearch, filterCardbacks = opts.FilterCardbacks },
                         filterSettings = new
                         {
-                            languages = Array.Empty<string>(),
-                            includesTags = Array.Empty<string>(),
-                            excludesTags = Array.Empty<string>(),
-                            minimumDPI = 0,
-                            maximumDPI = 1500,
-                            maximumSize = 30
+                            languages = opts.Languages,
+                            includesTags = opts.IncludesTags,
+                            excludesTags = opts.ExcludesTags,
+                            minimumDPI = opts.MinimumDpi,
+                            maximumDPI = opts.MaximumDpi,
+                            maximumSize = opts.MaximumSize
                         },
                         sourceSettings = new { sources }
                     }

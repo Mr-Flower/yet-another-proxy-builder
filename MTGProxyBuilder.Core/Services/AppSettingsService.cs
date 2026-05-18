@@ -21,6 +21,42 @@ namespace MTGProxyBuilder.Core.Services
 
         [JsonProperty("mpcFillUseFavoritesOnly")]
         public bool MpcFillUseFavoritesOnly { get; set; }
+
+        [JsonProperty("mpcFillDefaultMinDpi")]
+        public int MpcFillDefaultMinDpi { get; set; }
+
+        [JsonProperty("mpcFillDefaultMaxDpi")]
+        public int MpcFillDefaultMaxDpi { get; set; } = 1500;
+
+        [JsonProperty("mpcFillDefaultFuzzySearch")]
+        public bool MpcFillDefaultFuzzySearch { get; set; } = true;
+
+        [JsonProperty("mpcFillDefaultSortBy")]
+        public string MpcFillDefaultSortBy { get; set; } = "nameAscending";
+
+        [JsonProperty("mpcFillCardTypes")]
+        public List<string> MpcFillCardTypes { get; set; } = new() { "CARD" };
+
+        [JsonProperty("mpcFillFilterCardbacks")]
+        public bool MpcFillFilterCardbacks { get; set; }
+
+        [JsonProperty("mpcFillMaximumSize")]
+        public int MpcFillMaximumSize { get; set; } = 30;
+
+        [JsonProperty("mpcFillLanguages")]
+        public List<string> MpcFillLanguages { get; set; } = new();
+
+        [JsonProperty("mpcFillExcludeNsfw")]
+        public bool MpcFillExcludeNsfw { get; set; }
+
+        [JsonProperty("mpcFillExcludeAiArt")]
+        public bool MpcFillExcludeAiArt { get; set; }
+
+        [JsonProperty("mpcFillExcludeTags")]
+        public List<string> MpcFillExcludeTags { get; set; } = new();
+
+        [JsonProperty("mpcFillIncludeTags")]
+        public List<string> MpcFillIncludeTags { get; set; } = new();
     }
 
     public class AppSettingsService

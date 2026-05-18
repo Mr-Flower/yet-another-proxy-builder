@@ -14,17 +14,15 @@ using MTGProxyBuilder.Core.Services;
 
 namespace MTGProxyBuilder.UI.Dialogs
 {
-    public partial class BackArtLibraryDialog : Window
+    public partial class FrontArtLibraryDialog : Window
     {
-        private readonly BackArtLibraryService _library;
-        private readonly MpcFillService _mpcFill;
+        private readonly FrontArtLibraryService _library;
         private string? _selectedEntryId;
 
-        public BackArtLibraryDialog(BackArtLibraryService library, MpcFillService mpcFill)
+        public FrontArtLibraryDialog(FrontArtLibraryService library)
         {
             InitializeComponent();
             _library = library;
-            _mpcFill = mpcFill;
             PopulateSourceFilter();
             RefreshGrid();
         }
@@ -39,7 +37,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                 .ToList();
 
             SourceFilter.Items.Clear();
-            SourceFilter.Items.Add("All Contributors");
+            SourceFilter.Items.Add("All Sources");
             foreach (var s in sources)
                 SourceFilter.Items.Add(s);
             SourceFilter.SelectedIndex = 0;
@@ -55,22 +53,20 @@ namespace MTGProxyBuilder.UI.Dialogs
             LibraryPanel.Children.Clear();
             _selectedEntryId = null;
             RemoveBtn.IsEnabled = false;
-            DefaultBtn.IsEnabled = false;
 
             string nameFilter = SearchBox?.Text?.Trim() ?? "";
-            string sourceFilter = SourceFilter?.SelectedItem as string ?? "All Contributors";
+            string sourceFilter = SourceFilter?.SelectedItem as string ?? "All Sources";
 
             var entries = _library.Entries.Where(e => File.Exists(e.FilePath)).AsEnumerable();
 
             if (!string.IsNullOrEmpty(nameFilter))
                 entries = entries.Where(e => e.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
 
-            if (sourceFilter != "All Contributors")
+            if (sourceFilter != "All Sources")
                 entries = entries.Where(e => e.Source.Equals(sourceFilter, StringComparison.OrdinalIgnoreCase));
 
             var filteredEntries = entries.ToList();
 
-            // Build all tiles immediately with placeholder backgrounds
             var imageTargets = new List<(Image img, string path)>();
 
             foreach (var entry in filteredEntries)
@@ -82,7 +78,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                     CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
                     BorderThickness = new Thickness(2), BorderBrush = Brushes.Transparent,
                     Tag = entry.Id,
-                    ToolTip = $"{entry.Name}\nAdded: {entry.AddedDate:d}"
+                    ToolTip = $"{entry.Name}\nSource: {entry.Source}\nAdded: {entry.AddedDate:d}"
                 };
 
                 var stack = new StackPanel();
@@ -97,16 +93,11 @@ namespace MTGProxyBuilder.UI.Dialogs
                 imageTargets.Add((img, entry.FilePath));
                 stack.Children.Add(imgBorder);
 
-                bool isDefault = _library.IsDefault(entry.Id);
-
                 var lbl = new TextBlock
                 {
-                    Text = isDefault ? "\u2605 " + entry.Name : entry.Name,
-                    Foreground = isDefault
-                        ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
-                        : new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                    Text = entry.Name,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
                     FontSize = 9, TextTrimming = TextTrimming.CharacterEllipsis,
-                    FontWeight = isDefault ? FontWeights.Bold : FontWeights.Normal,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Margin = new Thickness(3, 4, 3, 0)
                 };
@@ -124,9 +115,6 @@ namespace MTGProxyBuilder.UI.Dialogs
                     };
                     stack.Children.Add(srcLbl);
                 }
-
-                if (isDefault)
-                    border.BorderBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50));
 
                 border.Child = stack;
 
@@ -147,14 +135,11 @@ namespace MTGProxyBuilder.UI.Dialogs
                 LibraryPanel.Children.Add(border);
             }
 
-            var defaultEntry = _library.DefaultEntryId != null ? _library.GetById(_library.DefaultEntryId) : null;
-            string defaultInfo = defaultEntry != null ? $" | Default: {defaultEntry.Name}" : "";
             int totalCount = _library.Entries.Count(e => File.Exists(e.FilePath));
             string filterInfo = filteredEntries.Count < totalCount ? $" (showing {filteredEntries.Count} of {totalCount})" : "";
-            CountLabel.Text = $"{totalCount} item(s) in library{filterInfo}{defaultInfo}";
+            CountLabel.Text = $"{totalCount} item(s) in library{filterInfo}";
             StatusLabel.Text = "Loading thumbnails...";
 
-            // Load thumbnails on background thread in batches
             _ = LoadThumbnailsAsync(imageTargets);
         }
 
@@ -164,8 +149,6 @@ namespace MTGProxyBuilder.UI.Dialogs
             for (int i = 0; i < targets.Count; i += batchSize)
             {
                 var batch = targets.Skip(i).Take(batchSize).ToList();
-
-                // Load bitmaps on background thread
                 var bitmaps = await Task.Run(() =>
                 {
                     var results = new List<BitmapImage?>();
@@ -187,36 +170,21 @@ namespace MTGProxyBuilder.UI.Dialogs
                     return results;
                 });
 
-                // Assign to UI on dispatcher
                 for (int j = 0; j < batch.Count && j < bitmaps.Count; j++)
-                {
-                    if (bitmaps[j] != null)
-                        batch[j].img.Source = bitmaps[j];
-                }
+                    if (bitmaps[j] != null) batch[j].img.Source = bitmaps[j];
             }
-
             StatusLabel.Text = "";
         }
 
         private void SelectEntry(string entryId, Border clickedBorder)
         {
-            // Update selection highlight (preserve default green borders)
             foreach (var child in LibraryPanel.Children)
-            {
-                if (child is Border b && b.Tag is string id)
-                {
-                    b.BorderBrush = _library.IsDefault(id)
-                        ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
-                        : Brushes.Transparent;
-                }
-            }
+                if (child is Border b) b.BorderBrush = Brushes.Transparent;
 
             clickedBorder.BorderBrush = Brushes.DodgerBlue;
             _selectedEntryId = entryId;
             RemoveBtn.IsEnabled = true;
-            DefaultBtn.IsEnabled = true;
 
-            // Load preview
             var entry = _library.GetById(entryId);
             if (entry != null && File.Exists(entry.FilePath))
             {
@@ -232,7 +200,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             var dialog = new OpenFileDialog
             {
                 Filter = "Image Files (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp|All Files (*.*)|*.*",
-                Title = "Add Image to Back Art Library",
+                Title = "Add Image to Front Art Library",
                 Multiselect = true
             };
             if (dialog.ShowDialog() != true) return;
@@ -240,26 +208,10 @@ namespace MTGProxyBuilder.UI.Dialogs
             int added = 0;
             foreach (var file in dialog.FileNames)
             {
-                var entry = _library.AddFromFile(file);
-                if (entry != null) added++;
+                if (_library.AddFromFile(file) != null) added++;
             }
             StatusLabel.Text = $"Added {added} image(s)";
-            RefreshGrid();
-        }
-
-        private void OnSetDefault(object sender, RoutedEventArgs e)
-        {
-            if (_selectedEntryId == null) return;
-            _library.SetDefault(_selectedEntryId);
-            var entry = _library.GetById(_selectedEntryId);
-            StatusLabel.Text = $"Default set to \"{entry?.Name}\"";
-            RefreshGrid();
-        }
-
-        private void OnClearDefault(object sender, RoutedEventArgs e)
-        {
-            _library.SetDefault(null);
-            StatusLabel.Text = "Default cleared";
+            PopulateSourceFilter();
             RefreshGrid();
         }
 
@@ -277,57 +229,6 @@ namespace MTGProxyBuilder.UI.Dialogs
             _library.Remove(_selectedEntryId);
             StatusLabel.Text = $"Removed \"{name}\"";
             RefreshGrid();
-        }
-
-        private async void OnDownloadMpcFill(object sender, RoutedEventArgs e)
-        {
-            DownloadBtn.IsEnabled = false;
-            StatusLabel.Text = "Fetching card back list from MPCFill...";
-
-            try
-            {
-                var (cardbacks, error) = await _mpcFill.SearchCardbacksAsync(500);
-                if (error != null || cardbacks.Count == 0)
-                {
-                    StatusLabel.Text = error ?? "No card backs found.";
-                    DownloadBtn.IsEnabled = true;
-                    return;
-                }
-
-                StatusLabel.Text = $"Downloading {cardbacks.Count} card backs...";
-                var results = await _mpcFill.DownloadAndCacheImagesAsync(
-                    cardbacks,
-                    maxConcurrency: 8,
-                    onProgress: (done, total, name) =>
-                        Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Downloading {done}/{total}: {name}..."));
-
-                int added = 0, skipped = 0;
-                _library.BeginBatch();
-                try
-                {
-                    foreach (var (cb, cached) in results)
-                    {
-                        if (cached == null) { skipped++; continue; }
-                        string displayName = $"{cb.Name} [{cb.Source}]";
-                        var entry = _library.AddFromFile(cached, displayName, cb.Source);
-                        if (entry != null) added++;
-                        else skipped++;
-                    }
-                }
-                finally { _library.EndBatch(); }
-
-                StatusLabel.Text = $"Added {added} card back(s) to library ({skipped} skipped)";
-                PopulateSourceFilter();
-                RefreshGrid();
-            }
-            catch (Exception ex)
-            {
-                StatusLabel.Text = $"Error: {ex.Message}";
-            }
-            finally
-            {
-                DownloadBtn.IsEnabled = true;
-            }
         }
 
         private void OnClose(object sender, RoutedEventArgs e)

@@ -13,16 +13,72 @@ namespace MTGProxyBuilder.UI.Dialogs
     public partial class MpcSourceManagerDialog : Window
     {
         private readonly MpcFillSourceManager _manager;
+        private readonly MpcFillService? _mpcFillService;
         private List<MpcFillSource> _allSources;
         private bool _initialized;
 
-        public MpcSourceManagerDialog(MpcFillSourceManager manager)
+        public MpcSourceManagerDialog(MpcFillSourceManager manager, MpcFillService? mpcFillService = null)
         {
             _manager = manager;
+            _mpcFillService = mpcFillService;
             _allSources = manager.AllSources.ToList();
             InitializeComponent();
             _initialized = true;
-            RefreshList();
+
+            // Always load on open — if sources are already cached this is near-instant
+            Loaded += async (_, _) => await LoadSourcesAsync(forceReload: _allSources.Count == 0);
+        }
+
+        private async System.Threading.Tasks.Task LoadSourcesAsync(bool forceReload = false)
+        {
+            if (_mpcFillService == null)
+            {
+                // No service available — just show what we have
+                RefreshList();
+                if (_allSources.Count == 0)
+                    CountLabel.Text = "No sources available (service unavailable)";
+                return;
+            }
+
+            RefreshBtn.IsEnabled = false;
+            CountLabel.Text = "Loading sources from MPCFill...";
+            SummaryLabel.Text = "Connecting to mpcfill.com...";
+
+            try
+            {
+                var error = await _mpcFillService.EnsureSourcesLoadedAsync(forceReload);
+                _allSources = _manager.AllSources.ToList();
+
+                if (error != null)
+                {
+                    CountLabel.Text = $"0 sources — failed to load";
+                    SummaryLabel.Text = $"Error: {error}";
+                    return;
+                }
+
+                if (_allSources.Count == 0)
+                {
+                    CountLabel.Text = "0 sources available";
+                    SummaryLabel.Text = "MPCFill returned no sources. Click Refresh to retry.";
+                    return;
+                }
+
+                RefreshList();
+            }
+            catch (Exception ex)
+            {
+                CountLabel.Text = "0 sources — failed to load";
+                SummaryLabel.Text = $"Error: {ex.Message}";
+            }
+            finally
+            {
+                RefreshBtn.IsEnabled = true;
+            }
+        }
+
+        private async void OnRefresh(object sender, RoutedEventArgs e)
+        {
+            await LoadSourcesAsync(forceReload: true);
         }
 
         private void RefreshList()
