@@ -23,6 +23,9 @@
             <Button Content="Add from File..." Padding="10,5" Margin="0,0,6,0"
                     Background="#0078D4" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"
                     Click="OnAddFromFile"/>
+            <Button x:Name="ImportCacheBtn" Content="Import Downloaded Art" Padding="10,5" Margin="0,0,6,0"
+                    Background="#0078D4" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"
+                    Click="OnImportFromCache"/>
             <Button Content="Remove Selected" Padding="10,5"
                     Background="Transparent" Foreground="#E06060" BorderThickness="0" Cursor="Hand" FontSize="11"
                     Click="OnRemoveSelected" x:Name="RemoveBtn" IsEnabled="False"/>

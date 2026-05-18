@@ -19,7 +19,10 @@ namespace MTGProxyBuilder.UI.ViewModels
         private ProjectViewModel? _activeProject;
         private readonly AppSettingsService _appSettings = new();
         private readonly MpcFillSourceManager _mpcSourceManager = new();
+        private readonly ImageCacheService _imageCacheService;
         private readonly MpcFillService _mpcFillService;
+        private readonly BackArtLibraryService _backArtLibraryService = new();
+        private readonly FrontArtLibraryService _frontArtLibraryService = new();
         private readonly UpdateCheckService _updateService = new();
         private bool _updateAvailable;
         private string _updateMessage = string.Empty;
@@ -27,7 +30,8 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         public ShellViewModel()
         {
-            _mpcFillService = new MpcFillService(new ImageCacheService(), _mpcSourceManager);
+            _imageCacheService = new ImageCacheService();
+            _mpcFillService = new MpcFillService(_imageCacheService, _mpcSourceManager);
             Projects = new ObservableCollection<ProjectViewModel>();
 
             NewProjectCommand = new RelayCommand(_ => NewProject());
@@ -38,6 +42,8 @@ namespace MTGProxyBuilder.UI.ViewModels
             ExitCommand = new RelayCommand(_ => Application.Current.Shutdown());
             DownloadUpdateCommand = new RelayCommand(_ => DownloadUpdate());
             DismissUpdateCommand = new RelayCommand(_ => UpdateAvailable = false);
+            ManageFrontArtLibraryCommand = new RelayCommand(_ => ManageFrontArtLibrary());
+            ManageBackArtLibraryCommand = new RelayCommand(_ => ManageBackArtLibrary());
 
             _ = CheckForUpdateAsync();
         }
@@ -61,6 +67,8 @@ namespace MTGProxyBuilder.UI.ViewModels
         public ICommand ExitCommand { get; }
         public ICommand DownloadUpdateCommand { get; }
         public ICommand DismissUpdateCommand { get; }
+        public ICommand ManageFrontArtLibraryCommand { get; }
+        public ICommand ManageBackArtLibraryCommand { get; }
 
         // --- Update ---
         public bool UpdateAvailable
@@ -211,6 +219,20 @@ namespace MTGProxyBuilder.UI.ViewModels
         private void OpenSettings()
         {
             var dialog = new Dialogs.SettingsDialog(_appSettings, _mpcSourceManager, _mpcFillService);
+            dialog.Owner = Application.Current.MainWindow;
+            dialog.ShowDialog();
+        }
+
+        private void ManageFrontArtLibrary()
+        {
+            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService, _imageCacheService);
+            dialog.Owner = Application.Current.MainWindow;
+            dialog.ShowDialog();
+        }
+
+        private void ManageBackArtLibrary()
+        {
+            var dialog = new Dialogs.BackArtLibraryDialog(_backArtLibraryService, _mpcFillService);
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
         }

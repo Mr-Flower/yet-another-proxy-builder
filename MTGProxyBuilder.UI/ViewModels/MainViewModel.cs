@@ -2096,7 +2096,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         private void ManageFrontArtLibrary()
         {
-            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService);
+            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService, _imageCacheService);
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
             StatusText = $"Front art library: {_frontArtLibraryService.Entries.Count} item(s)";

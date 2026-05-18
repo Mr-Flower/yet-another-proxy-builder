@@ -1,17 +1,24 @@
+using Newtonsoft.Json;
+
 namespace MTGProxyBuilder.Core.Services
 {
     public class ImageCacheService
     {
         private readonly string _cacheDirectory;
+        private readonly string _metadataPath;
         // cardId -> full path; avoids Directory.GetFiles per lookup
         private readonly Dictionary<string, string> _fileIndex = new(StringComparer.OrdinalIgnoreCase);
+        // cardId -> (displayName, source) for resolving cache entries back to meaningful names
+        private Dictionary<string, CachedImageMeta> _metaIndex = new(StringComparer.OrdinalIgnoreCase);
 
         public ImageCacheService()
         {
             _cacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "MTGProxyBuilder", "ImageCache");
             Directory.CreateDirectory(_cacheDirectory);
+            _metadataPath = Path.Combine(_cacheDirectory, "metadata.json");
             RebuildIndex();
+            LoadMetadata();
         }
 
         public string CacheDirectory => _cacheDirectory;
@@ -58,6 +65,52 @@ namespace MTGProxyBuilder.Core.Services
             return _fileIndex.TryGetValue(cardId, out var path) ? path : null;
         }
 
+        /// <summary>Store display metadata for a cached image.</summary>
+        public void SetMetadata(string cardId, string displayName, string source)
+        {
+            _metaIndex[cardId] = new CachedImageMeta { Name = displayName, Source = source };
+            SaveMetadata();
+        }
+
+        /// <summary>Returns all cached file paths whose key starts with the given prefix, with metadata.</summary>
+        public List<(string Key, string Path, string Name, string Source)> GetCachedByPrefix(string prefix)
+        {
+            return _fileIndex
+                .Where(kv => kv.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .Select(kv =>
+                {
+                    _metaIndex.TryGetValue(kv.Key, out var meta);
+                    return (kv.Key, kv.Value,
+                            Name: meta?.Name ?? Path.GetFileNameWithoutExtension(kv.Value),
+                            Source: meta?.Source ?? "");
+                })
+                .ToList();
+        }
+
+        private void LoadMetadata()
+        {
+            try
+            {
+                if (File.Exists(_metadataPath))
+                {
+                    var json = File.ReadAllText(_metadataPath);
+                    _metaIndex = JsonConvert.DeserializeObject<Dictionary<string, CachedImageMeta>>(json)
+                        ?? new(StringComparer.OrdinalIgnoreCase);
+                }
+            }
+            catch { _metaIndex = new(StringComparer.OrdinalIgnoreCase); }
+        }
+
+        private void SaveMetadata()
+        {
+            try
+            {
+                var json = JsonConvert.SerializeObject(_metaIndex, Formatting.Indented);
+                File.WriteAllText(_metadataPath, json);
+            }
+            catch { }
+        }
+
         public void ClearCache()
         {
             if (Directory.Exists(_cacheDirectory))
@@ -69,6 +122,17 @@ namespace MTGProxyBuilder.Core.Services
                 }
             }
             _fileIndex.Clear();
+            _metaIndex.Clear();
+            SaveMetadata();
         }
+    }
+
+    public class CachedImageMeta
+    {
+        [JsonProperty("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonProperty("source")]
+        public string Source { get; set; } = string.Empty;
     }
 }

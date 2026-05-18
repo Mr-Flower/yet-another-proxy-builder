@@ -89,6 +89,10 @@ namespace MTGProxyBuilder.UI.Dialogs
                 }
             }
 
+            // Show actions bar in front mode with library available
+            if (isFront && _frontArtLibrary != null)
+                ActionsBar.Visibility = Visibility.Visible;
+
             LoadFilterControls(_mpcSearchOptions);
             Loaded += async (_, _) => await LoadOptionsAsync();
         }
@@ -129,12 +133,15 @@ namespace MTGProxyBuilder.UI.Dialogs
             }
 
             // 1. Show local library matches first (instant, no network)
+            var libraryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (_frontArtLibrary != null)
             {
                 var libraryMatches = _frontArtLibrary.SearchByCardName(_card.Name);
                 if (libraryMatches.Count > 0)
                 {
                     StatusLabel.Text = $"Found {libraryMatches.Count} in library, searching online...";
+                    foreach (var m in libraryMatches)
+                        libraryNames.Add(m.Name);
                     var deferredImages = new List<(Image img, string path)>();
                     foreach (var entry in libraryMatches)
                     {
@@ -253,6 +260,12 @@ namespace MTGProxyBuilder.UI.Dialogs
             var scryfallResults = scryfallTask.Result;
             var mpcResults = mpcTask.Result;
 
+            // Skip MPCFill results that are already in the local library
+            if (libraryNames.Count > 0)
+                mpcResults = mpcResults
+                    .Where(mc => !libraryNames.Contains($"{mc.Name} [{mc.Source}]"))
+                    .ToList();
+
             int totalImages = scryfallResults.Count + mpcResults.Count;
 
             // Warn the user if there are a lot of results to cache
@@ -331,9 +344,9 @@ namespace MTGProxyBuilder.UI.Dialogs
                 }
             }
 
-            if (_frontArtLibrary != null)
-                AddActionTile("+ Add to Library", OnAddToFrontLibrary);
-            AddActionTile("Browse File...", OnBrowseFile);
+            // "Browse File" action tile only shown when no actions bar (back mode)
+            if (_frontArtLibrary == null)
+                AddActionTile("Browse File...", OnBrowseFile);
         }
 
         private async Task LoadBackOptionsAsync(HashSet<string> shown)
@@ -703,6 +716,41 @@ namespace MTGProxyBuilder.UI.Dialogs
         // ================================================================
         //  ACTIONS
         // ================================================================
+
+        private void OnImportCacheToLibrary(object sender, RoutedEventArgs e) => OnImportCacheToLibrary();
+        private void OnAddToFrontLibraryClick(object sender, RoutedEventArgs e) => OnAddToFrontLibrary();
+        private void OnBrowseFileClick(object sender, RoutedEventArgs e) => OnBrowseFile();
+
+        private void OnImportCacheToLibrary()
+        {
+            if (_frontArtLibrary == null) return;
+
+            var cached = _imageCache.GetCachedByPrefix("mpc_");
+            if (cached.Count == 0)
+            {
+                StatusLabel.Text = "No downloaded MPCFill art found in cache.";
+                return;
+            }
+
+            int added = 0, skipped = 0;
+            _frontArtLibrary.BeginBatch();
+            try
+            {
+                foreach (var (key, path, name, source) in cached)
+                {
+                    if (!File.Exists(path)) { skipped++; continue; }
+                    string displayName = !string.IsNullOrEmpty(source)
+                        ? $"{name} [{source}]" : name;
+                    if (_frontArtLibrary.AddFromFile(path, displayName, source) != null) added++;
+                    else skipped++;
+                }
+            }
+            finally { _frontArtLibrary.EndBatch(); }
+
+            StatusLabel.Text = $"Imported {added} image(s) to library ({skipped} already existed or skipped)";
+            if (added > 0)
+                _ = LoadOptionsAsync();
+        }
 
         private void OnAddToFrontLibrary()
         {

@@ -226,13 +226,22 @@ namespace MTGProxyBuilder.Core.Services
         /// <summary>Download and cache a card image from MPCFill.</summary>
         public async Task<string?> DownloadAndCacheImageAsync(MpcFillCard card)
         {
-            var cached = _imageCache.GetCachedImagePath($"mpc_{card.Identifier}");
-            if (cached != null) return cached;
+            string cacheKey = $"mpc_{card.Identifier}";
+            var cached = _imageCache.GetCachedImagePath(cacheKey);
+            if (cached != null)
+            {
+                // Ensure metadata is stored even for previously cached images
+                _imageCache.SetMetadata(cacheKey, card.Name, card.Source);
+                return cached;
+            }
 
             string url = card.DownloadLink;
             if (string.IsNullOrEmpty(url)) return null;
 
-            return await _imageCache.CacheImageFromUrlAsync(_httpClient, url, $"mpc_{card.Identifier}");
+            var result = await _imageCache.CacheImageFromUrlAsync(_httpClient, url, cacheKey);
+            if (result != null)
+                _imageCache.SetMetadata(cacheKey, card.Name, card.Source);
+            return result;
         }
 
         /// <summary>Download and cache multiple card images in parallel with bounded concurrency.</summary>

@@ -17,12 +17,15 @@ namespace MTGProxyBuilder.UI.Dialogs
     public partial class FrontArtLibraryDialog : Window
     {
         private readonly FrontArtLibraryService _library;
+        private readonly ImageCacheService? _imageCache;
         private string? _selectedEntryId;
 
-        public FrontArtLibraryDialog(FrontArtLibraryService library)
+        public FrontArtLibraryDialog(FrontArtLibraryService library, ImageCacheService? imageCache = null)
         {
             InitializeComponent();
             _library = library;
+            _imageCache = imageCache;
+            ImportCacheBtn.Visibility = _imageCache != null ? Visibility.Visible : Visibility.Collapsed;
             PopulateSourceFilter();
             RefreshGrid();
         }
@@ -213,6 +216,45 @@ namespace MTGProxyBuilder.UI.Dialogs
             StatusLabel.Text = $"Added {added} image(s)";
             PopulateSourceFilter();
             RefreshGrid();
+        }
+
+        private void OnImportFromCache(object sender, RoutedEventArgs e)
+        {
+            if (_imageCache == null) return;
+
+            var cached = _imageCache.GetCachedByPrefix("mpc_");
+            if (cached.Count == 0)
+            {
+                StatusLabel.Text = "No downloaded MPCFill art found in cache.";
+                return;
+            }
+
+            ImportCacheBtn.IsEnabled = false;
+            StatusLabel.Text = $"Importing from {cached.Count} cached file(s)...";
+
+            int added = 0, skipped = 0;
+            _library.BeginBatch();
+            try
+            {
+                foreach (var (key, path, name, source) in cached)
+                {
+                    if (!File.Exists(path)) { skipped++; continue; }
+                    string displayName = !string.IsNullOrEmpty(source)
+                        ? $"{name} [{source}]" : name;
+                    var entry = _library.AddFromFile(path, displayName, source);
+                    if (entry != null) added++;
+                    else skipped++;
+                }
+            }
+            finally { _library.EndBatch(); }
+
+            StatusLabel.Text = $"Imported {added} image(s) ({skipped} already in library or skipped)";
+            if (added > 0)
+            {
+                PopulateSourceFilter();
+                RefreshGrid();
+            }
+            ImportCacheBtn.IsEnabled = true;
         }
 
         private void OnRemoveSelected(object sender, RoutedEventArgs e)

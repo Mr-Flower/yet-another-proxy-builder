@@ -133,6 +133,8 @@
 
                 <!-- Global right buttons -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,2">
+                    <Button Style="{StaticResource ToolBtn}" Command="{Binding ManageFrontArtLibraryCommand}" Content="Front Art Library" Padding="8,4"/>
+                    <Button Style="{StaticResource ToolBtn}" Command="{Binding ManageBackArtLibraryCommand}" Content="Back Art Library" Padding="8,4"/>
                     <Button Style="{StaticResource ToolBtn}" Command="{Binding OpenSettingsCommand}" Content="Settings" Padding="8,4"/>
                 </StackPanel>
             </Grid>
@@ -869,17 +871,10 @@
                                             Content="Clear Cache" Padding="8,3" FontSize="10"/>
                                 </Grid>
 
-                                <!-- Front Art Library -->
-                                <TextBlock Text="FRONT ART" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,6,0,6"/>
-                                <Button Style="{StaticResource ToolBtn}" Command="{Binding ManageFrontArtLibraryCommand}"
-                                        Content="Manage Front Art Library..." HorizontalAlignment="Stretch" Padding="8,4" Margin="0,0,0,4"/>
-
-                                <!-- Back Art Library -->
+                                <!-- Back Art -->
                                 <TextBlock Text="BACK ART" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,6,0,6"/>
                                 <Button Style="{StaticResource AccentBtn}" Command="{Binding SelectBackArtForAllCommand}"
-                                        Content="Select Back for All Cards..." HorizontalAlignment="Stretch" Padding="8,6" Margin="0,0,0,4"/>
-                                <Button Style="{StaticResource ToolBtn}" Command="{Binding ManageBackArtLibraryCommand}"
-                                        Content="Manage Back Art Library..." HorizontalAlignment="Stretch" Padding="8,4"/>
+                                        Content="Select Back for All Cards..." HorizontalAlignment="Stretch" Padding="8,6"/>
                             </StackPanel>
                         </ScrollViewer>
                         </avalonDock:LayoutAnchorable>
