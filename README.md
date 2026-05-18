@@ -67,6 +67,11 @@ The release is a self-contained single-file executable that includes everything 
   - **Line type** — Solid or Dashed
   - **Corner length** — length of corner marks in mm (when using Corners mode)
   - **Line weight** — thickness in points
+- **Silhouette Cameo support** — built-in print-and-cut workflow for Silhouette Cameo cutters:
+  - **Registration marks** — Cameo Type 1 three-mark system (filled square top-left, L-shapes top-right and bottom-left) drawn on front pages only to save ink
+  - **SVG cut line export** — generates SVG files alongside the PDF with rounded rectangle cut lines matching card positions and corner radius; one SVG per unique layout (full page + partial last page)
+  - **Configurable mark dimensions** — length, thickness, and inset in inches with Silhouette defaults (0.35", 0.039", 0.394")
+  - **Automatic mode switching** — when registration marks are enabled, bleed extension, cutting guides, and card outlines are automatically suppressed in both PDF and canvas preview
 - **Print modes** — Duplex (interleaved front/back with mirrored columns), Fronts Only, Backs Only
 - **Auto-centering** — margins automatically adjust to center the card grid when dimensions change
 - **Grid override** — manually set columns and rows, or let the app auto-fit
@@ -100,6 +105,8 @@ The release is a self-contained single-file executable that includes everything 
 - **Dark theme** — VS2013 dark theme throughout, including dockable panels
 - **Dockable panels** — Search, Card, Layout, and Filter panels powered by AvalonDock; drag to float, dock to any side, tab together, auto-hide, resize; layout persists across sessions
 - **Busy spinner** — animated overlay with step-by-step progress messages during all network operations (no screen flashing during bulk imports)
+- **Project loading progress** — shell-level loading overlay with step-by-step status (reading file, parsing data, extracting images with count, resolving artwork) shown when opening project files
+- **Render progress** — canvas overlay showing image loading count and per-page rendering progress during every redraw, with UI thread yielding to keep the app responsive
 - **Async image loading** — card images load on a background thread; cached in memory for instant redraws
 - **Cache management** — "Clear Cache" button with size display in the Layout tab
 - **Version display** — current version shown in the status bar
@@ -148,6 +155,7 @@ MTGProxyBuilder/
 │       ├── PdfGeneratorService.cs     # PDF output with bleed, guides, outlines, overlays
 │       ├── ProjectSerializationService.cs  # ZIP-based portable project files
 │       ├── ScryfallService.cs         # Scryfall card search, lookup, image download
+│       ├── SvgCutLineService.cs      # Silhouette Cameo SVG cut line generator
 │       ├── UndoService.cs            # Snapshot-based undo/redo stack
 │       └── UpdateCheckService.cs      # GitHub release version checker
 ├── MTGProxyBuilder.UI/               # WPF presentation layer
@@ -297,6 +305,12 @@ In the Layout tab:
   - Adjust corner mark length (Corners mode)
   - Adjust line weight
 
+**Silhouette Cameo:**
+- **Add registration marks to PDF** — prints Cameo Type 1 marks on front pages; back pages are left clean to save ink
+- **Export SVG cut lines with PDF** — generates SVG files alongside the PDF for import into Silhouette Studio
+- When marks are enabled, adjust length, thickness, and inset (in inches); defaults match Silhouette Studio settings
+- Bleed, cut guides, and card outlines are automatically disabled when registration marks are active
+
 **Card Size:**
 - Select a TCG preset from the dropdown, or enter custom width/height/bleed in mm
 
@@ -337,6 +351,8 @@ Both libraries are accessible from the global toolbar — no project needs to be
    - Cutting guides behind the card art (won't show through light artwork)
    - Card outlines on top of the art (if enabled)
    - Mirrored columns for duplex back pages
+   - Silhouette Cameo registration marks on front pages (if enabled)
+4. If "Export SVG cut lines" is enabled, SVG files are saved alongside the PDF (one per unique layout) for import into Silhouette Studio
 
 ### Saving & Loading Projects
 - **Save:** Click "Save" or Ctrl+S — creates a `.mtgproj` ZIP file containing all artwork
