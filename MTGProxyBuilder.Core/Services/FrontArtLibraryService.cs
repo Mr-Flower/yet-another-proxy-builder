@@ -3,27 +3,23 @@ using Newtonsoft.Json;
 
 namespace MTGProxyBuilder.Core.Services
 {
-    public class BackArtLibraryCatalog
+    public class FrontArtLibraryCatalog
     {
         [JsonProperty("entries")]
         public List<BackArtEntry> Entries { get; set; } = new();
-
-        [JsonProperty("defaultEntryId")]
-        public string? DefaultEntryId { get; set; }
     }
 
-    public class BackArtLibraryService
+    public class FrontArtLibraryService
     {
         private readonly string _libraryDirectory;
         private readonly string _catalogPath;
         private List<BackArtEntry> _entries = new();
-        private string? _defaultEntryId;
 
-        public BackArtLibraryService()
+        public FrontArtLibraryService()
         {
             _libraryDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MTGProxyBuilder", "BackArtLibrary");
+                "MTGProxyBuilder", "FrontArtLibrary");
             Directory.CreateDirectory(_libraryDirectory);
             _catalogPath = Path.Combine(_libraryDirectory, "catalog.json");
             Load();
@@ -31,31 +27,21 @@ namespace MTGProxyBuilder.Core.Services
 
         public IReadOnlyList<BackArtEntry> Entries => _entries.AsReadOnly();
 
-        public string? DefaultEntryId => _defaultEntryId;
-
-        /// <summary>Returns the default back art file path, or null if none is set.</summary>
-        public string? DefaultBackArtPath
+        /// <summary>Search for library entries whose Name contains the card name.</summary>
+        public List<BackArtEntry> SearchByCardName(string cardName)
         {
-            get
-            {
-                if (_defaultEntryId == null) return null;
-                var entry = _entries.FirstOrDefault(e => e.Id == _defaultEntryId);
-                return entry != null && File.Exists(entry.FilePath) ? entry.FilePath : null;
-            }
-        }
+            if (string.IsNullOrWhiteSpace(cardName))
+                return new List<BackArtEntry>();
 
-        public void SetDefault(string? entryId)
-        {
-            _defaultEntryId = entryId;
-            Save();
+            return _entries
+                .Where(e => e.Name.Contains(cardName, StringComparison.OrdinalIgnoreCase)
+                            && File.Exists(e.FilePath))
+                .ToList();
         }
-
-        public bool IsDefault(string entryId) => _defaultEntryId == entryId;
 
         private bool _batchMode;
         private HashSet<string>? _batchNameIndex;
 
-        /// <summary>Begin a batch operation. Suppresses Save() until EndBatch() is called.</summary>
         public void BeginBatch()
         {
             _batchMode = true;
@@ -64,7 +50,6 @@ namespace MTGProxyBuilder.Core.Services
                 StringComparer.OrdinalIgnoreCase);
         }
 
-        /// <summary>End a batch operation and persist all changes at once.</summary>
         public void EndBatch()
         {
             _batchMode = false;
@@ -127,8 +112,6 @@ namespace MTGProxyBuilder.Core.Services
             }
 
             _entries.Remove(entry);
-            if (_defaultEntryId == entryId)
-                _defaultEntryId = null;
             Save();
             return true;
         }
@@ -145,26 +128,16 @@ namespace MTGProxyBuilder.Core.Services
                 if (File.Exists(_catalogPath))
                 {
                     string json = File.ReadAllText(_catalogPath);
-
-                    // Try new format first
-                    var catalog = JsonConvert.DeserializeObject<BackArtLibraryCatalog>(json);
-                    if (catalog?.Entries != null && catalog.Entries.Count > 0)
-                    {
+                    var catalog = JsonConvert.DeserializeObject<FrontArtLibraryCatalog>(json);
+                    if (catalog?.Entries != null)
                         _entries = catalog.Entries;
-                        _defaultEntryId = catalog.DefaultEntryId;
-                    }
-                    else
-                    {
-                        // Fall back to old format (just a list)
-                        _entries = JsonConvert.DeserializeObject<List<BackArtEntry>>(json) ?? new();
-                    }
 
                     _entries.RemoveAll(e => !File.Exists(e.FilePath));
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Back art library load error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Front art library load error: {ex.Message}");
                 _entries = new();
             }
         }
@@ -173,17 +146,13 @@ namespace MTGProxyBuilder.Core.Services
         {
             try
             {
-                var catalog = new BackArtLibraryCatalog
-                {
-                    Entries = _entries,
-                    DefaultEntryId = _defaultEntryId
-                };
+                var catalog = new FrontArtLibraryCatalog { Entries = _entries };
                 string json = JsonConvert.SerializeObject(catalog, Formatting.Indented);
                 File.WriteAllText(_catalogPath, json);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Back art library save error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Front art library save error: {ex.Message}");
             }
         }
     }

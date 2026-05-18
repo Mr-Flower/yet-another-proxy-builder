@@ -25,8 +25,14 @@ namespace MTGProxyBuilder.UI.Dialogs
         private readonly ImageCacheService _imageCache;
         private readonly BackArtLibraryService? _backLibrary;
         private readonly IList<CardModel>? _allCards;
+        private readonly object[][]? _mpcSourcesOverride;
+        private readonly FrontArtLibraryService? _frontArtLibrary;
+        private MpcFillSearchOptions _mpcSearchOptions;
 
         public string? ResultPath { get; private set; }
+
+        // Maps normal-size Scryfall tile paths to their card data for full-size upgrade on selection
+        private readonly Dictionary<string, ScryfallCard> _scryfallCardsByPath = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>When true, the result should be applied to all cards with matching name.</summary>
         public bool ApplyToSameName { get; private set; }
@@ -41,7 +47,10 @@ namespace MTGProxyBuilder.UI.Dialogs
             MpcFillService mpcFill,
             ImageCacheService imageCache,
             BackArtLibraryService? backLibrary = null,
-            IList<CardModel>? allCards = null)
+            IList<CardModel>? allCards = null,
+            object[][]? mpcSourcesOverride = null,
+            MpcFillSearchOptions? mpcSearchOptions = null,
+            FrontArtLibraryService? frontArtLibrary = null)
         {
             InitializeComponent();
             _card = card;
@@ -51,6 +60,9 @@ namespace MTGProxyBuilder.UI.Dialogs
             _imageCache = imageCache;
             _backLibrary = backLibrary;
             _allCards = allCards;
+            _mpcSourcesOverride = mpcSourcesOverride;
+            _mpcSearchOptions = mpcSearchOptions ?? new MpcFillSearchOptions();
+            _frontArtLibrary = frontArtLibrary;
 
             bool isFront = mode == ArtSelectorMode.Front;
             TitleLabel.Text = isFront ? "Select Front Artwork" : "Select Card Back";
@@ -77,6 +89,11 @@ namespace MTGProxyBuilder.UI.Dialogs
                 }
             }
 
+            // Show actions bar in front mode with library available
+            if (isFront && _frontArtLibrary != null)
+                ActionsBar.Visibility = Visibility.Visible;
+
+            LoadFilterControls(_mpcSearchOptions);
             Loaded += async (_, _) => await LoadOptionsAsync();
         }
 
@@ -109,75 +126,227 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private async Task LoadFrontOptions(HashSet<string> shown)
         {
-            // Search Scryfall for exact name matches (all printings)
-            if (!string.IsNullOrEmpty(_card.Name))
+            if (string.IsNullOrEmpty(_card.Name))
             {
-                StatusLabel.Text = $"Searching Scryfall for \"{_card.Name}\"...";
-                await Task.Delay(10);
-
-                try
-                {
-                    var (results, _) = await _scryfall.SearchCardAsync($"!\"{_card.Name}\"");
-                    int scryfallCount = 0;
-                    foreach (var sc in results.Take(20))
-                    {
-                        string? imgUrl = sc.GetImageUrl();
-                        if (imgUrl == null) continue;
-
-                        StatusLabel.Text = $"Downloading Scryfall art {++scryfallCount}...";
-                        await Task.Delay(5);
-
-                        string cacheKey = sc.Id;
-                        var cached = _imageCache.GetCachedImagePath(cacheKey);
-                        if (cached == null)
-                        {
-                            using var http = new System.Net.Http.HttpClient();
-                            http.DefaultRequestHeaders.Add("User-Agent", "MTGProxyBuilder/1.0");
-                            http.DefaultRequestHeaders.Add("Accept", "application/json");
-                            cached = await _imageCache.CacheImageFromUrlAsync(http, imgUrl, cacheKey);
-                        }
-
-                        if (cached != null && !shown.Contains(cached))
-                        {
-                            string label = $"{sc.SetName} #{sc.CollectorNumber}";
-                            AddOption(label, cached, false, $"Scryfall | {sc.Artist ?? ""}");
-                            shown.Add(cached);
-                        }
-                        await Task.Delay(80);
-                    }
-                }
-                catch { }
+                AddActionTile("Browse File...", OnBrowseFile);
+                return;
             }
 
-            // Search MPCFill for matching front art
-            if (!string.IsNullOrEmpty(_card.Name))
+            // 1. Show local library matches first (instant, no network)
+            var libraryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (_frontArtLibrary != null)
             {
-                StatusLabel.Text = $"Searching MPCFill for \"{_card.Name}\"...";
-                await Task.Delay(10);
+                var libraryMatches = _frontArtLibrary.SearchByCardName(_card.Name);
+                if (libraryMatches.Count > 0)
+                {
+                    StatusLabel.Text = $"Found {libraryMatches.Count} in library, searching online...";
+                    foreach (var m in libraryMatches)
+                        libraryNames.Add(m.Name);
+                    var deferredImages = new List<(Image img, string path)>();
+                    foreach (var entry in libraryMatches)
+                    {
+                        if (shown.Contains(entry.FilePath)) continue;
+                        shown.Add(entry.FilePath);
 
+                        var border = new Border
+                        {
+                            Width = 110, Height = 165, Margin = new Thickness(4),
+                            Background = new SolidColorBrush(Color.FromRgb(0x3E, 0x3E, 0x42)),
+                            CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
+                            BorderThickness = new Thickness(2),
+                            BorderBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                            ToolTip = $"{entry.Name}\nLibrary | {entry.Source}"
+                        };
+                        var stack = new StackPanel();
+                        var imgBorder = new Border
+                        {
+                            Height = 125, Background = Brushes.Black,
+                            CornerRadius = new CornerRadius(3, 3, 0, 0), ClipToBounds = true
+                        };
+                        var img = new Image { Stretch = Stretch.UniformToFill };
+                        imgBorder.Child = img;
+                        deferredImages.Add((img, entry.FilePath));
+                        stack.Children.Add(imgBorder);
+
+                        var lbl = new TextBlock
+                        {
+                            Text = "\u2605 " + entry.Name,
+                            Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                            FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            Margin = new Thickness(3, 4, 3, 0)
+                        };
+                        stack.Children.Add(lbl);
+                        var detailLbl = new TextBlock
+                        {
+                            Text = $"Library | {entry.Source}",
+                            Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                            FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center,
+                            Margin = new Thickness(3, 0, 3, 2)
+                        };
+                        stack.Children.Add(detailLbl);
+                        border.Child = stack;
+
+                        string path = entry.FilePath;
+                        string capturedName = entry.Name;
+                        string detail = $"Library | {entry.Source}";
+                        border.MouseLeftButtonUp += (_, _) => SelectOption(capturedName, path, detail, border);
+                        border.MouseLeftButtonDown += (_, ev) =>
+                        {
+                            if (ev.ClickCount == 2) { SelectOption(capturedName, path, detail, border); OkClick(null!, null!); }
+                        };
+
+                        OptionsPanel.Children.Add(border);
+                    }
+
+                    // Load library thumbnails progressively
+                    if (deferredImages.Count > 0)
+                    {
+                        const int batchSize = 20;
+                        for (int i = 0; i < deferredImages.Count; i += batchSize)
+                        {
+                            var batch = deferredImages.Skip(i).Take(batchSize).ToList();
+                            var bitmaps = await Task.Run(() =>
+                            {
+                                var results = new List<BitmapImage?>();
+                                foreach (var (_, path) in batch)
+                                {
+                                    try
+                                    {
+                                        var bmp = new BitmapImage();
+                                        bmp.BeginInit();
+                                        bmp.UriSource = new Uri(path, UriKind.Absolute);
+                                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                                        bmp.DecodePixelWidth = 150;
+                                        bmp.EndInit();
+                                        bmp.Freeze();
+                                        results.Add(bmp);
+                                    }
+                                    catch { results.Add(null); }
+                                }
+                                return results;
+                            });
+                            for (int j = 0; j < batch.Count && j < bitmaps.Count; j++)
+                                if (bitmaps[j] != null) batch[j].img.Source = bitmaps[j];
+                        }
+                    }
+                }
+            }
+
+            // 2. Kick off API searches concurrently
+            StatusLabel.Text = $"Searching for \"{_card.Name}\"...";
+            var mpcOpts = BuildSearchOptionsFromControls();
+            mpcOpts.FuzzySearch = false;
+            var scryfallTask = Task.Run(async () =>
+            {
+                try { return (await _scryfall.SearchCardAsync($"!\"{_card.Name}\"")).Cards; }
+                catch { return new List<ScryfallCard>(); }
+            });
+            var mpcTask = Task.Run(async () =>
+            {
                 try
                 {
-                    var (results, _) = await _mpcFill.SearchAsync(_card.Name, 50);
-                    var filtered = results
+                    var (results, _) = await _mpcFill.SearchAsync(
+                        _card.Name, fuzzySearch: false, sourcesOverride: _mpcSourcesOverride,
+                        options: mpcOpts);
+                    return results
                         .Where(mc => mc.Name.Contains(_card.Name, StringComparison.OrdinalIgnoreCase))
-                        .Take(20);
-                    int mpcCount = 0;
-                    foreach (var mc in filtered)
-                    {
-                        StatusLabel.Text = $"Downloading MPCFill art {++mpcCount}...";
-                        var cached = await _mpcFill.DownloadAndCacheImageAsync(mc);
-                        if (cached != null && !shown.Contains(cached))
-                        {
-                            AddOption(mc.Name, cached, false, $"MPCFill | {mc.Source} | {mc.Dpi} DPI");
-                            shown.Add(cached);
-                        }
-                        await Task.Delay(30);
-                    }
+                        .ToList();
                 }
-                catch { }
+                catch { return new List<MpcFillCard>(); }
+            });
+
+            await Task.WhenAll(scryfallTask, mpcTask);
+            var scryfallResults = scryfallTask.Result;
+            var mpcResults = mpcTask.Result;
+
+            // Skip MPCFill results that are already in the local library
+            if (libraryNames.Count > 0)
+                mpcResults = mpcResults
+                    .Where(mc => !libraryNames.Contains($"{mc.Name} [{mc.Source}]"))
+                    .ToList();
+
+            int totalImages = scryfallResults.Count + mpcResults.Count;
+
+            // Warn the user if there are a lot of results to cache
+            if (totalImages > 200)
+            {
+                var answer = MessageBox.Show(
+                    $"Found {totalImages} art options ({scryfallResults.Count} Scryfall, {mpcResults.Count} MPCFill).\n\n" +
+                    "Downloading and caching all of these may take a while. Continue?",
+                    "Large Number of Results",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (answer != MessageBoxResult.Yes)
+                {
+                    StatusLabel.Text = $"{totalImages} results found (download skipped)";
+                    SpinnerDot.Visibility = Visibility.Collapsed;
+                    AddActionTile("Browse File...", OnBrowseFile);
+                    return;
+                }
             }
 
-            AddActionTile("Browse File...", OnBrowseFile);
+            // Download all images in parallel
+            int completed = 0;
+            var semaphore = new System.Threading.SemaphoreSlim(8);
+
+            var scryfallDownloads = scryfallResults
+                .Where(sc => sc.GetImageUrl() != null)
+                .Select(async sc =>
+                {
+                    await semaphore.WaitAsync();
+                    try
+                    {
+                        var cached = await _scryfall.DownloadAndCacheImageAsync(sc, size: "normal");
+                        var done = System.Threading.Interlocked.Increment(ref completed);
+                        _ = Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Downloading art {done}/{totalImages}...");
+                        if (cached != null)
+                            return (Label: $"{sc.SetName} #{sc.CollectorNumber}",
+                                    Path: cached,
+                                    Detail: $"Scryfall | {sc.Artist ?? ""}",
+                                    ScryfallCard: (ScryfallCard?)sc,
+                                    MpcSource: (string?)null);
+                        return default;
+                    }
+                    finally { semaphore.Release(); }
+                }).ToList();
+
+            var mpcDownloads = mpcResults.Select(async mc =>
+            {
+                await semaphore.WaitAsync();
+                try
+                {
+                    var cached = await _mpcFill.DownloadAndCacheImageAsync(mc);
+                    var done = System.Threading.Interlocked.Increment(ref completed);
+                    _ = Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Downloading art {done}/{totalImages}...");
+                    if (cached != null)
+                        return (Label: mc.Name,
+                                Path: cached,
+                                Detail: $"MPCFill | {mc.Source} | {mc.Dpi} DPI",
+                                ScryfallCard: (ScryfallCard?)null,
+                                MpcSource: (string?)mc.Source);
+                    return default;
+                }
+                finally { semaphore.Release(); }
+            }).ToList();
+
+            var allDownloads = scryfallDownloads.Concat(mpcDownloads).ToList();
+            var downloadResults = await Task.WhenAll(allDownloads);
+
+            // Add tiles (Scryfall first, then MPCFill)
+            foreach (var result in downloadResults)
+            {
+                if (result.Path != null && !shown.Contains(result.Path))
+                {
+                    AddOption(result.Label, result.Path, false, result.Detail, result.MpcSource);
+                    shown.Add(result.Path);
+                    if (result.ScryfallCard != null)
+                        _scryfallCardsByPath[result.Path] = result.ScryfallCard;
+                }
+            }
+
+            // "Browse File" action tile only shown when no actions bar (back mode)
+            if (_frontArtLibrary == null)
+                AddActionTile("Browse File...", OnBrowseFile);
         }
 
         private async Task LoadBackOptionsAsync(HashSet<string> shown)
@@ -337,26 +506,28 @@ namespace MTGProxyBuilder.UI.Dialogs
                     return;
                 }
 
+                StatusLabel.Text = $"Downloading {cardbacks.Count} card backs...";
+                var results = await _mpcFill.DownloadAndCacheImagesAsync(
+                    cardbacks,
+                    maxConcurrency: 8,
+                    onProgress: (done, total, name) =>
+                        Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Downloading card back {done}/{total}: {name}..."));
+
                 int added = 0;
                 int skipped = 0;
-                for (int i = 0; i < cardbacks.Count; i++)
+                _backLibrary.BeginBatch();
+                try
                 {
-                    var cb = cardbacks[i];
-                    StatusLabel.Text = $"Downloading card back {i + 1}/{cardbacks.Count}: {cb.Name}...";
-                    await Task.Delay(5);
-
-                    // Download the image
-                    var cached = await _mpcFill.DownloadAndCacheImageAsync(cb);
-                    if (cached == null) { skipped++; continue; }
-
-                    // Add to library (service handles deduplication by name)
-                    string displayName = $"{cb.Name} [{cb.Source}]";
-                    var entry = _backLibrary.AddFromFile(cached, displayName, cb.Source);
-                    if (entry != null) added++;
-                    else skipped++;
-
-                    await Task.Delay(20);
+                    foreach (var (cb, cached) in results)
+                    {
+                        if (cached == null) { skipped++; continue; }
+                        string displayName = $"{cb.Name} [{cb.Source}]";
+                        var entry = _backLibrary.AddFromFile(cached, displayName, cb.Source);
+                        if (entry != null) added++;
+                        else skipped++;
+                    }
                 }
+                finally { _backLibrary.EndBatch(); }
 
                 StatusLabel.Text = $"Added {added} card back(s) to library ({skipped} already existed or failed)";
 
@@ -386,7 +557,7 @@ namespace MTGProxyBuilder.UI.Dialogs
         //  TILE BUILDERS
         // ================================================================
 
-        private void AddOption(string label, string imagePath, bool isCurrent, string detail)
+        private void AddOption(string label, string imagePath, bool isCurrent, string detail, string? mpcSource = null)
         {
             var border = new Border
             {
@@ -471,6 +642,21 @@ namespace MTGProxyBuilder.UI.Dialogs
                     preview.ShowDialog();
                 };
                 menu.Items.Add(previewItem);
+
+                if (_frontArtLibrary != null && mpcSource != null)
+                {
+                    var saveItem = new System.Windows.Controls.MenuItem { Header = "Save to Library" };
+                    saveItem.Click += (_, _) =>
+                    {
+                        string libName = $"{capturedLabel} [{mpcSource}]";
+                        var entry = _frontArtLibrary.AddFromFile(path, libName, mpcSource);
+                        StatusLabel.Text = entry != null
+                            ? $"Saved \"{libName}\" to front art library"
+                            : $"\"{libName}\" already in library";
+                    };
+                    menu.Items.Add(saveItem);
+                }
+
                 menu.IsOpen = true;
                 e.Handled = true;
             };
@@ -515,8 +701,6 @@ namespace MTGProxyBuilder.UI.Dialogs
         //  SELECTION
         // ================================================================
 
-        private double _previewZoom = 1.0;
-
         private void SelectOption(string label, string path, string detail, Border selectedBorder)
         {
             foreach (var child in OptionsPanel.Children)
@@ -524,77 +708,68 @@ namespace MTGProxyBuilder.UI.Dialogs
             selectedBorder.BorderBrush = Brushes.DodgerBlue;
 
             ResultPath = path;
-            SelectedLabel.Text = label;
             OkBtn.IsEnabled = true;
 
-            try
-            {
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.UriSource = new Uri(path, UriKind.Absolute);
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.EndInit();
-                bmp.Freeze();
-                FullPreviewImage.Source = bmp;
-
-                // Calculate DPI assuming 63x88mm card
-                double widthInches = 63.0 / 25.4;
-                double heightInches = 88.0 / 25.4;
-                int dpiW = (int)(bmp.PixelWidth / widthInches);
-                int dpiH = (int)(bmp.PixelHeight / heightInches);
-                int dpi = Math.Min(dpiW, dpiH);
-
-                var fi = new FileInfo(path);
-                string size = fi.Length < 1024 * 1024
-                    ? $"{fi.Length / 1024.0:F0} KB"
-                    : $"{fi.Length / (1024.0 * 1024):F1} MB";
-
-                SelectedDetailLabel.Text = $"{bmp.PixelWidth} x {bmp.PixelHeight} px  |  ~{dpi} DPI  |  {size}\n{detail}";
-
-                SetPreviewZoomFit(bmp);
-            }
-            catch
-            {
-                FullPreviewImage.Source = null;
-                SelectedDetailLabel.Text = detail;
-            }
+            PreviewPanel.ShowImage(path, label, detail);
         }
-
-        private void SetPreviewZoomFit(BitmapImage? bmp = null)
-        {
-            bmp ??= FullPreviewImage.Source as BitmapImage;
-            if (bmp == null || bmp.PixelWidth == 0) return;
-            double fitW = (PreviewScroll.ViewportWidth - 20) / bmp.PixelWidth;
-            double fitH = (PreviewScroll.ViewportHeight - 20) / bmp.PixelHeight;
-            double fit = Math.Min(fitW, fitH);
-            if (fit <= 0) fit = 0.5;
-            SetPreviewZoom(fit);
-        }
-
-        private void SetPreviewZoom(double zoom)
-        {
-            _previewZoom = Math.Clamp(zoom, 0.1, 5.0);
-            PreviewScale.ScaleX = _previewZoom;
-            PreviewScale.ScaleY = _previewZoom;
-            PreviewZoomLabel.Text = $"{(int)(_previewZoom * 100)}%";
-        }
-
-        private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
-        {
-            double delta = e.Delta > 0 ? 0.15 : -0.15;
-            if (_previewZoom < 0.5) delta *= 0.5;
-            SetPreviewZoom(_previewZoom + delta);
-            e.Handled = true;
-        }
-
-        private void PreviewZoomIn(object sender, RoutedEventArgs e) => SetPreviewZoom(_previewZoom + 0.15);
-        private void PreviewZoomOut(object sender, RoutedEventArgs e) => SetPreviewZoom(_previewZoom - 0.15);
-        private void PreviewZoomReset(object sender, RoutedEventArgs e) => SetPreviewZoom(1.0);
-        private void PreviewZoomFit(object sender, RoutedEventArgs e) => SetPreviewZoomFit();
 
         // ================================================================
         //  ACTIONS
         // ================================================================
+
+        private void OnImportCacheToLibrary(object sender, RoutedEventArgs e) => OnImportCacheToLibrary();
+        private void OnAddToFrontLibraryClick(object sender, RoutedEventArgs e) => OnAddToFrontLibrary();
+        private void OnBrowseFileClick(object sender, RoutedEventArgs e) => OnBrowseFile();
+
+        private void OnImportCacheToLibrary()
+        {
+            if (_frontArtLibrary == null) return;
+
+            var cached = _imageCache.GetCachedByPrefix("mpc_");
+            if (cached.Count == 0)
+            {
+                StatusLabel.Text = "No downloaded MPCFill art found in cache.";
+                return;
+            }
+
+            int added = 0, skipped = 0;
+            _frontArtLibrary.BeginBatch();
+            try
+            {
+                foreach (var (key, path, name, source) in cached)
+                {
+                    if (!File.Exists(path)) { skipped++; continue; }
+                    string displayName = !string.IsNullOrEmpty(source)
+                        ? $"{name} [{source}]" : name;
+                    if (_frontArtLibrary.AddFromFile(path, displayName, source) != null) added++;
+                    else skipped++;
+                }
+            }
+            finally { _frontArtLibrary.EndBatch(); }
+
+            StatusLabel.Text = $"Imported {added} image(s) to library ({skipped} already existed or skipped)";
+            if (added > 0)
+                _ = LoadOptionsAsync();
+        }
+
+        private void OnAddToFrontLibrary()
+        {
+            if (_frontArtLibrary == null) return;
+            var dialog = new OpenFileDialog
+            {
+                Filter = "Image Files (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp|All Files (*.*)|*.*",
+                Title = "Add Image to Front Art Library",
+                Multiselect = true
+            };
+            if (dialog.ShowDialog() != true) return;
+            int added = 0;
+            foreach (var file in dialog.FileNames)
+            {
+                if (_frontArtLibrary.AddFromFile(file) != null) added++;
+            }
+            StatusLabel.Text = $"Added {added} image(s) to front art library";
+            _ = LoadOptionsAsync(); // rebuild to show new entries
+        }
 
         private void OnAddToLibrary()
         {
@@ -619,37 +794,126 @@ namespace MTGProxyBuilder.UI.Dialogs
             if (dialog.ShowDialog() != true) return;
 
             ResultPath = dialog.FileName;
-            SelectedLabel.Text = Path.GetFileName(dialog.FileName);
             OkBtn.IsEnabled = true;
-
-            try
-            {
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.UriSource = new Uri(dialog.FileName, UriKind.Absolute);
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.EndInit();
-                bmp.Freeze();
-                FullPreviewImage.Source = bmp;
-
-                double widthInches = 63.0 / 25.4;
-                double heightInches = 88.0 / 25.4;
-                int dpi = Math.Min((int)(bmp.PixelWidth / widthInches), (int)(bmp.PixelHeight / heightInches));
-                var fi = new FileInfo(dialog.FileName);
-                string size = fi.Length < 1024 * 1024 ? $"{fi.Length / 1024.0:F0} KB" : $"{fi.Length / (1024.0 * 1024):F1} MB";
-                SelectedDetailLabel.Text = $"{bmp.PixelWidth} x {bmp.PixelHeight} px  |  ~{dpi} DPI  |  {size}\nLocal file";
-
-                SetPreviewZoomFit(bmp);
-            }
-            catch
-            {
-                FullPreviewImage.Source = null;
-                SelectedDetailLabel.Text = dialog.FileName;
-            }
+            PreviewPanel.ShowImage(dialog.FileName, Path.GetFileName(dialog.FileName), "Local file");
         }
 
-        private void OkClick(object sender, RoutedEventArgs e)
+        // ================================================================
+        //  FILTER PANEL
+        // ================================================================
+
+        private void LoadFilterControls(MpcFillSearchOptions opts)
         {
+            SelectByTag(FilterSortByBox, opts.SortBy);
+            SelectByTag(FilterMinDpiBox, opts.MinimumDpi.ToString());
+            SelectByTag(FilterMaxDpiBox, opts.MaximumDpi.ToString());
+            FilterMaxSizeBox.Text = opts.MaximumSize.ToString();
+            FilterFuzzyBox.IsChecked = opts.FuzzySearch;
+            FilterCardbacksBox.IsChecked = opts.FilterCardbacks;
+
+            FilterTypeCard.IsChecked = opts.CardTypes.Contains("CARD");
+            FilterTypeToken.IsChecked = opts.CardTypes.Contains("TOKEN");
+            FilterTypeCardback.IsChecked = opts.CardTypes.Contains("CARDBACK");
+
+            var langs = opts.Languages;
+            FilterLangEN.IsChecked = langs.Contains("EN");
+            FilterLangJA.IsChecked = langs.Contains("JA");
+            FilterLangFR.IsChecked = langs.Contains("FR");
+            FilterLangDE.IsChecked = langs.Contains("DE");
+            FilterLangES.IsChecked = langs.Contains("ES");
+            FilterLangIT.IsChecked = langs.Contains("IT");
+            FilterLangPT.IsChecked = langs.Contains("PT");
+            FilterLangZH.IsChecked = langs.Contains("ZH");
+            FilterLangRU.IsChecked = langs.Contains("RU");
+            FilterLangAR.IsChecked = langs.Contains("AR");
+            FilterLangSA.IsChecked = langs.Contains("SA");
+
+            FilterExcludeNsfw.IsChecked = opts.ExcludesTags.Contains("NSFW");
+            FilterExcludeAiArt.IsChecked = opts.ExcludesTags.Contains("AI Art");
+        }
+
+        private MpcFillSearchOptions BuildSearchOptionsFromControls()
+        {
+            var cardTypes = new List<string>();
+            if (FilterTypeCard.IsChecked == true) cardTypes.Add("CARD");
+            if (FilterTypeToken.IsChecked == true) cardTypes.Add("TOKEN");
+            if (FilterTypeCardback.IsChecked == true) cardTypes.Add("CARDBACK");
+            if (cardTypes.Count == 0) cardTypes.Add("CARD");
+
+            var languages = new List<string>();
+            if (FilterLangEN.IsChecked == true) languages.Add("EN");
+            if (FilterLangJA.IsChecked == true) languages.Add("JA");
+            if (FilterLangFR.IsChecked == true) languages.Add("FR");
+            if (FilterLangDE.IsChecked == true) languages.Add("DE");
+            if (FilterLangES.IsChecked == true) languages.Add("ES");
+            if (FilterLangIT.IsChecked == true) languages.Add("IT");
+            if (FilterLangPT.IsChecked == true) languages.Add("PT");
+            if (FilterLangZH.IsChecked == true) languages.Add("ZH");
+            if (FilterLangRU.IsChecked == true) languages.Add("RU");
+            if (FilterLangAR.IsChecked == true) languages.Add("AR");
+            if (FilterLangSA.IsChecked == true) languages.Add("SA");
+
+            var excludeTags = new List<string>();
+            if (FilterExcludeNsfw.IsChecked == true) excludeTags.Add("NSFW");
+            if (FilterExcludeAiArt.IsChecked == true) excludeTags.Add("AI Art");
+
+            return new MpcFillSearchOptions
+            {
+                CardTypes = cardTypes.ToArray(),
+                SortBy = (FilterSortByBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "nameAscending",
+                MinimumDpi = int.TryParse((FilterMinDpiBox.SelectedItem as ComboBoxItem)?.Tag?.ToString(), out var minD) ? minD : 0,
+                MaximumDpi = int.TryParse((FilterMaxDpiBox.SelectedItem as ComboBoxItem)?.Tag?.ToString(), out var maxD) ? maxD : 1500,
+                MaximumSize = int.TryParse(FilterMaxSizeBox.Text, out var ms) && ms > 0 ? ms : 30,
+                FuzzySearch = FilterFuzzyBox.IsChecked == true,
+                FilterCardbacks = FilterCardbacksBox.IsChecked == true,
+                Languages = languages.ToArray(),
+                IncludesTags = Array.Empty<string>(),
+                ExcludesTags = excludeTags.ToArray()
+            };
+        }
+
+        private static void SelectByTag(ComboBox box, string tagValue)
+        {
+            foreach (ComboBoxItem item in box.Items)
+            {
+                if (item.Tag?.ToString() == tagValue)
+                {
+                    box.SelectedItem = item;
+                    return;
+                }
+            }
+            box.SelectedIndex = box.Items.Count - 1;
+        }
+
+        private void OnClearFilters(object sender, RoutedEventArgs e)
+        {
+            LoadFilterControls(new MpcFillSearchOptions());
+        }
+
+        private async void OnResearchMpcFill(object sender, RoutedEventArgs e)
+        {
+            _mpcSearchOptions = BuildSearchOptionsFromControls();
+            _scryfallCardsByPath.Clear();
+            OkBtn.IsEnabled = false;
+            ResultPath = null;
+            PreviewPanel.Clear();
+            SpinnerDot.Visibility = Visibility.Visible;
+            await LoadOptionsAsync();
+        }
+
+        private async void OkClick(object sender, RoutedEventArgs e)
+        {
+            // If the selected path is a normal-size Scryfall thumbnail, upgrade to full-size
+            if (ResultPath != null && _scryfallCardsByPath.TryGetValue(ResultPath, out var sc))
+            {
+                OkBtn.IsEnabled = false;
+                StatusLabel.Text = "Downloading full resolution...";
+                var fullPath = await _scryfall.DownloadAndCacheImageAsync(sc, size: "large");
+                if (fullPath != null)
+                    ResultPath = fullPath;
+                OkBtn.IsEnabled = true;
+            }
+
             ApplyToSameName = ApplySameNameChk.IsChecked == true;
             ApplyToNoBack = ApplyNoBackChk.IsChecked == true;
             DialogResult = true;

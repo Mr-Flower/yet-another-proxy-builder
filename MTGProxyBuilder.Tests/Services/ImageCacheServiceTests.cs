@@ -41,4 +41,75 @@ public class ImageCacheServiceTests
         var result = await svc.CacheImageFromUrlAsync(http, "https://invalid.example.com/no-image.jpg", $"test_{Guid.NewGuid():N}");
         Assert.Null(result);
     }
+
+    // --- Metadata Tests ---
+
+    [Fact]
+    public void SetMetadata_StoresAndRetrieves()
+    {
+        var svc = new ImageCacheService();
+        string key = $"mpc_meta_test_{Guid.NewGuid():N}";
+
+        // Write a file so the key appears in the index
+        string testFile = Path.Combine(svc.CacheDirectory, $"{key}.png");
+        File.WriteAllBytes(testFile, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+
+        try
+        {
+            // Re-create to pick up the new file
+            var svc2 = new ImageCacheService();
+            svc2.SetMetadata(key, "Lightning Bolt", "Chilli_Axe");
+
+            var cached = svc2.GetCachedByPrefix(key);
+            Assert.Single(cached);
+            Assert.Equal("Lightning Bolt", cached[0].Name);
+            Assert.Equal("Chilli_Axe", cached[0].Source);
+        }
+        finally
+        {
+            try { File.Delete(testFile); } catch { }
+        }
+    }
+
+    [Fact]
+    public void GetCachedByPrefix_ReturnsFilenameWhenNoMetadata()
+    {
+        var svc = new ImageCacheService();
+        string key = $"mpc_nometa_{Guid.NewGuid():N}";
+
+        string testFile = Path.Combine(svc.CacheDirectory, $"{key}.jpg");
+        File.WriteAllBytes(testFile, new byte[] { 0xFF, 0xD8 });
+
+        try
+        {
+            var svc2 = new ImageCacheService();
+            var cached = svc2.GetCachedByPrefix(key);
+            Assert.Single(cached);
+            Assert.Equal(key, cached[0].Name); // Falls back to filename
+            Assert.Equal("", cached[0].Source);
+        }
+        finally
+        {
+            try { File.Delete(testFile); } catch { }
+        }
+    }
+
+    [Fact]
+    public void GetCachedByPrefix_ReturnsEmptyForNoMatch()
+    {
+        var svc = new ImageCacheService();
+        var result = svc.GetCachedByPrefix($"nonexistent_prefix_{Guid.NewGuid():N}");
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ClearCache_AlsoDeletesMetadata()
+    {
+        var svc = new ImageCacheService();
+        svc.SetMetadata("test_clear", "Card", "Source");
+        svc.ClearCache();
+
+        var cached = svc.GetCachedByPrefix("test_clear");
+        Assert.Empty(cached);
+    }
 }
