@@ -98,6 +98,26 @@ namespace MTGProxyBuilder.UI.Controls
             DependencyProperty.Register("PrintSettingsSource", typeof(PrintSettings), typeof(GridEditorCanvas),
                 new PropertyMetadata(null, OnPrintSettingsChanged));
 
+        public static readonly DependencyProperty RenderProgressProperty =
+            DependencyProperty.Register("RenderProgress", typeof(string), typeof(GridEditorCanvas),
+                new PropertyMetadata(null));
+
+        public static readonly DependencyProperty IsRenderingProperty =
+            DependencyProperty.Register("IsRendering", typeof(bool), typeof(GridEditorCanvas),
+                new PropertyMetadata(false));
+
+        public string? RenderProgress
+        {
+            get => (string?)GetValue(RenderProgressProperty);
+            set => SetValue(RenderProgressProperty, value);
+        }
+
+        public bool IsRendering
+        {
+            get => (bool)GetValue(IsRenderingProperty);
+            set => SetValue(IsRenderingProperty, value);
+        }
+
         public PrintSettings? PrintSettingsSource
         {
             get => (PrintSettings?)GetValue(PrintSettingsSourceProperty);
@@ -251,17 +271,20 @@ namespace MTGProxyBuilder.UI.Controls
 
             if (pathsToLoad.Count > 0)
             {
-                await Task.Run(() =>
+                IsRendering = true;
+                int loaded = 0;
+                int total = pathsToLoad.Count;
+                foreach (var path in pathsToLoad)
                 {
-                    foreach (var path in pathsToLoad)
-                    {
-                        if (token.IsCancellationRequested) return;
-                        LoadImageToCache(path, (int)cellW * 2);
-                    }
-                }, token);
+                    if (token.IsCancellationRequested) { IsRendering = false; return; }
+                    await Task.Run(() => LoadImageToCache(path, (int)cellW * 2), token);
+                    loaded++;
+                    RenderProgress = $"Loading images ({loaded}/{total})...";
+                    await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+                }
             }
 
-            if (token.IsCancellationRequested) return;
+            if (token.IsCancellationRequested) { IsRendering = false; return; }
 
             _pageW = pageW; _pageH = pageH; _cellW = cellW; _cellH = cellH;
             _marginL = marginL; _marginT = marginT;
@@ -278,8 +301,13 @@ namespace MTGProxyBuilder.UI.Controls
             Width = pageW;
             Height = _totalPages * pageH + (_totalPages - 1) * PageGapPx;
 
+            IsRendering = true;
             for (int page = 0; page < _totalPages; page++)
             {
+                if (token.IsCancellationRequested) { IsRendering = false; return; }
+                RenderProgress = _totalPages > 1
+                    ? $"Rendering page {page + 1} of {_totalPages}..."
+                    : "Rendering page...";
                 float pageTop = page * (pageH + PageGapPx);
 
                 if (page > 0)
@@ -328,7 +356,48 @@ namespace MTGProxyBuilder.UI.Controls
 
                 var pn = new TextBlock { Text = $"{page + 1}", FontSize = 14, Foreground = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)), FontWeight = FontWeights.Bold };
                 SetLeft(pn, pageW - 30); SetTop(pn, pageTop + pageH - 25); Children.Add(pn);
+
+                // Registration marks
+                var regPs = PrintSettingsSource;
+                if (regPs != null && regPs.ShowRegistrationMarks)
+                {
+                    DrawRegistrationMarksPreview(pageTop, pageW, pageH, regPs);
+                }
+
+                // Yield to UI thread between pages so the progress overlay updates
+                if (_totalPages > 1)
+                    await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
             }
+
+            IsRendering = false;
+            RenderProgress = null;
+        }
+
+        private const float InToPx = 96f; // 1 inch = 96 WPF pixels
+
+        private void DrawRegistrationMarksPreview(float pageTop, float pageW, float pageH, PrintSettings ps)
+        {
+            float inset = ps.RegMarkInsetIn * InToPx;
+            float length = ps.RegMarkLengthIn * InToPx;
+            float thickness = ps.RegMarkThicknessIn * InToPx;
+            var brush = Brushes.Black;
+
+            void AddMark(float rx, float ry, float rw, float rh)
+            {
+                var r = new Rectangle { Width = rw, Height = rh, Fill = brush, IsHitTestVisible = false };
+                SetLeft(r, rx); SetTop(r, ry); Children.Add(r);
+            }
+
+            // Top-left: filled square
+            AddMark(inset, pageTop + inset, length, length);
+
+            // Top-right L: horizontal bar left + vertical bar down
+            AddMark(pageW - inset - length, pageTop + inset, length, thickness);
+            AddMark(pageW - inset - thickness, pageTop + inset + thickness, thickness, length - thickness);
+
+            // Bottom-left L: vertical bar up + horizontal bar right
+            AddMark(inset, pageTop + pageH - inset - length, thickness, length - thickness);
+            AddMark(inset, pageTop + pageH - inset - thickness, length, thickness);
         }
 
         private bool IsCardFlipped(int cardIndex) => _allFlipped ^ _flippedCardIndices.Contains(cardIndex);
@@ -756,7 +825,8 @@ namespace MTGProxyBuilder.UI.Controls
                 var image = new Image { Source = bmp, Width = cardW, Height = cardH, Stretch = Stretch.Fill };
                 SetLeft(image, x + bleed); SetTop(image, y + bleed); Children.Add(image);
 
-                if (bleed > 0)
+                bool regMarksActive = PrintSettingsSource?.ShowRegistrationMarks == true;
+                if (bleed > 0 && !regMarksActive)
                 {
                     var overlay = new System.Windows.Shapes.Path
                     {
@@ -786,8 +856,9 @@ namespace MTGProxyBuilder.UI.Controls
                 SetLeft(selRect, x); SetTop(selRect, y); Children.Add(selRect);
             }
 
-            // Cut guides
-            if (ShowCutGuides)
+            // Cut guides (disabled with registration marks)
+            bool regMarksOn = PrintSettingsSource?.ShowRegistrationMarks == true;
+            if (ShowCutGuides && !regMarksOn)
             {
                 float cardLeft = x + bleed, cardTopY = y + bleed;
                 float cardRight = cardLeft + cardW, cardBottomY = cardTopY + cardH;
@@ -838,9 +909,9 @@ namespace MTGProxyBuilder.UI.Controls
                 Children.Add(overlayTb);
             }
 
-            // Card outline guides
+            // Card outline guides (disabled with registration marks)
             var ps = PrintSettingsSource;
-            if (ps != null && ps.ShowCardOutline)
+            if (ps != null && ps.ShowCardOutline && !ps.ShowRegistrationMarks)
             {
                 DrawCardOutlinePreview(x, y, cellW, cellH, bleed, cardW, cardH, ps);
             }

@@ -113,8 +113,11 @@ namespace MTGProxyBuilder.Core.Services
             float pageWPt = settings.PageWidthMm * MmToPt;
             float pageHPt = settings.PageHeightMm * MmToPt;
 
-            // Pass 1: Draw cut guides BEHIND card art
-            if (printSettings.ShowCutGuides)
+            // When registration marks are active, suppress bleed, cut guides, and outlines
+            bool useBleed = bleedCache.Count > 0 && !printSettings.ShowRegistrationMarks;
+
+            // Pass 1: Draw cut guides BEHIND card art (disabled with registration marks)
+            if (printSettings.ShowCutGuides && !printSettings.ShowRegistrationMarks)
             {
                 for (int i = 0; i < perPage && (startIdx + i) < cards.Count; i++)
                 {
@@ -140,7 +143,7 @@ namespace MTGProxyBuilder.Core.Services
 
                 string imagePath = front ? card.ArtworkPath : (card.BackArtworkPath ?? card.ArtworkPath);
 
-                if (bleedCache.Count > 0 && !string.IsNullOrEmpty(imagePath) && bleedCache.TryGetValue(imagePath, out var bleedImage))
+                if (useBleed && !string.IsNullOrEmpty(imagePath) && bleedCache.TryGetValue(imagePath, out var bleedImage))
                 {
                     DrawCard(gfx, bleedImage, cellX, cellY, cellW, cellH);
                 }
@@ -161,8 +164,8 @@ namespace MTGProxyBuilder.Core.Services
                 }
             }
 
-            // Pass 3: Draw card outlines ON TOP of card art
-            if (printSettings.ShowCardOutline)
+            // Pass 3: Draw card outlines ON TOP of card art (disabled with registration marks)
+            if (printSettings.ShowCardOutline && !printSettings.ShowRegistrationMarks)
             {
                 for (int i = 0; i < perPage && (startIdx + i) < cards.Count; i++)
                 {
@@ -173,6 +176,12 @@ namespace MTGProxyBuilder.Core.Services
 
                     DrawCardOutline(gfx, cellX, cellY, cellW, cellH, bleedPt, cardWPt, cardHPt, printSettings);
                 }
+            }
+
+            // Pass 4: Draw registration marks ON TOP of everything (front pages only)
+            if (printSettings.ShowRegistrationMarks && front)
+            {
+                DrawRegistrationMarks(gfx, pageWPt, pageHPt, printSettings);
             }
         }
 
@@ -343,6 +352,32 @@ namespace MTGProxyBuilder.Core.Services
             gfx.DrawLine(pen, cardRight, cardTop, pageW, cardTop);      // top-right horizontal right
             gfx.DrawLine(pen, 0, cardBottom, cardLeft, cardBottom);     // bottom-left horizontal left
             gfx.DrawLine(pen, cardRight, cardBottom, pageW, cardBottom); // bottom-right horizontal right
+        }
+
+        private const float InToPt = 72f;
+
+        private void DrawRegistrationMarks(XGraphics gfx, float pageW, float pageH, PrintSettings ps)
+        {
+            float inset = ps.RegMarkInsetIn * InToPt;
+            float length = ps.RegMarkLengthIn * InToPt;
+            float thickness = ps.RegMarkThicknessIn * InToPt;
+
+            var brush = XBrushes.Black;
+
+            // Top-left mark: filled square
+            gfx.DrawRectangle(brush, inset, inset, length, length);
+
+            // Top-right mark: L-shape with corner at (pageW - inset, inset)
+            // Horizontal bar going left
+            gfx.DrawRectangle(brush, pageW - inset - length, inset, length, thickness);
+            // Vertical bar going down
+            gfx.DrawRectangle(brush, pageW - inset - thickness, inset + thickness, thickness, length - thickness);
+
+            // Bottom-left mark: L-shape with corner at (inset, pageH - inset)
+            // Vertical bar going up
+            gfx.DrawRectangle(brush, inset, pageH - inset - length, thickness, length - thickness);
+            // Horizontal bar going right
+            gfx.DrawRectangle(brush, inset, pageH - inset - thickness, length, thickness);
         }
 
         private void DrawOverlayText(XGraphics gfx, string text, float x, float y, float w, float h)
