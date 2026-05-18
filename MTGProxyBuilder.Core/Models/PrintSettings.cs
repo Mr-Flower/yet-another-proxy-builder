@@ -45,6 +45,13 @@ namespace MTGProxyBuilder.Core.Models
         private float _cornerLengthMm = 5f;
         private float _lineWeight = 2f;
 
+        // Silhouette Cameo
+        private bool _showRegistrationMarks;
+        private bool _exportSvgCutLines;
+        private float _regMarkLengthIn = 0.35f;
+        private float _regMarkThicknessIn = 0.039f;
+        private float _regMarkInsetIn = 0.394f;
+
         public PrintMode PrintMode
         {
             get => _printMode;
@@ -115,6 +122,41 @@ namespace MTGProxyBuilder.Core.Models
         {
             get => _lineWeight;
             set { _lineWeight = value; OnPropertyChanged(); }
+        }
+
+        // --- Silhouette Cameo ---
+
+        public bool ShowRegistrationMarks
+        {
+            get => _showRegistrationMarks;
+            set { _showRegistrationMarks = value; OnPropertyChanged(); }
+        }
+
+        public bool ExportSvgCutLines
+        {
+            get => _exportSvgCutLines;
+            set { _exportSvgCutLines = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>Length of each registration mark arm in inches (default 0.35").</summary>
+        public float RegMarkLengthIn
+        {
+            get => _regMarkLengthIn;
+            set { _regMarkLengthIn = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>Thickness of each registration mark arm in inches (default 0.039").</summary>
+        public float RegMarkThicknessIn
+        {
+            get => _regMarkThicknessIn;
+            set { _regMarkThicknessIn = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>Distance from page edge to the registration mark corner in inches (default 0.394").</summary>
+        public float RegMarkInsetIn
+        {
+            get => _regMarkInsetIn;
+            set { _regMarkInsetIn = value; OnPropertyChanged(); }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

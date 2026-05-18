@@ -27,6 +27,8 @@ namespace MTGProxyBuilder.UI.ViewModels
         private bool _updateAvailable;
         private string _updateMessage = string.Empty;
         private string _updateDownloadUrl = string.Empty;
+        private bool _isLoading;
+        private string _loadingMessage = string.Empty;
 
         public ShellViewModel()
         {
@@ -91,6 +93,19 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         public string AppVersion => MainViewModel.GetAppVersion();
 
+        // --- Loading ---
+        public bool IsLoading
+        {
+            get => _isLoading;
+            set => SetProperty(ref _isLoading, value);
+        }
+
+        public string LoadingMessage
+        {
+            get => _loadingMessage;
+            set => SetProperty(ref _loadingMessage, value);
+        }
+
         // --- Project Management ---
 
         public void NewProject()
@@ -138,19 +153,30 @@ namespace MTGProxyBuilder.UI.ViewModels
                 }
             }
 
-            var vm = new MainViewModel();
-            var serializer = new ProjectSerializationService();
-            var project = await serializer.LoadProjectAsync(dialog.FileName);
-            if (project == null)
+            IsLoading = true;
+            LoadingMessage = "Opening project...";
+            try
             {
-                MessageBox.Show("Failed to load project file.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
+                var vm = new MainViewModel();
+                var serializer = new ProjectSerializationService();
+                var project = await serializer.LoadProjectAsync(dialog.FileName,
+                    msg => Application.Current.Dispatcher.Invoke(() => LoadingMessage = msg));
+                if (project == null)
+                {
+                    MessageBox.Show("Failed to load project file.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
 
-            vm.LoadFromProject(project, dialog.FileName);
-            var tab = new ProjectViewModel(vm) { FilePath = dialog.FileName };
-            Projects.Add(tab);
-            ActiveProject = tab;
+                LoadingMessage = "Building project view...";
+                vm.LoadFromProject(project, dialog.FileName);
+                var tab = new ProjectViewModel(vm) { FilePath = dialog.FileName };
+                Projects.Add(tab);
+                ActiveProject = tab;
+            }
+            finally
+            {
+                IsLoading = false;
+            }
         }
 
         public void CloseActiveProject()

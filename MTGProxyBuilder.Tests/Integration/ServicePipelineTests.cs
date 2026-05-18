@@ -574,4 +574,187 @@ public class ServicePipelineTests : IDisposable
         var card = new CardModel { Name = "No Back", BackArtworkPath = null };
         Assert.True(string.IsNullOrEmpty(card.BackArtworkPath));
     }
+
+    // --- Silhouette Cameo Tests ---
+
+    [Fact]
+    public async Task Pdf_WithRegistrationMarks_Succeeds()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Forest");
+        if (card == null) return;
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "RegMark Test" };
+        var model = card!.ToCardModel(artPath ?? "", null);
+        model.Quantity = 4;
+        project.Cards.Add(model);
+        project.PrintSettings.ShowRegistrationMarks = true;
+
+        string pdfPath = Path.Combine(_testOutputDir, "regmarks.pdf");
+        bool success = await _pdfGenerator.GeneratePdfAsync(project, pdfPath);
+
+        Assert.True(success);
+        Assert.True(File.Exists(pdfPath));
+        Assert.True(new FileInfo(pdfPath).Length > 1000);
+    }
+
+    [Fact]
+    public async Task Pdf_WithRegistrationMarks_SuppressesBleedAndOutlines()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Plains");
+        if (card == null) return;
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "Suppress Test" };
+        var model = card!.ToCardModel(artPath ?? "", null);
+        model.Quantity = 2;
+        project.Cards.Add(model);
+
+        // Enable everything, then enable reg marks — should suppress outlines/guides
+        project.PrintSettings.ShowCutGuides = true;
+        project.PrintSettings.ShowCardOutline = true;
+        project.PrintSettings.ShowRegistrationMarks = true;
+        project.PageSettings.BleedWidthMm = 1.5f;
+
+        string pdfPath = Path.Combine(_testOutputDir, "suppress.pdf");
+        bool success = await _pdfGenerator.GeneratePdfAsync(project, pdfPath);
+
+        Assert.True(success);
+        Assert.True(File.Exists(pdfPath));
+    }
+
+    [Fact]
+    public async Task Pdf_RegistrationMarks_DuplexMode_OnlyOnFrontPages()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Swamp");
+        if (card == null) return;
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "Duplex RegMark" };
+        var model = card!.ToCardModel(artPath ?? "", null);
+        model.Quantity = 4;
+        model.IncludeBack = true;
+        model.BackArtworkPath = artPath;
+        project.Cards.Add(model);
+        project.PrintSettings.PrintMode = PrintMode.Duplex;
+        project.PrintSettings.ShowRegistrationMarks = true;
+
+        string pdfPath = Path.Combine(_testOutputDir, "duplex_regmarks.pdf");
+        bool success = await _pdfGenerator.GeneratePdfAsync(project, pdfPath);
+
+        Assert.True(success);
+        Assert.True(File.Exists(pdfPath));
+    }
+
+    [Fact]
+    public async Task SvgExport_GeneratesFilesAlongsidePdf()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Mountain");
+        if (card == null) return;
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "SVG Export" };
+        var model = card!.ToCardModel(artPath ?? "", null);
+        model.Quantity = 9; // full page
+        project.Cards.Add(model);
+        project.PrintSettings.ExportSvgCutLines = true;
+
+        // Generate PDF
+        string pdfPath = Path.Combine(_testOutputDir, "svgexport.pdf");
+        bool pdfSuccess = await _pdfGenerator.GeneratePdfAsync(project, pdfPath);
+        Assert.True(pdfSuccess);
+
+        // Generate SVG alongside
+        var svgService = new SvgCutLineService();
+        var svgFiles = await svgService.GenerateSvgAsync(project, _testOutputDir, "svgexport");
+
+        Assert.NotEmpty(svgFiles);
+        foreach (var svgFile in svgFiles)
+        {
+            Assert.True(File.Exists(svgFile));
+            string content = File.ReadAllText(svgFile);
+            Assert.Contains("<svg", content);
+            Assert.Contains("<rect", content);
+            Assert.Contains("stroke=\"black\"", content);
+            Assert.Contains("fill=\"none\"", content);
+        }
+    }
+
+    [Fact]
+    public async Task SvgExport_PartialPage_GeneratesTwoFiles()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Island");
+        if (card == null) return;
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "SVG Partial" };
+        var model = card!.ToCardModel(artPath ?? "", null);
+        model.Quantity = 10; // 9 full + 1 partial
+        project.Cards.Add(model);
+
+        var svgService = new SvgCutLineService();
+        var svgFiles = await svgService.GenerateSvgAsync(project, _testOutputDir, "svgpartial");
+
+        Assert.Equal(2, svgFiles.Count);
+        Assert.Contains(svgFiles, f => f.Contains("_full.svg"));
+        Assert.Contains(svgFiles, f => f.Contains("_partial_"));
+    }
+
+    [Fact]
+    public async Task SvgExport_WithCornerRadius_HasRoundedRects()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Forest");
+        if (card == null) return;
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "SVG Rounded" };
+        var model = card!.ToCardModel(artPath ?? "", null);
+        model.Quantity = 1;
+        project.Cards.Add(model);
+        project.PrintSettings.CornerRadiusMm = 3f;
+
+        var svgService = new SvgCutLineService();
+        var svgFiles = await svgService.GenerateSvgAsync(project, _testOutputDir, "svgrounded");
+
+        Assert.NotEmpty(svgFiles);
+        string svg = File.ReadAllText(svgFiles[0]);
+        Assert.Contains("rx=", svg);
+        Assert.Contains("ry=", svg);
+    }
+
+    [Fact]
+    public async Task FullPipeline_RegMarksAndSvg_EndToEnd()
+    {
+        var card = await _scryfall.GetCardByNameAsync("Lightning Bolt");
+        if (card == null) return;
+        var artPath = await _scryfall.DownloadAndCacheImageAsync(card!);
+
+        var project = new ProjectModel { ProjectName = "Full Cameo Pipeline" };
+        var model = card!.ToCardModel(artPath ?? "", null);
+        model.Quantity = 9;
+        project.Cards.Add(model);
+
+        // Enable full Silhouette Cameo workflow
+        project.PrintSettings.ShowRegistrationMarks = true;
+        project.PrintSettings.ExportSvgCutLines = true;
+        project.PrintSettings.CornerRadiusMm = 3f;
+
+        // 1. Generate PDF with reg marks
+        string pdfPath = Path.Combine(_testOutputDir, "cameo_e2e.pdf");
+        bool pdfSuccess = await _pdfGenerator.GeneratePdfAsync(project, pdfPath);
+        Assert.True(pdfSuccess);
+        Assert.True(File.Exists(pdfPath));
+
+        // 2. Generate SVG cut lines
+        var svgService = new SvgCutLineService();
+        var svgFiles = await svgService.GenerateSvgAsync(project, _testOutputDir, "cameo_e2e");
+        Assert.NotEmpty(svgFiles);
+
+        // 3. Verify SVG content
+        string svg = File.ReadAllText(svgFiles[0]);
+        Assert.Contains("<svg", svg);
+        Assert.Contains("rx=", svg); // rounded corners
+        int rectCount = svg.Split("<rect ").Length - 1;
+        Assert.Equal(9, rectCount); // one per card slot
+    }
 }

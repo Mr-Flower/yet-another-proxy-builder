@@ -818,9 +818,11 @@ namespace MTGProxyBuilder.UI.ViewModels
             _currentFilePath = filePath;
             Cards = new ObservableCollection<CardModel>(project.Cards);
             SelectedCard = null;
+            _selectedPagePreset = DetectPagePreset(project.PageSettings);
             HasUnsavedChanges = false;
             OnPropertyChanged(nameof(CurrentProject));
             OnPropertyChanged(nameof(ProjectName));
+            OnPropertyChanged(nameof(SelectedPagePreset));
             OnPropertyChanged(nameof(SelectedPrintMode));
             OnPropertyChanged(nameof(SelectedOutlineAlignment));
             OnPropertyChanged(nameof(SelectedOutlineType));
@@ -852,8 +854,10 @@ namespace MTGProxyBuilder.UI.ViewModels
                 _currentFilePath = dialog.FileName;
                 Cards = new ObservableCollection<CardModel>(project.Cards);
                 SelectedCard = null;
+                _selectedPagePreset = DetectPagePreset(project.PageSettings);
                 OnPropertyChanged(nameof(CurrentProject));
                 OnPropertyChanged(nameof(ProjectName));
+                OnPropertyChanged(nameof(SelectedPagePreset));
                 OnPropertyChanged(nameof(SelectedPrintMode));
                 HasUnsavedChanges = false;
                 StatusText = $"Opened: {Path.GetFileName(dialog.FileName)}";
@@ -1324,8 +1328,20 @@ namespace MTGProxyBuilder.UI.ViewModels
 
                 if (success)
                 {
+                    string svgInfo = "";
+                    if (_currentProject.PrintSettings.ExportSvgCutLines)
+                    {
+                        var svgService = new SvgCutLineService();
+                        string outputDir = Path.GetDirectoryName(dialog.FileName) ?? ".";
+                        string baseName = Path.GetFileNameWithoutExtension(dialog.FileName);
+                        var svgFiles = await svgService.GenerateSvgAsync(_currentProject, outputDir, baseName);
+                        svgInfo = svgFiles.Count > 0
+                            ? $"\n\nSVG cut files ({svgFiles.Count}):\n" + string.Join("\n", svgFiles.Select(Path.GetFileName))
+                            : "";
+                    }
+
                     StatusText = $"PDF exported: {Path.GetFileName(dialog.FileName)}";
-                    MessageBox.Show($"PDF exported successfully!\n\n{dialog.FileName}",
+                    MessageBox.Show($"PDF exported successfully!\n\n{dialog.FileName}{svgInfo}",
                         "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 else
@@ -2030,6 +2046,25 @@ namespace MTGProxyBuilder.UI.ViewModels
         }
 
         // --- Page Layout ---
+
+        private static string DetectPagePreset(PageLayout settings)
+        {
+            float w = settings.PageWidthMm;
+            float h = settings.PageHeightMm;
+            // Normalize to portrait for comparison
+            float pw = Math.Min(w, h);
+            float ph = Math.Max(w, h);
+
+            bool Match(float presetW, float presetH) =>
+                Math.Abs(pw - presetW) < 1f && Math.Abs(ph - presetH) < 1f;
+
+            if (Match(210f, 297f)) return "A4";
+            if (Match(297f, 420f)) return "A3";
+            if (Match(215.9f, 279.4f)) return "Letter";
+            if (Match(215.9f, 355.6f)) return "Legal";
+            if (Match(279.4f, 431.8f)) return "Tabloid";
+            return "A4";
+        }
 
         private void SetPagePreset(string? preset)
         {

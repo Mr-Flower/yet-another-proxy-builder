@@ -149,4 +149,54 @@ public class PrintSettingsTests
         Assert.Contains("CornerLengthMm", changed);
         Assert.Contains("LineWeight", changed);
     }
+
+    // --- Silhouette Cameo Defaults ---
+
+    [Fact]
+    public void SilhouetteCameo_DefaultsAreCorrect()
+    {
+        var settings = new PrintSettings();
+        Assert.False(settings.ShowRegistrationMarks);
+        Assert.False(settings.ExportSvgCutLines);
+        Assert.Equal(0.35f, settings.RegMarkLengthIn);
+        Assert.Equal(0.039f, settings.RegMarkThicknessIn);
+        Assert.Equal(0.394f, settings.RegMarkInsetIn);
+    }
+
+    [Fact]
+    public void SilhouetteCameo_PropertiesCanBeChanged()
+    {
+        var settings = new PrintSettings();
+        settings.ShowRegistrationMarks = true;
+        settings.ExportSvgCutLines = true;
+        settings.RegMarkLengthIn = 0.5f;
+        settings.RegMarkThicknessIn = 0.06f;
+        settings.RegMarkInsetIn = 0.5f;
+
+        Assert.True(settings.ShowRegistrationMarks);
+        Assert.True(settings.ExportSvgCutLines);
+        Assert.Equal(0.5f, settings.RegMarkLengthIn);
+        Assert.Equal(0.06f, settings.RegMarkThicknessIn);
+        Assert.Equal(0.5f, settings.RegMarkInsetIn);
+    }
+
+    [Fact]
+    public void PropertyChanged_FiresOnSilhouetteProperties()
+    {
+        var settings = new PrintSettings();
+        var changed = new List<string>();
+        settings.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+
+        settings.ShowRegistrationMarks = true;
+        settings.ExportSvgCutLines = true;
+        settings.RegMarkLengthIn = 0.4f;
+        settings.RegMarkThicknessIn = 0.05f;
+        settings.RegMarkInsetIn = 0.5f;
+
+        Assert.Contains("ShowRegistrationMarks", changed);
+        Assert.Contains("ExportSvgCutLines", changed);
+        Assert.Contains("RegMarkLengthIn", changed);
+        Assert.Contains("RegMarkThicknessIn", changed);
+        Assert.Contains("RegMarkInsetIn", changed);
+    }
 }

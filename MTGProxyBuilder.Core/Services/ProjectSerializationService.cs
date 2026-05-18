@@ -87,12 +87,16 @@ namespace MTGProxyBuilder.Core.Services
         //  LOAD
         // ================================================================
 
-        public async Task<ProjectModel?> LoadProjectAsync(string filePath)
+        public Task<ProjectModel?> LoadProjectAsync(string filePath)
+            => LoadProjectAsync(filePath, null);
+
+        public async Task<ProjectModel?> LoadProjectAsync(string filePath, Action<string>? onProgress)
         {
             try
             {
                 return await Task.Run(() =>
                 {
+                    onProgress?.Invoke("Reading project file...");
                     using var stream = File.OpenRead(filePath);
                     using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
 
@@ -104,6 +108,7 @@ namespace MTGProxyBuilder.Core.Services
                     using (var reader = new StreamReader(jsonEntry.Open()))
                         json = reader.ReadToEnd();
 
+                    onProgress?.Invoke("Parsing project data...");
                     var wrapper = JsonConvert.DeserializeObject<ProjectFileWrapper>(json);
                     if (wrapper?.Project == null) return null;
 
@@ -119,16 +124,21 @@ namespace MTGProxyBuilder.Core.Services
                         Directory.Delete(extractDir, true);
                     Directory.CreateDirectory(extractDir);
 
-                    foreach (var entry in zip.Entries)
-                    {
-                        if (!entry.FullName.StartsWith(ImageFolder) || entry.FullName == ImageFolder)
-                            continue;
+                    var imageEntries = zip.Entries
+                        .Where(e => e.FullName.StartsWith(ImageFolder) && e.FullName != ImageFolder)
+                        .ToList();
 
+                    int extracted = 0;
+                    foreach (var entry in imageEntries)
+                    {
+                        extracted++;
+                        onProgress?.Invoke($"Extracting images ({extracted}/{imageEntries.Count})...");
                         string destPath = Path.Combine(extractDir, entry.Name);
                         entry.ExtractToFile(destPath, overwrite: true);
                     }
 
                     // Resolve relative paths back to absolute extracted paths
+                    onProgress?.Invoke("Resolving card artwork...");
                     foreach (var card in project.Cards)
                     {
                         card.ArtworkPath = ResolveImagePath(card.ArtworkPath, extractDir);
