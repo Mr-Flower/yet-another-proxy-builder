@@ -164,6 +164,8 @@ namespace MTGProxyBuilder.UI.Controls
         public event Action<CardModel>? CreateTokenRequested; // (sourceCard)
         public event Action<List<CardModel>>? CreateTokensFromCardsRequested; // (sourceCards)
         public event Action<List<int>>? ApplyMajorityBackRequested; // (cardIndices)
+        public event Action<List<int>>? SelectFrontArtRequested; // (cardIndices)
+        public event Action<List<int>>? SelectBackArtRequested; // (cardIndices)
 
         public PageLayout? PageSettings
         {
@@ -593,6 +595,17 @@ namespace MTGProxyBuilder.UI.Controls
                 var matchBackItem = new MenuItem { Header = hasSelection ? $"Match Back Art{target}" : "Match Back Art" };
                 matchBackItem.Click += (_, _) => ApplyMajorityBackRequested?.Invoke(cardIndices);
                 menu.Items.Add(matchBackItem);
+
+                menu.Items.Add(new Separator());
+
+                // Art selection
+                var selectFrontItem = new MenuItem { Header = hasSelection ? $"Select Front Art{target}" : "Select Front Art..." };
+                selectFrontItem.Click += (_, _) => SelectFrontArtRequested?.Invoke(cardIndices);
+                menu.Items.Add(selectFrontItem);
+
+                var selectBackItem = new MenuItem { Header = hasSelection ? $"Select Card Back{target}" : "Select Card Back..." };
+                selectBackItem.Click += (_, _) => SelectBackArtRequested?.Invoke(cardIndices);
+                menu.Items.Add(selectBackItem);
 
                 // "Create Token" — for cards with unique (non-common) back art
                 menu.Items.Add(new Separator());

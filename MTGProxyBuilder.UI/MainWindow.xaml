@@ -687,7 +687,7 @@
 
                                     <TextBlock Text="Front Artwork" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
                                     <Button Style="{StaticResource AccentBtn}"
-                                            Command="{Binding DataContext.BrowseFrontArtworkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            Command="{Binding DataContext.ActiveProject.Inner.BrowseFrontArtworkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                             Content="Select Art..." Margin="0,0,0,6" HorizontalAlignment="Stretch" Padding="8,6"/>
                                     <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4">
                                         <Image Source="{Binding ArtworkPath}" Stretch="Uniform" Margin="4"/>
@@ -701,7 +701,7 @@
 
                                     <CheckBox Content="Include Back Artwork" IsChecked="{Binding IncludeBack}" Foreground="#CCC" Margin="0,0,0,6"/>
                                     <Button Style="{StaticResource AccentBtn}"
-                                            Command="{Binding DataContext.BrowseBackArtworkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            Command="{Binding DataContext.ActiveProject.Inner.BrowseBackArtworkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                             Content="Select Card Back..." Margin="0,0,0,6" HorizontalAlignment="Stretch" Padding="8,6"/>
                                     <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4">
                                         <Image Source="{Binding BackArtworkPath}" Stretch="Uniform" Margin="4"/>

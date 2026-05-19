@@ -976,6 +976,63 @@ namespace MTGProxyBuilder.UI.ViewModels
             ShowArtSelector(card, isShowingBack ? Dialogs.ArtSelectorMode.Back : Dialogs.ArtSelectorMode.Front);
         }
 
+        public void SelectFrontArtForCards(List<int> cardIndices)
+        {
+            var targets = cardIndices
+                .Where(i => i >= 0 && i < Cards.Count)
+                .Select(i => Cards[i])
+                .Distinct()
+                .ToList();
+            if (targets.Count == 0) return;
+
+            // Use the first card for the art selector dialog
+            var dialog = new Dialogs.ArtSelectorDialog(
+                targets.First(), Dialogs.ArtSelectorMode.Front,
+                _scryfallService, _mpcFillService, _imageCacheService,
+                _backArtLibraryService, Cards, GetMpcFillSources(), BuildMpcFillSearchOptions(),
+                _frontArtLibraryService);
+            dialog.Owner = Application.Current.MainWindow;
+
+            if (dialog.ShowDialog() == true && dialog.ResultPath != null)
+            {
+                PushUndo();
+                foreach (var c in targets)
+                    c.ArtworkPath = dialog.ResultPath;
+                StatusText = $"Front art updated for {targets.Count} card(s)";
+                RefreshCanvas();
+            }
+        }
+
+        public void SelectBackArtForCards(List<int> cardIndices)
+        {
+            var targets = cardIndices
+                .Where(i => i >= 0 && i < Cards.Count)
+                .Select(i => Cards[i])
+                .Distinct()
+                .ToList();
+            if (targets.Count == 0) return;
+
+            var dialog = new Dialogs.ArtSelectorDialog(
+                targets.First(), Dialogs.ArtSelectorMode.Back,
+                _scryfallService, _mpcFillService, _imageCacheService,
+                _backArtLibraryService, Cards, GetMpcFillSources(), BuildMpcFillSearchOptions(),
+                _frontArtLibraryService);
+            dialog.Owner = Application.Current.MainWindow;
+
+            if (dialog.ShowDialog() == true && dialog.ResultPath != null)
+            {
+                PushUndo();
+                foreach (var c in targets)
+                {
+                    c.BackArtworkPath = dialog.ResultPath;
+                    c.IncludeBack = true;
+                }
+                StatusText = $"Back art applied to {targets.Count} card(s)";
+                RefreshBackArtLibrary();
+                RefreshCanvas();
+            }
+        }
+
         public void ApplyMajorityBackToCards(List<int> cardIndices)
         {
             var mostCommon = GetMostCommonBackArt();
