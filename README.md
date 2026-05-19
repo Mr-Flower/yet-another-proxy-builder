@@ -31,7 +31,8 @@ The release is a self-contained single-file executable that includes everything 
 - **Multi-page preview** — all pages displayed vertically in a scrollable, zoomable canvas
 - **Drag and drop** — reorder cards across pages by dragging
 - **Selection** — click to select, Ctrl+Click to toggle individual cards, Shift+Click for range selection across pages
-- **Right-click context menu** — duplicate, delete, flip, match back art, create token cards (single or multi-select)
+- **Right-click context menu** — duplicate, delete, flip, match back art, select front art, select card back, create token cards (single or multi-select)
+- **Multi-select art changes** — select multiple cards on the canvas, then right-click "Select Front Art" or "Select Card Back" to apply the chosen artwork to all selected cards at once; also works from the Card panel buttons
 - **Flip preview** — view back artwork on the canvas; flip individual, selected, or all cards
 - **Zoom** — Ctrl+Mouse Wheel, +/- buttons, Fit to Width, 1:1 reset (15%-300%)
 - **Pan** — middle-click and drag to pan freely; Shift+Mouse Wheel for horizontal scroll
@@ -269,11 +270,14 @@ dotnet test
 - **Duplicate / Delete** — single card or all selected
 - **Flip** — preview back artwork
 - **Match Back Art** — apply the project's most common back art to selected cards
+- **Select Front Art** — open the art selector to change front artwork for the card or all selected cards
+- **Select Card Back** — open the art selector to change back artwork for the card or all selected cards
 - **Create Token Card** — for dual-faced cards: creates a new card with the front art and the project's common back
 
 **Changing artwork:**
 - Double-click a card on the canvas to open the art selector
 - Or select a card and use the Card tab's "Select Art..." / "Select Card Back..." buttons
+- Select multiple cards (Ctrl+Click or Shift+Click), then right-click → "Select Front Art" or "Select Card Back" to apply the same artwork to all selected cards
 - The art selector shows library matches first (instant), then Scryfall printings + MPCFill community art; art already in the library is not re-downloaded
 - Expand "MPCFill Filters" to adjust sort order, DPI range, languages, card types, and content filters inline; click "Re-search MPCFill" to apply
 - Right-click any MPCFill tile to "Save to Library" for future local-first access

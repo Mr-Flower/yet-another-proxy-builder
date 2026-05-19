@@ -112,6 +112,18 @@ public partial class MainWindow : Window
                 if (Shell?.ActiveProject?.Inner is MainViewModel vm)
                     vm.ApplyMajorityBackToCards(cardIndices);
             };
+
+            GridCanvas.SelectFrontArtRequested += (cardIndices) =>
+            {
+                if (Shell?.ActiveProject?.Inner is MainViewModel vm)
+                    vm.SelectFrontArtForCards(cardIndices);
+            };
+
+            GridCanvas.SelectBackArtRequested += (cardIndices) =>
+            {
+                if (Shell?.ActiveProject?.Inner is MainViewModel vm)
+                    vm.SelectBackArtForCards(cardIndices);
+            };
         };
     }
 
