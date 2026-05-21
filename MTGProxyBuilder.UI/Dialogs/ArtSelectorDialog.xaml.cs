@@ -580,65 +580,7 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private void AddOption(string label, string imagePath, bool isCurrent, string detail, string? mpcSource = null)
         {
-            var border = new Border
-            {
-                Width = 110, Height = 165, Margin = new Thickness(4),
-                Background = AppBrushes.TileBg,
-                CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
-                BorderThickness = new Thickness(2),
-                BorderBrush = isCurrent ? Brushes.DodgerBlue : Brushes.Transparent,
-                ToolTip = $"{label}\n{detail}"
-            };
-
-            var stack = new StackPanel();
-
-            var imgBorder = new Border
-            {
-                Height = 125, Background = Brushes.Black,
-                CornerRadius = new CornerRadius(3, 3, 0, 0), ClipToBounds = true
-            };
-            try
-            {
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.UriSource = new Uri(imagePath, UriKind.Absolute);
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.DecodePixelWidth = 220;
-                bmp.EndInit();
-                bmp.Freeze();
-                imgBorder.Child = new Image { Source = bmp, Stretch = Stretch.UniformToFill };
-            }
-            catch
-            {
-                imgBorder.Child = new TextBlock
-                {
-                    Text = "?", Foreground = Brushes.Gray, FontSize = 24,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-            }
-            stack.Children.Add(imgBorder);
-
-            var lbl = new TextBlock
-            {
-                Text = label + (isCurrent ? " *" : ""),
-                Foreground = AppBrushes.TextSecondary,
-                FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(3, 4, 3, 0)
-            };
-            stack.Children.Add(lbl);
-
-            var detailLbl = new TextBlock
-            {
-                Text = detail, Foreground = AppBrushes.TextMuted,
-                FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(3, 0, 3, 2)
-            };
-            stack.Children.Add(detailLbl);
-
-            border.Child = stack;
+            var border = Controls.ArtTileBuilder.CreateOptionTile(label, imagePath, isCurrent, detail);
 
             string path = imagePath;
             string capturedLabel = label;
@@ -698,33 +640,7 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private void AddActionTile(string label, Action action)
         {
-            var border = new Border
-            {
-                Width = 110, Height = 165, Margin = new Thickness(4),
-                Background = AppBrushes.ActionTileBg,
-                CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
-                BorderThickness = new Thickness(1),
-                BorderBrush = AppBrushes.Border
-            };
-
-            var stack = new StackPanel
-            {
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center
-            };
-            stack.Children.Add(new TextBlock
-            {
-                Text = "+", FontSize = 28, Foreground = Brushes.Gray,
-                HorizontalAlignment = HorizontalAlignment.Center
-            });
-            stack.Children.Add(new TextBlock
-            {
-                Text = label, FontSize = 10,
-                Foreground = AppBrushes.Label,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                TextAlignment = TextAlignment.Center
-            });
-            border.Child = stack;
+            var border = Controls.ArtTileBuilder.CreateActionTile(label);
             border.MouseLeftButtonUp += (_, _) => action();
             OptionsPanel.Children.Add(border);
             _allTiles.Add(new TileInfo(border, label, "", "", IsAction: true));
