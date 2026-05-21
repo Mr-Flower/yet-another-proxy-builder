@@ -57,6 +57,12 @@ namespace MTGProxyBuilder.Core.Services
 
         [JsonProperty("mpcFillIncludeTags")]
         public List<string> MpcFillIncludeTags { get; set; } = new();
+
+        [JsonProperty("frontArtLibraryPath")]
+        public string? FrontArtLibraryPath { get; set; }
+
+        [JsonProperty("backArtLibraryPath")]
+        public string? BackArtLibraryPath { get; set; }
     }
 
     public class AppSettingsService

@@ -102,6 +102,51 @@ public class ImageCacheServiceTests
         Assert.Empty(result);
     }
 
+    // --- Remove Tests ---
+
+    [Fact]
+    public void Remove_DeletesFileAndIndex()
+    {
+        var svc = new ImageCacheService();
+        string key = $"mpc_remove_test_{Guid.NewGuid():N}";
+        string testFile = Path.Combine(svc.CacheDirectory, $"{key}.png");
+        File.WriteAllBytes(testFile, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+
+        var svc2 = new ImageCacheService(); // pick up the new file
+        Assert.True(svc2.IsImageCached(key));
+
+        bool removed = svc2.Remove(key);
+        Assert.True(removed);
+        Assert.False(File.Exists(testFile));
+        Assert.False(svc2.IsImageCached(key));
+        Assert.Null(svc2.GetCachedImagePath(key));
+    }
+
+    [Fact]
+    public void Remove_NonexistentKey_ReturnsFalse()
+    {
+        var svc = new ImageCacheService();
+        Assert.False(svc.Remove($"nonexistent_{Guid.NewGuid():N}"));
+    }
+
+    [Fact]
+    public void Remove_AlsoDeletesMetadata()
+    {
+        var svc = new ImageCacheService();
+        string key = $"mpc_remove_meta_{Guid.NewGuid():N}";
+        string testFile = Path.Combine(svc.CacheDirectory, $"{key}.png");
+        File.WriteAllBytes(testFile, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+
+        var svc2 = new ImageCacheService();
+        svc2.SetMetadata(key, "Test Card", "TestSource");
+
+        bool removed = svc2.Remove(key);
+        Assert.True(removed);
+
+        var cached = svc2.GetCachedByPrefix(key);
+        Assert.Empty(cached);
+    }
+
     [Fact]
     public void ClearCache_AlsoDeletesMetadata()
     {

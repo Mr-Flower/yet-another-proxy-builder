@@ -21,6 +21,10 @@ namespace MTGProxyBuilder.UI.Dialogs
         public string? ResultPath { get; private set; }
         public bool WasCleared { get; private set; }
 
+        // Tile tracking for search/filter
+        private record TileInfo(Border Tile, string Name, string Source, bool IsAction = false);
+        private readonly List<TileInfo> _allTiles = new();
+
         public BackArtSelectorDialog(CardModel card, BackArtLibraryService library)
         {
             InitializeComponent();
@@ -33,6 +37,7 @@ namespace MTGProxyBuilder.UI.Dialogs
         private void BuildOptions()
         {
             OptionsPanel.Children.Clear();
+            _allTiles.Clear();
 
             // Track which paths we've already shown to avoid duplicates
             var shownPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -41,7 +46,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             if (!string.IsNullOrEmpty(_card.OriginalBackArtworkPath) && File.Exists(_card.OriginalBackArtworkPath))
             {
                 bool isCurrent = string.Equals(_card.BackArtworkPath, _card.OriginalBackArtworkPath, StringComparison.OrdinalIgnoreCase);
-                AddOption("Original (Scryfall)", _card.OriginalBackArtworkPath, isCurrent);
+                AddOption("Original (Scryfall)", _card.OriginalBackArtworkPath, isCurrent, "Scryfall");
                 shownPaths.Add(_card.OriginalBackArtworkPath);
             }
 
@@ -49,7 +54,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             if (!string.IsNullOrEmpty(_card.BackArtworkPath) && File.Exists(_card.BackArtworkPath)
                 && !shownPaths.Contains(_card.BackArtworkPath))
             {
-                AddOption("Current Back", _card.BackArtworkPath, true);
+                AddOption("Current Back", _card.BackArtworkPath, true, "Current");
                 shownPaths.Add(_card.BackArtworkPath);
             }
 
@@ -58,7 +63,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             {
                 if (File.Exists(entry.FilePath) && !shownPaths.Contains(entry.FilePath))
                 {
-                    AddOption(entry.Name, entry.FilePath, false);
+                    AddOption(entry.Name, entry.FilePath, false, entry.Source);
                     shownPaths.Add(entry.FilePath);
                 }
             }
@@ -66,9 +71,11 @@ namespace MTGProxyBuilder.UI.Dialogs
             // 4. Actions
             AddActionTile("+ Add to Library", OnAddToLibrary);
             AddActionTile("Browse File...", OnBrowseFile);
+
+            PopulateSourceFilter();
         }
 
-        private void AddOption(string label, string imagePath, bool isCurrent)
+        private void AddOption(string label, string imagePath, bool isCurrent, string source = "")
         {
             var border = new Border
             {
@@ -128,6 +135,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             border.MouseLeftButtonUp += (_, _) => SelectOption(label, path, border);
 
             OptionsPanel.Children.Add(border);
+            _allTiles.Add(new TileInfo(border, label, source));
         }
 
         private void AddActionTile(string label, Action action)
@@ -164,6 +172,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             border.MouseLeftButtonUp += (_, _) => action();
 
             OptionsPanel.Children.Add(border);
+            _allTiles.Add(new TileInfo(border, label, "", IsAction: true));
         }
 
         private void SelectOption(string label, string path, Border selectedBorder)
@@ -237,6 +246,78 @@ namespace MTGProxyBuilder.UI.Dialogs
                 PreviewImage.Source = bmp;
             }
             catch { PreviewImage.Source = null; }
+        }
+
+        // ================================================================
+        //  SEARCH & SOURCE FILTER
+        // ================================================================
+
+        private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (SearchPlaceholder != null)
+                SearchPlaceholder.Visibility = string.IsNullOrEmpty(SearchBox.Text)
+                    ? Visibility.Visible : Visibility.Collapsed;
+            ApplyFilters();
+        }
+
+        private void OnSourceFilterChanged(object sender, SelectionChangedEventArgs e)
+        {
+            ApplyFilters();
+        }
+
+        private void ApplyFilters()
+        {
+            if (_allTiles.Count == 0) return;
+
+            string searchText = SearchBox?.Text?.Trim() ?? "";
+            string sourceFilter = (SourceFilterBox?.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
+
+            foreach (var tile in _allTiles)
+            {
+                if (tile.IsAction)
+                {
+                    tile.Tile.Visibility = Visibility.Visible;
+                    continue;
+                }
+
+                bool matchesSearch = string.IsNullOrEmpty(searchText) ||
+                    tile.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    tile.Source.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+
+                bool matchesSource = string.IsNullOrEmpty(sourceFilter) ||
+                    tile.Source.Equals(sourceFilter, StringComparison.OrdinalIgnoreCase);
+
+                tile.Tile.Visibility = matchesSearch && matchesSource
+                    ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
+        private void PopulateSourceFilter()
+        {
+            var currentSource = (SourceFilterBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
+            SourceFilterBox.SelectionChanged -= OnSourceFilterChanged;
+
+            SourceFilterBox.Items.Clear();
+            var allItem = new ComboBoxItem { Content = "All Sources", Tag = "" };
+            SourceFilterBox.Items.Add(allItem);
+            SourceFilterBox.SelectedItem = allItem;
+
+            var sources = _allTiles
+                .Where(t => !t.IsAction && !string.IsNullOrEmpty(t.Source))
+                .Select(t => t.Source)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(s => s)
+                .ToList();
+
+            foreach (var source in sources)
+            {
+                var item = new ComboBoxItem { Content = source, Tag = source };
+                SourceFilterBox.Items.Add(item);
+                if (source.Equals(currentSource, StringComparison.OrdinalIgnoreCase))
+                    SourceFilterBox.SelectedItem = item;
+            }
+
+            SourceFilterBox.SelectionChanged += OnSourceFilterChanged;
         }
 
         private void OkClick(object sender, RoutedEventArgs e)

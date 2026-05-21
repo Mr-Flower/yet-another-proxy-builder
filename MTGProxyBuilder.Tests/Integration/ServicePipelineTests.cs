@@ -757,4 +757,138 @@ public class ServicePipelineTests : IDisposable
         int rectCount = svg.Split("<rect ").Length - 1;
         Assert.Equal(9, rectCount); // one per card slot
     }
+
+    // ================================================================
+    //  LIBRARY MIGRATION & COMPRESSION E2E
+    // ================================================================
+
+    [Fact]
+    public void Library_ExportImport_RoundTrip()
+    {
+        var tmpImage = Path.Combine(_testOutputDir, "roundtrip.png");
+        File.WriteAllBytes(tmpImage, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+
+        // Create a library with entries
+        string srcDir = Path.Combine(_testOutputDir, "RoundTripSrc");
+        var srcLib = new FrontArtLibraryService(srcDir);
+        var e1 = srcLib.AddFromFile(tmpImage, $"Card_A_{Guid.NewGuid():N}", "SourceA");
+        var e2 = srcLib.AddFromFile(tmpImage, $"Card_B_{Guid.NewGuid():N}", "SourceB");
+        Assert.NotNull(e1);
+        Assert.NotNull(e2);
+
+        // Export
+        string zipPath = Path.Combine(_testOutputDir, "roundtrip.zip");
+        srcLib.ExportToZip(zipPath);
+        Assert.True(File.Exists(zipPath));
+
+        // Import into a fresh library
+        string destDir = Path.Combine(_testOutputDir, "RoundTripDest");
+        var destLib = new FrontArtLibraryService(destDir);
+        int added = destLib.ImportFromZip(zipPath);
+
+        Assert.Equal(2, added);
+        Assert.Equal(2, destLib.Entries.Count);
+
+        // Verify names and sources survived the round-trip
+        Assert.Contains(destLib.Entries, e => e.Name == e1!.Name && e.Source == "SourceA");
+        Assert.Contains(destLib.Entries, e => e.Name == e2!.Name && e.Source == "SourceB");
+        Assert.All(destLib.Entries, e => Assert.True(File.Exists(e.FilePath)));
+    }
+
+    [Fact]
+    public void Library_Move_PreservesEntriesAndCatalog()
+    {
+        var tmpImage = Path.Combine(_testOutputDir, "move_test.png");
+        File.WriteAllBytes(tmpImage, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+
+        string srcDir = Path.Combine(_testOutputDir, "MoveSrc");
+        string destDir = Path.Combine(_testOutputDir, "MoveDest");
+        var svc = new BackArtLibraryService(srcDir);
+
+        var entry = svc.AddFromFile(tmpImage, $"MoveE2E_{Guid.NewGuid():N}", "TestContrib");
+        Assert.NotNull(entry);
+        svc.SetDefault(entry!.Id);
+
+        // Move
+        svc.MoveToDirectory(destDir);
+
+        // Verify the service now points to the new directory
+        Assert.Equal(destDir, svc.LibraryDirectory);
+
+        // Verify the entry is accessible and file exists at new location
+        var found = svc.GetById(entry.Id);
+        Assert.NotNull(found);
+        Assert.StartsWith(destDir, found!.FilePath, StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(found.FilePath));
+        Assert.Equal("TestContrib", found.Source);
+
+        // Verify default was preserved
+        Assert.Equal(entry.Id, svc.DefaultEntryId);
+
+        // Verify old directory was cleaned up
+        Assert.False(Directory.Exists(srcDir));
+
+        // Verify a fresh load from the new catalog works
+        var reloaded = new BackArtLibraryService(destDir);
+        Assert.Single(reloaded.Entries);
+        Assert.Equal(entry.Id, reloaded.DefaultEntryId);
+    }
+
+    [Fact]
+    public void ImageCache_Remove_CleansUpAfterLibraryImport()
+    {
+        // Simulate the cache-to-library import workflow
+        string key = $"mpc_e2e_import_{Guid.NewGuid():N}";
+        string testFile = Path.Combine(_imageCache.CacheDirectory, $"{key}.png");
+        File.WriteAllBytes(testFile, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+
+        var cache = new ImageCacheService(); // pick up the test file
+        cache.SetMetadata(key, "E2E Card", "E2E Source");
+        Assert.True(cache.IsImageCached(key));
+
+        // Import into library
+        string libDir = Path.Combine(_testOutputDir, "CacheImportLib");
+        var lib = new FrontArtLibraryService(libDir);
+        var cached = cache.GetCachedByPrefix(key);
+        Assert.Single(cached);
+
+        var entry = lib.AddFromFile(cached[0].Path, cached[0].Name, cached[0].Source);
+        Assert.NotNull(entry);
+
+        // Remove from cache (mimicking what the UI does)
+        cache.Remove(key);
+
+        Assert.False(cache.IsImageCached(key));
+        Assert.False(File.Exists(testFile));
+
+        // Library entry still works
+        Assert.True(File.Exists(entry!.FilePath));
+        Assert.Equal("E2E Card", entry.Name);
+    }
+
+    [Fact]
+    public void AppSettings_CustomLibraryPaths_Persist()
+    {
+        var settings = new AppSettingsService();
+        string origFront = settings.Settings.FrontArtLibraryPath;
+        string origBack = settings.Settings.BackArtLibraryPath;
+
+        try
+        {
+            settings.Settings.FrontArtLibraryPath = @"D:\TestFrontLib";
+            settings.Settings.BackArtLibraryPath = @"D:\TestBackLib";
+            settings.Save();
+
+            var reloaded = new AppSettingsService();
+            Assert.Equal(@"D:\TestFrontLib", reloaded.Settings.FrontArtLibraryPath);
+            Assert.Equal(@"D:\TestBackLib", reloaded.Settings.BackArtLibraryPath);
+        }
+        finally
+        {
+            // Restore original values
+            settings.Settings.FrontArtLibraryPath = origFront;
+            settings.Settings.BackArtLibraryPath = origBack;
+            settings.Save();
+        }
+    }
 }

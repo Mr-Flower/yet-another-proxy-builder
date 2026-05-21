@@ -217,4 +217,96 @@ public class BackArtLibraryServiceTests : IDisposable
 
         svc.Remove(entry.Id);
     }
+
+    // --- Custom Directory Constructor ---
+
+    [Fact]
+    public void Constructor_WithCustomDirectory_UsesIt()
+    {
+        string customDir = Path.Combine(_testDir, "CustomBackLib");
+        var svc = new BackArtLibraryService(customDir);
+
+        Assert.Equal(customDir, svc.LibraryDirectory);
+        Assert.True(Directory.Exists(customDir));
+    }
+
+    // --- MoveToDirectory Tests ---
+
+    [Fact]
+    public void MoveToDirectory_MovesFilesAndUpdatesPaths()
+    {
+        string srcDir = Path.Combine(_testDir, "MoveSource");
+        string destDir = Path.Combine(_testDir, "MoveDest");
+        var svc = new BackArtLibraryService(srcDir);
+
+        var entry = svc.AddFromFile(_testImagePath, $"Move_{Guid.NewGuid():N}");
+        Assert.NotNull(entry);
+        string oldPath = entry!.FilePath;
+        Assert.StartsWith(srcDir, oldPath, StringComparison.OrdinalIgnoreCase);
+
+        svc.MoveToDirectory(destDir);
+
+        Assert.Equal(destDir, svc.LibraryDirectory);
+        var found = svc.GetById(entry.Id);
+        Assert.NotNull(found);
+        Assert.StartsWith(destDir, found!.FilePath, StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(found.FilePath));
+    }
+
+    // --- ExportToZip / ImportFromZip Tests ---
+
+    [Fact]
+    public void ExportToZip_CreatesZipFile()
+    {
+        string libDir = Path.Combine(_testDir, "ExportLib");
+        var svc = new BackArtLibraryService(libDir);
+
+        svc.AddFromFile(_testImagePath, $"Export_{Guid.NewGuid():N}");
+        svc.AddFromFile(_testImagePath, $"Export_{Guid.NewGuid():N}");
+
+        string zipPath = Path.Combine(_testDir, "export_back.zip");
+        svc.ExportToZip(zipPath);
+
+        Assert.True(File.Exists(zipPath));
+        Assert.True(new FileInfo(zipPath).Length > 0);
+    }
+
+    [Fact]
+    public void ImportFromZip_RestoresEntries()
+    {
+        // Create and export a library
+        string srcDir = Path.Combine(_testDir, "ImportSrc");
+        var srcSvc = new BackArtLibraryService(srcDir);
+        srcSvc.AddFromFile(_testImagePath, $"Import_{Guid.NewGuid():N}", "TestSource");
+        srcSvc.AddFromFile(_testImagePath, $"Import_{Guid.NewGuid():N}", "TestSource");
+
+        string zipPath = Path.Combine(_testDir, "import_back.zip");
+        srcSvc.ExportToZip(zipPath);
+
+        // Import into a fresh library
+        string destDir = Path.Combine(_testDir, "ImportDest");
+        var destSvc = new BackArtLibraryService(destDir);
+        Assert.Empty(destSvc.Entries);
+
+        int added = destSvc.ImportFromZip(zipPath);
+        Assert.Equal(2, added);
+        Assert.Equal(2, destSvc.Entries.Count);
+        Assert.All(destSvc.Entries, e => Assert.True(File.Exists(e.FilePath)));
+    }
+
+    [Fact]
+    public void ImportFromZip_SkipsDuplicates()
+    {
+        string libDir = Path.Combine(_testDir, "DupImportLib");
+        var svc = new BackArtLibraryService(libDir);
+        string name = $"DupImport_{Guid.NewGuid():N}";
+        svc.AddFromFile(_testImagePath, name);
+
+        // Export, then re-import into the same library
+        string zipPath = Path.Combine(_testDir, "dup_import_back.zip");
+        svc.ExportToZip(zipPath);
+
+        int added = svc.ImportFromZip(zipPath);
+        Assert.Equal(0, added); // already exists
+    }
 }

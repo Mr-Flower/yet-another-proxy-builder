@@ -19,16 +19,32 @@
         <TextBlock Grid.Row="0" x:Name="CountLabel" Foreground="#888" FontSize="11" Margin="0,24,0,8"/>
 
         <!-- Actions bar -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,4,0,6">
-            <Button Content="Add from File..." Padding="10,5" Margin="0,0,6,0"
-                    Background="#0078D4" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"
-                    Click="OnAddFromFile"/>
-            <Button x:Name="ImportCacheBtn" Content="Import Downloaded Art" Padding="10,5" Margin="0,0,6,0"
-                    Background="#0078D4" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"
-                    Click="OnImportFromCache"/>
-            <Button Content="Remove Selected" Padding="10,5"
-                    Background="Transparent" Foreground="#E06060" BorderThickness="0" Cursor="Hand" FontSize="11"
-                    Click="OnRemoveSelected" x:Name="RemoveBtn" IsEnabled="False"/>
+        <StackPanel Grid.Row="1" Margin="0,4,0,6">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <Button Content="Add from File..." Padding="10,5" Margin="0,0,6,0"
+                        Background="#0078D4" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"
+                        Click="OnAddFromFile"/>
+                <Button x:Name="ImportCacheBtn" Content="Import Downloaded Art" Padding="10,5" Margin="0,0,6,0"
+                        Background="#0078D4" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"
+                        Click="OnImportFromCache"/>
+                <Button Content="Remove Selected" Padding="10,5" Margin="0,0,6,0"
+                        Background="Transparent" Foreground="#E06060" BorderThickness="0" Cursor="Hand" FontSize="11"
+                        Click="OnRemoveSelected" x:Name="RemoveBtn" IsEnabled="False"/>
+                <Button Content="Regenerate Thumbnails" Padding="10,5"
+                        Background="Transparent" Foreground="#AAA" BorderThickness="0" Cursor="Hand" FontSize="11"
+                        Click="OnRegenerateThumbnails" x:Name="RegenThumbBtn"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Move Library..." Padding="10,5" Margin="0,0,6,0"
+                        Background="#3E3E42" Foreground="#CCC" BorderThickness="0" Cursor="Hand" FontSize="11"
+                        Click="OnMoveLibrary"/>
+                <Button Content="Export as ZIP..." Padding="10,5" Margin="0,0,6,0"
+                        Background="#3E3E42" Foreground="#CCC" BorderThickness="0" Cursor="Hand" FontSize="11"
+                        Click="OnExportZip"/>
+                <Button Content="Import from ZIP..." Padding="10,5"
+                        Background="#3E3E42" Foreground="#CCC" BorderThickness="0" Cursor="Hand" FontSize="11"
+                        Click="OnImportZip"/>
+            </StackPanel>
         </StackPanel>
 
         <!-- Filter bar -->

@@ -251,14 +251,14 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         private void ManageFrontArtLibrary()
         {
-            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService, _imageCacheService);
+            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService, _imageCacheService, _appSettings);
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
         }
 
         private void ManageBackArtLibrary()
         {
-            var dialog = new Dialogs.BackArtLibraryDialog(_backArtLibraryService, _mpcFillService);
+            var dialog = new Dialogs.BackArtLibraryDialog(_backArtLibraryService, _mpcFillService, _appSettings);
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
         }

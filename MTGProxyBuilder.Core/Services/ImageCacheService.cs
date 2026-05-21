@@ -111,6 +111,24 @@ namespace MTGProxyBuilder.Core.Services
             catch { }
         }
 
+        /// <summary>Removes a single cached image by its card ID key.</summary>
+        public bool Remove(string cardId)
+        {
+            if (!_fileIndex.TryGetValue(cardId, out var path))
+                return false;
+
+            if (File.Exists(path))
+            {
+                try { File.Delete(path); }
+                catch { return false; }
+            }
+
+            _fileIndex.Remove(cardId);
+            if (_metaIndex.Remove(cardId))
+                SaveMetadata();
+            return true;
+        }
+
         public void ClearCache()
         {
             if (Directory.Exists(_cacheDirectory))

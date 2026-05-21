@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.Win32;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
+using MTGProxyBuilder.UI.Services;
 
 namespace MTGProxyBuilder.UI.Dialogs
 {
@@ -18,13 +19,20 @@ namespace MTGProxyBuilder.UI.Dialogs
     {
         private readonly BackArtLibraryService _library;
         private readonly MpcFillService _mpcFill;
-        private string? _selectedEntryId;
+        private readonly AppSettingsService? _appSettings;
+        private ThumbnailService _thumbnails;
+        private readonly HashSet<string> _selectedEntryIds = new();
+        private readonly List<string> _displayedEntryIds = new();
+        private string? _lastSelectedId;
+        private int _anchorIndex = -1;
 
-        public BackArtLibraryDialog(BackArtLibraryService library, MpcFillService mpcFill)
+        public BackArtLibraryDialog(BackArtLibraryService library, MpcFillService mpcFill, AppSettingsService? appSettings = null)
         {
             InitializeComponent();
             _library = library;
             _mpcFill = mpcFill;
+            _appSettings = appSettings;
+            _thumbnails = new ThumbnailService(library.LibraryDirectory);
             PopulateSourceFilter();
             RefreshGrid();
         }
@@ -53,8 +61,12 @@ namespace MTGProxyBuilder.UI.Dialogs
         private void RefreshGrid()
         {
             LibraryPanel.Children.Clear();
-            _selectedEntryId = null;
+            _selectedEntryIds.Clear();
+            _displayedEntryIds.Clear();
+            _lastSelectedId = null;
+            _anchorIndex = -1;
             RemoveBtn.IsEnabled = false;
+            RemoveBtn.Content = "Remove Selected";
             DefaultBtn.IsEnabled = false;
 
             string nameFilter = SearchBox?.Text?.Trim() ?? "";
@@ -70,11 +82,12 @@ namespace MTGProxyBuilder.UI.Dialogs
 
             var filteredEntries = entries.ToList();
 
-            // Build all tiles immediately with placeholder backgrounds
-            var imageTargets = new List<(Image img, string path)>();
+            var imageTargets = new List<(Image img, string entryId, string path)>();
 
             foreach (var entry in filteredEntries)
             {
+                _displayedEntryIds.Add(entry.Id);
+
                 var border = new Border
                 {
                     Width = 100, Height = 150, Margin = new Thickness(4),
@@ -94,7 +107,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                 };
                 var img = new Image { Stretch = Stretch.UniformToFill };
                 imgBorder.Child = img;
-                imageTargets.Add((img, entry.FilePath));
+                imageTargets.Add((img, entry.Id, entry.FilePath));
                 stack.Children.Add(imgBorder);
 
                 bool isDefault = _library.IsDefault(entry.Id);
@@ -154,28 +167,26 @@ namespace MTGProxyBuilder.UI.Dialogs
             CountLabel.Text = $"{totalCount} item(s) in library{filterInfo}{defaultInfo}";
             StatusLabel.Text = "Loading thumbnails...";
 
-            // Load thumbnails on background thread in batches
             _ = LoadThumbnailsAsync(imageTargets);
         }
 
-        private async Task LoadThumbnailsAsync(List<(Image img, string path)> targets)
+        private async Task LoadThumbnailsAsync(List<(Image img, string entryId, string path)> targets)
         {
             const int batchSize = 20;
             for (int i = 0; i < targets.Count; i += batchSize)
             {
                 var batch = targets.Skip(i).Take(batchSize).ToList();
-
-                // Load bitmaps on background thread
                 var bitmaps = await Task.Run(() =>
                 {
                     var results = new List<BitmapImage?>();
-                    foreach (var (_, path) in batch)
+                    foreach (var (_, entryId, path) in batch)
                     {
                         try
                         {
+                            var loadPath = _thumbnails.GetOrCreate(entryId, path) ?? path;
                             var bmp = new BitmapImage();
                             bmp.BeginInit();
-                            bmp.UriSource = new Uri(path, UriKind.Absolute);
+                            bmp.UriSource = new Uri(loadPath, UriKind.Absolute);
                             bmp.CacheOption = BitmapCacheOption.OnLoad;
                             bmp.DecodePixelWidth = 150;
                             bmp.EndInit();
@@ -187,12 +198,8 @@ namespace MTGProxyBuilder.UI.Dialogs
                     return results;
                 });
 
-                // Assign to UI on dispatcher
                 for (int j = 0; j < batch.Count && j < bitmaps.Count; j++)
-                {
-                    if (bitmaps[j] != null)
-                        batch[j].img.Source = bitmaps[j];
-                }
+                    if (bitmaps[j] != null) batch[j].img.Source = bitmaps[j];
             }
 
             StatusLabel.Text = "";
@@ -200,24 +207,55 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private void SelectEntry(string entryId, Border clickedBorder)
         {
-            // Update selection highlight (preserve default green borders)
+            bool isCtrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+            bool isShift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+            int clickedIndex = _displayedEntryIds.IndexOf(entryId);
+
+            if (isShift && _anchorIndex >= 0 && clickedIndex >= 0)
+            {
+                int start = Math.Min(_anchorIndex, clickedIndex);
+                int end = Math.Max(_anchorIndex, clickedIndex);
+                if (!isCtrl) _selectedEntryIds.Clear();
+                for (int i = start; i <= end; i++)
+                    _selectedEntryIds.Add(_displayedEntryIds[i]);
+            }
+            else if (isCtrl)
+            {
+                if (!_selectedEntryIds.Remove(entryId))
+                    _selectedEntryIds.Add(entryId);
+                _anchorIndex = clickedIndex;
+            }
+            else
+            {
+                _selectedEntryIds.Clear();
+                _selectedEntryIds.Add(entryId);
+                _anchorIndex = clickedIndex;
+            }
+
+            _lastSelectedId = _selectedEntryIds.Contains(entryId) ? entryId : _selectedEntryIds.LastOrDefault();
+
+            // Update all borders: selected = blue, default = green, else transparent
             foreach (var child in LibraryPanel.Children)
             {
                 if (child is Border b && b.Tag is string id)
                 {
-                    b.BorderBrush = _library.IsDefault(id)
-                        ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
-                        : Brushes.Transparent;
+                    if (_selectedEntryIds.Contains(id))
+                        b.BorderBrush = Brushes.DodgerBlue;
+                    else if (_library.IsDefault(id))
+                        b.BorderBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50));
+                    else
+                        b.BorderBrush = Brushes.Transparent;
                 }
             }
 
-            clickedBorder.BorderBrush = Brushes.DodgerBlue;
-            _selectedEntryId = entryId;
-            RemoveBtn.IsEnabled = true;
-            DefaultBtn.IsEnabled = true;
+            RemoveBtn.IsEnabled = _selectedEntryIds.Count > 0;
+            RemoveBtn.Content = _selectedEntryIds.Count > 1
+                ? $"Remove Selected ({_selectedEntryIds.Count})"
+                : "Remove Selected";
+            DefaultBtn.IsEnabled = _lastSelectedId != null;
 
-            // Load preview
-            var entry = _library.GetById(entryId);
+            // Load preview for clicked item
+            var entry = _lastSelectedId != null ? _library.GetById(_lastSelectedId) : null;
             if (entry != null && File.Exists(entry.FilePath))
             {
                 string sourceInfo = !string.IsNullOrEmpty(entry.Source) && entry.Source != "Local"
@@ -249,9 +287,9 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private void OnSetDefault(object sender, RoutedEventArgs e)
         {
-            if (_selectedEntryId == null) return;
-            _library.SetDefault(_selectedEntryId);
-            var entry = _library.GetById(_selectedEntryId);
+            if (_lastSelectedId == null) return;
+            _library.SetDefault(_lastSelectedId);
+            var entry = _library.GetById(_lastSelectedId);
             StatusLabel.Text = $"Default set to \"{entry?.Name}\"";
             RefreshGrid();
         }
@@ -265,17 +303,52 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private void OnRemoveSelected(object sender, RoutedEventArgs e)
         {
-            if (_selectedEntryId == null) return;
+            if (_selectedEntryIds.Count == 0) return;
 
-            var entry = _library.GetById(_selectedEntryId);
-            string name = entry?.Name ?? "this item";
+            string message;
+            if (_selectedEntryIds.Count == 1)
+            {
+                var entry = _library.GetById(_selectedEntryIds.First());
+                message = $"Remove \"{entry?.Name ?? "this item"}\" from the library?";
+            }
+            else
+            {
+                message = $"Remove {_selectedEntryIds.Count} items from the library?";
+            }
 
-            var result = MessageBox.Show($"Remove \"{name}\" from the library?",
-                "Remove", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var result = MessageBox.Show(message, "Remove", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result != MessageBoxResult.Yes) return;
 
-            _library.Remove(_selectedEntryId);
-            StatusLabel.Text = $"Removed \"{name}\"";
+            int removed = 0;
+            foreach (var id in _selectedEntryIds.ToList())
+            {
+                _thumbnails.Delete(id);
+                if (_library.Remove(id)) removed++;
+            }
+            _selectedEntryIds.Clear();
+            _lastSelectedId = null;
+            StatusLabel.Text = $"Removed {removed} item(s)";
+            PopulateSourceFilter();
+            RefreshGrid();
+        }
+
+        private async void OnRegenerateThumbnails(object sender, RoutedEventArgs e)
+        {
+            RegenThumbBtn.IsEnabled = false;
+            StatusLabel.Text = "Regenerating thumbnails...";
+
+            var entries = _library.Entries
+                .Where(en => File.Exists(en.FilePath))
+                .Select(en => (en.Id, en.FilePath))
+                .ToList();
+
+            int generated = await Task.Run(() =>
+                _thumbnails.RegenerateAll(entries,
+                    onProgress: (done, total) =>
+                        Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Regenerating thumbnails {done}/{total}...")));
+
+            StatusLabel.Text = $"Regenerated {generated} thumbnail(s)";
+            RegenThumbBtn.IsEnabled = true;
             RefreshGrid();
         }
 
@@ -328,6 +401,87 @@ namespace MTGProxyBuilder.UI.Dialogs
             {
                 DownloadBtn.IsEnabled = true;
             }
+        }
+
+        // ================================================================
+        //  LIBRARY MANAGEMENT
+        // ================================================================
+
+        private async void OnMoveLibrary(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "Select new location for the back art library"
+            };
+            if (dialog.ShowDialog() != true) return;
+
+            string newDir = Path.Combine(dialog.FolderName, "BackArtLibrary");
+            if (string.Equals(newDir, _library.LibraryDirectory, StringComparison.OrdinalIgnoreCase))
+            {
+                StatusLabel.Text = "Selected directory is the same as current.";
+                return;
+            }
+
+            var confirm = MessageBox.Show(
+                $"Move {_library.Entries.Count} image(s) to:\n{newDir}\n\nThis will move all files and delete the old location.",
+                "Move Library", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            StatusLabel.Text = "Moving library...";
+
+            await Task.Run(() => _library.MoveToDirectory(newDir,
+                onProgress: (done, total) =>
+                    Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Moving {done}/{total}...")));
+
+            _thumbnails = new ThumbnailService(_library.LibraryDirectory);
+
+            if (_appSettings != null)
+            {
+                _appSettings.Settings.BackArtLibraryPath = newDir;
+                _appSettings.Save();
+            }
+
+            StatusLabel.Text = $"Library moved to {newDir}";
+            RefreshGrid();
+        }
+
+        private async void OnExportZip(object sender, RoutedEventArgs e)
+        {
+            var dialog = new SaveFileDialog
+            {
+                Filter = "ZIP Archive (*.zip)|*.zip",
+                Title = "Export Back Art Library",
+                FileName = "BackArtLibrary.zip"
+            };
+            if (dialog.ShowDialog() != true) return;
+
+            StatusLabel.Text = "Exporting library...";
+
+            await Task.Run(() => _library.ExportToZip(dialog.FileName,
+                onProgress: (done, total) =>
+                    Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Compressing {done}/{total}...")));
+
+            StatusLabel.Text = $"Exported to {Path.GetFileName(dialog.FileName)}";
+        }
+
+        private async void OnImportZip(object sender, RoutedEventArgs e)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "ZIP Archive (*.zip)|*.zip",
+                Title = "Import Back Art Library from ZIP"
+            };
+            if (dialog.ShowDialog() != true) return;
+
+            StatusLabel.Text = "Importing from ZIP...";
+
+            int added = await Task.Run(() => _library.ImportFromZip(dialog.FileName,
+                onProgress: (done, total) =>
+                    Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Importing {done}/{total}...")));
+
+            StatusLabel.Text = $"Imported {added} new image(s) from ZIP";
+            PopulateSourceFilter();
+            RefreshGrid();
         }
 
         private void OnClose(object sender, RoutedEventArgs e)
