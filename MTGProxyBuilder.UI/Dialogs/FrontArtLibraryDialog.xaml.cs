@@ -20,17 +20,20 @@ namespace MTGProxyBuilder.UI.Dialogs
         private readonly FrontArtLibraryService _library;
         private readonly ImageCacheService? _imageCache;
         private readonly AppSettingsService? _appSettings;
+        private readonly ScryfallService? _scryfall;
         private ThumbnailService _thumbnails;
         private readonly HashSet<string> _selectedEntryIds = new();
         private readonly List<string> _displayedEntryIds = new();
         private int _anchorIndex = -1;
 
-        public FrontArtLibraryDialog(FrontArtLibraryService library, ImageCacheService? imageCache = null, AppSettingsService? appSettings = null)
+        public FrontArtLibraryDialog(FrontArtLibraryService library, ImageCacheService? imageCache = null,
+            AppSettingsService? appSettings = null, ScryfallService? scryfall = null)
         {
             InitializeComponent();
             _library = library;
             _imageCache = imageCache;
             _appSettings = appSettings;
+            _scryfall = scryfall;
             _thumbnails = new ThumbnailService(library.LibraryDirectory);
             ImportCacheBtn.Visibility = _imageCache != null ? Visibility.Visible : Visibility.Collapsed;
             PopulateSourceFilter();
@@ -291,6 +294,35 @@ namespace MTGProxyBuilder.UI.Dialogs
                 }
             }
             finally { _library.EndBatch(); }
+
+            // Populate metadata from Scryfall for newly added entries
+            if (newEntries.Count > 0 && _scryfall != null)
+            {
+                StatusLabel.Text = $"Looking up card metadata for {newEntries.Count} new image(s)...";
+                for (int i = 0; i < newEntries.Count; i++)
+                {
+                    var entry = _library.GetById(newEntries[i].Id);
+                    if (entry == null || !string.IsNullOrEmpty(entry.TypeLine)) continue;
+
+                    // Extract card name from display name (e.g. "Lightning Bolt [Chilli_Axe]" → "Lightning Bolt")
+                    string cardName = entry.Name;
+                    int bracketIdx = cardName.LastIndexOf('[');
+                    if (bracketIdx > 0) cardName = cardName[..bracketIdx].Trim();
+
+                    StatusLabel.Text = $"Looking up metadata {i + 1}/{newEntries.Count}: {cardName}...";
+                    await Task.Delay(10);
+
+                    try
+                    {
+                        var sc = await _scryfall.GetCardByNameAsync(cardName);
+                        if (sc != null)
+                            _library.ApplyMetadata(entry.Id, sc);
+                    }
+                    catch { }
+
+                    await Task.Delay(100); // rate limiting
+                }
+            }
 
             // Generate thumbnails for newly added entries
             if (newEntries.Count > 0)

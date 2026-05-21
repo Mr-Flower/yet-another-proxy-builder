@@ -20,6 +20,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly AppSettingsService _appSettings = new();
         private readonly MpcFillSourceManager _mpcSourceManager = new();
         private readonly ImageCacheService _imageCacheService;
+        private readonly ScryfallService _scryfallService;
         private readonly MpcFillService _mpcFillService;
         private readonly BackArtLibraryService _backArtLibraryService;
         private readonly FrontArtLibraryService _frontArtLibraryService;
@@ -33,6 +34,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         public ShellViewModel()
         {
             _imageCacheService = new ImageCacheService();
+            _scryfallService = new ScryfallService(_imageCacheService);
             _mpcFillService = new MpcFillService(_imageCacheService, _mpcSourceManager);
             _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
             _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
@@ -253,7 +255,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         private void ManageFrontArtLibrary()
         {
-            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService, _imageCacheService, _appSettings);
+            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService, _imageCacheService, _appSettings, _scryfallService);
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
         }

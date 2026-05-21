@@ -700,11 +700,47 @@ namespace MTGProxyBuilder.UI.Dialogs
                         added++;
                         newEntries.Add((entry.Id, entry.FilePath));
                         importedCacheKeys.Add(key);
+
+                        // Apply Scryfall metadata if available
+                        if (_scryfallCardsByPath.TryGetValue(path, out var sc))
+                            _frontArtLibrary.ApplyMetadata(entry.Id, sc);
                     }
                     else skipped++;
                 }
             }
             finally { _frontArtLibrary.EndBatch(); }
+
+            // Populate metadata from Scryfall for entries that don't already have it
+            if (newEntries.Count > 0 && _frontArtLibrary != null)
+            {
+                int looked = 0;
+                for (int i = 0; i < newEntries.Count; i++)
+                {
+                    var entry = _frontArtLibrary.GetById(newEntries[i].Id);
+                    if (entry == null || !string.IsNullOrEmpty(entry.TypeLine)) continue;
+
+                    string cardName = entry.Name;
+                    int bracketIdx = cardName.LastIndexOf('[');
+                    if (bracketIdx > 0) cardName = cardName[..bracketIdx].Trim();
+
+                    StatusLabel.Text = $"Looking up metadata {i + 1}/{newEntries.Count}: {cardName}...";
+
+                    try
+                    {
+                        var sc = await _scryfall.GetCardByNameAsync(cardName);
+                        if (sc != null)
+                        {
+                            _frontArtLibrary.ApplyMetadata(entry.Id, sc);
+                            looked++;
+                        }
+                    }
+                    catch { }
+
+                    await Task.Delay(100);
+                }
+                if (looked > 0)
+                    StatusLabel.Text = $"Populated metadata for {looked} of {newEntries.Count} entries";
+            }
 
             // Generate thumbnails for newly added entries
             if (newEntries.Count > 0 && _frontThumbnails != null)
