@@ -76,6 +76,17 @@ namespace MTGProxyBuilder.UI.Dialogs
             UpdateFavoritesInfo();
         }
 
+        private void OnNavChanged(object sender, RoutedEventArgs e)
+        {
+            if (PageGeneral == null) return; // designer guard
+
+            PageGeneral.Visibility = NavGeneral.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PageLibraries.Visibility = NavLibraries.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PageMpcFill.Visibility = NavMpcFill.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PageLanguages.Visibility = NavLanguages.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PageFilters.Visibility = NavFilters.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private void UpdateFavoritesInfo()
         {
             int favCount = _sourceManager.FavoritePks.Count;
