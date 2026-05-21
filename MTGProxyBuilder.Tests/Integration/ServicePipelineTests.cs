@@ -835,6 +835,43 @@ public class ServicePipelineTests : IDisposable
     }
 
     [Fact]
+    public void Library_MoveToExisting_MergesEntries()
+    {
+        var tmpImage = Path.Combine(_testOutputDir, "merge_test.png");
+        File.WriteAllBytes(tmpImage, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+
+        // Create destination library with one entry
+        string destDir = Path.Combine(_testOutputDir, "MergeDest");
+        var destLib = new FrontArtLibraryService(destDir);
+        var destEntry = destLib.AddFromFile(tmpImage, $"DestCard_{Guid.NewGuid():N}", "DestSource");
+        Assert.NotNull(destEntry);
+
+        // Create source library with a different entry
+        string srcDir = Path.Combine(_testOutputDir, "MergeSrc");
+        var srcLib = new FrontArtLibraryService(srcDir);
+        var srcEntry = srcLib.AddFromFile(tmpImage, $"SrcCard_{Guid.NewGuid():N}", "SrcSource");
+        Assert.NotNull(srcEntry);
+
+        // Move source into destination
+        var newIds = srcLib.MoveToDirectory(destDir);
+
+        // Verify merge results
+        Assert.Single(newIds);
+        Assert.Equal(srcEntry!.Id, newIds[0]);
+        Assert.Equal(2, srcLib.Entries.Count);
+        Assert.All(srcLib.Entries, e => Assert.True(File.Exists(e.FilePath)));
+
+        // Verify a fresh load from the merged catalog sees both entries
+        var reloaded = new FrontArtLibraryService(destDir);
+        Assert.Equal(2, reloaded.Entries.Count);
+        Assert.Contains(reloaded.Entries, e => e.Source == "DestSource");
+        Assert.Contains(reloaded.Entries, e => e.Source == "SrcSource");
+
+        // Old source directory should be cleaned up
+        Assert.False(Directory.Exists(srcDir));
+    }
+
+    [Fact]
     public void ImageCache_Remove_CleansUpAfterLibraryImport()
     {
         // Simulate the cache-to-library import workflow
