@@ -130,25 +130,9 @@
         </StackPanel>
 
         <!-- Search and Source Filter -->
-        <Grid Grid.Row="4" Margin="0,0,0,6">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <Grid Grid.Column="0">
-                <TextBox x:Name="SearchBox" Background="#3E3E42" Foreground="White"
-                         BorderBrush="#555" CaretBrush="White" Padding="6,4" FontSize="12"
-                         TextChanged="OnSearchTextChanged"/>
-                <TextBlock x:Name="SearchPlaceholder" Text="Search by name, source, details..."
-                           Foreground="#666" FontSize="12" IsHitTestVisible="False"
-                           VerticalAlignment="Center" Margin="8,0,0,0"/>
-            </Grid>
-            <ComboBox x:Name="SourceFilterBox" Grid.Column="1"
-                      Width="160" Margin="6,0,0,0" Padding="4" FontSize="11"
-                      SelectionChanged="OnSourceFilterChanged">
-                <ComboBoxItem Content="All Sources" Tag="" IsSelected="True"/>
-            </ComboBox>
-        </Grid>
+        <controls:SearchBar x:Name="SearchBar" Grid.Row="4" Margin="0,0,0,6"
+                            Placeholder="Search art (name:, t:, s:, r:, c:, a:, source:...)"
+                            SearchRequested="OnSearchRequested" SourceChanged="OnSourceChanged"/>
 
         <!-- Main content: tiles + preview -->
         <Grid Grid.Row="5">

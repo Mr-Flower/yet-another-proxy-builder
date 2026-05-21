@@ -54,23 +54,9 @@
         </StackPanel>
 
         <!-- Search bar -->
-        <Grid Grid.Row="2" Margin="0,0,0,6">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="8"/>
-                <ColumnDefinition Width="160"/>
-            </Grid.ColumnDefinitions>
-            <TextBox x:Name="SearchBox" Padding="6,4" FontSize="11"
-                     Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"
-                     KeyDown="OnSearchKeyDown"
-                     ToolTip="Scryfall-like syntax: name:text source:text date&gt;2025-01-01 &quot;exact phrase&quot; -exclude term1 OR term2"/>
-            <Button Grid.Column="1" Content="Search" Padding="10,4" Margin="4,0,0,0"
-                    Background="#0078D4" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"
-                    Click="OnSearchClick"/>
-            <ComboBox Grid.Column="3" x:Name="SourceFilter" Padding="4" FontSize="11"
-                      SelectionChanged="OnSourceFilterChanged"/>
-        </Grid>
+        <controls:SearchBar x:Name="SearchBar" Grid.Row="2" Margin="0,0,0,6"
+                            Placeholder="Search library (name:, t:, s:, r:, c:, a:, o:, kw:, cmc, date...)"
+                            SearchRequested="OnSearchRequested" SourceChanged="OnSourceChanged"/>
 
         <!-- Main content: Grid + Preview side by side -->
         <Grid Grid.Row="3">

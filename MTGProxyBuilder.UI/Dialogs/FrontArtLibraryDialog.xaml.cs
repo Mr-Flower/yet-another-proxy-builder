@@ -43,30 +43,13 @@ namespace MTGProxyBuilder.UI.Dialogs
                 .Select(e => e.Source)
                 .Where(s => !string.IsNullOrEmpty(s))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(s => s)
-                .ToList();
+                .OrderBy(s => s);
 
-            SourceFilter.Items.Clear();
-            SourceFilter.Items.Add("All Sources");
-            foreach (var s in sources)
-                SourceFilter.Items.Add(s);
-            SourceFilter.SelectedIndex = 0;
+            SearchBar.SetSources(sources, "All Sources");
         }
 
-        private void OnSearchKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-        {
-            if (e.Key == System.Windows.Input.Key.Enter) RefreshGrid();
-        }
-
-        private void OnSearchClick(object sender, RoutedEventArgs e)
-        {
-            RefreshGrid();
-        }
-
-        private void OnSourceFilterChanged(object sender, object e)
-        {
-            RefreshGrid();
-        }
+        private void OnSearchRequested(object? sender, EventArgs e) => RefreshGrid();
+        private void OnSourceChanged(object? sender, EventArgs e) => RefreshGrid();
 
         private void RefreshGrid()
         {
@@ -77,16 +60,16 @@ namespace MTGProxyBuilder.UI.Dialogs
             RemoveBtn.IsEnabled = false;
             RemoveBtn.Content = "Remove Selected";
 
-            string searchQuery = SearchBox?.Text?.Trim() ?? "";
-            string sourceFilter = SourceFilter?.SelectedItem as string ?? "All Sources";
-
             var entries = _library.Entries.Where(e => File.Exists(e.FilePath)).AsEnumerable();
 
-            var searchPredicate = LibrarySearchParser.Parse(searchQuery);
+            var searchPredicate = LibrarySearchParser.Parse(SearchBar.SearchText);
             entries = entries.Where(searchPredicate);
 
-            if (sourceFilter != "All Sources")
+            if (!SearchBar.IsAllSourcesSelected)
+            {
+                string sourceFilter = SearchBar.SelectedSource;
                 entries = entries.Where(e => e.Source.Equals(sourceFilter, StringComparison.OrdinalIgnoreCase));
+            }
 
             var filteredEntries = entries.ToList();
 

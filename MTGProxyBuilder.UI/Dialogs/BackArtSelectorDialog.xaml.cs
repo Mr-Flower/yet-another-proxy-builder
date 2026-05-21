@@ -172,25 +172,15 @@ namespace MTGProxyBuilder.UI.Dialogs
         //  SEARCH & SOURCE FILTER
         // ================================================================
 
-        private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
-        {
-            if (SearchPlaceholder != null)
-                SearchPlaceholder.Visibility = string.IsNullOrEmpty(SearchBox.Text)
-                    ? Visibility.Visible : Visibility.Collapsed;
-            ApplyFilters();
-        }
-
-        private void OnSourceFilterChanged(object sender, SelectionChangedEventArgs e)
-        {
-            ApplyFilters();
-        }
+        private void OnSearchRequested(object? sender, EventArgs e) => ApplyFilters();
+        private void OnSourceChanged(object? sender, EventArgs e) => ApplyFilters();
 
         private void ApplyFilters()
         {
             if (_allTiles.Count == 0) return;
 
-            string searchText = SearchBox?.Text?.Trim() ?? "";
-            string sourceFilter = (SourceFilterBox?.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
+            string searchText = SearchBar?.SearchText ?? "";
+            string sourceFilter = SearchBar?.IsAllSourcesSelected == false ? SearchBar.SelectedSource : "";
 
             foreach (var tile in _allTiles)
             {
@@ -214,30 +204,13 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private void PopulateSourceFilter()
         {
-            var currentSource = (SourceFilterBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
-            SourceFilterBox.SelectionChanged -= OnSourceFilterChanged;
-
-            SourceFilterBox.Items.Clear();
-            var allItem = new ComboBoxItem { Content = "All Sources", Tag = "" };
-            SourceFilterBox.Items.Add(allItem);
-            SourceFilterBox.SelectedItem = allItem;
-
             var sources = _allTiles
                 .Where(t => !t.IsAction && !string.IsNullOrEmpty(t.Source))
                 .Select(t => t.Source)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(s => s)
-                .ToList();
+                .OrderBy(s => s);
 
-            foreach (var source in sources)
-            {
-                var item = new ComboBoxItem { Content = source, Tag = source };
-                SourceFilterBox.Items.Add(item);
-                if (source.Equals(currentSource, StringComparison.OrdinalIgnoreCase))
-                    SourceFilterBox.SelectedItem = item;
-            }
-
-            SourceFilterBox.SelectionChanged += OnSourceFilterChanged;
+            SearchBar.SetSources(sources, "All Sources");
         }
 
         private void OkClick(object sender, RoutedEventArgs e)
