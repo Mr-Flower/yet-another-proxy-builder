@@ -14,29 +14,42 @@ namespace MTGProxyBuilder.Core.Services
     ///     !fire                Name equals exactly (case-insensitive)
     ///     !"Black Lotus"       exact name with spaces
     ///
-    ///   FIELD FILTERS (prefix:value)
-    ///     name:text  n:text    match Name
-    ///     source:text  src:text  s:text   match Source/contributor
-    ///     id:text              match entry Id
+    ///   TEXT FIELD FILTERS (prefix:value)
+    ///     name:text  n:text             match Name
+    ///     source:text  src:text          match Source/contributor
+    ///     type:text  t:text              match TypeLine (e.g. t:creature, t:instant)
+    ///     oracle:text  o:text            match Oracle text
+    ///     keyword:text  kw:text          match Keywords (e.g. kw:flying)
+    ///     artist:text  a:text            match Artist
+    ///     set:code  s:code  e:code       match Set code or name
+    ///     rarity:value  r:value          match Rarity (common, uncommon, rare, mythic)
+    ///     color:wubrg  c:wubrg           match Colors (w/u/b/r/g, c for colorless)
+    ///     id:wubrg  identity:wubrg       match Color Identity
+    ///     mana:text  m:text              match Mana Cost string
+    ///     cn:number  number:number       match Collector Number
+    ///
+    ///   NUMERIC COMPARISONS
+    ///     cmc&gt;3  mv=5                 mana value comparison
+    ///     pow&gt;=4  power&lt;2           power comparison
+    ///     tou&gt;3  toughness&lt;=5       toughness comparison
+    ///     loy=3  loyalty&gt;=4            loyalty comparison
+    ///     r&gt;uncommon                  rarity comparison (common&lt;uncommon&lt;rare&lt;mythic)
     ///
     ///   DATE COMPARISONS
-    ///     date&gt;2025-01-01   added after date
-    ///     date&lt;2025-06-01   added before date
-    ///     date=2025-03-15     added on exact date
-    ///     date&gt;=  date&lt;=  date!=   also supported
-    ///     added: / d:         aliases for date
+    ///     date&gt;2025-01-01             added after date
+    ///     date&lt;2025-06-01             added before date
+    ///     date=2025-03-15               added on exact date
     ///
     ///   REGEX
-    ///     name:/pattern/       regex match on Name
-    ///     source:/pattern/     regex match on Source
+    ///     name:/pattern/                regex match on Name
+    ///     type:/pattern/                regex match on TypeLine
+    ///     oracle:/pattern/              regex match on Oracle text
     ///
     ///   LOGIC
-    ///     term1 term2          AND (all must match)
-    ///     term1 OR term2       OR  (either matches, case-insensitive "or")
-    ///     term1 or term2       same
-    ///     -term                negation (exclude matches)
-    ///     -source:Chilli       negate any prefixed filter
-    ///     (group1) (group2)    parenthetical grouping
+    ///     term1 term2                   AND (all must match)
+    ///     term1 OR term2                OR  (either matches)
+    ///     -term                         negation (exclude matches)
+    ///     (group1) (group2)             parenthetical grouping
     /// </summary>
     public static class LibrarySearchParser
     {
@@ -167,6 +180,28 @@ namespace MTGProxyBuilder.Core.Services
                     continue;
                 }
 
+                // Prefixed with quoted value: prefix:"quoted value" or -prefix:"quoted value"
+                {
+                    int peek = i;
+                    if (input[peek] == '-') peek++;
+                    // Check if there's a word followed by : or operator then "
+                    while (peek < input.Length && (char.IsLetterOrDigit(input[peek]) || input[peek] == '_')) peek++;
+                    if (peek < input.Length && (input[peek] == ':' || input[peek] == '>' || input[peek] == '<' || input[peek] == '=' || input[peek] == '!'))
+                    {
+                        while (peek < input.Length && (input[peek] == ':' || input[peek] == '>' || input[peek] == '<' || input[peek] == '=' || input[peek] == '!')) peek++;
+                        if (peek < input.Length && input[peek] == '"')
+                        {
+                            // Found prefix:operator"...", consume through closing quote
+                            peek++;
+                            while (peek < input.Length && input[peek] != '"') peek++;
+                            if (peek < input.Length) peek++; // closing quote
+                            tokens.Add(input[i..peek]);
+                            i = peek;
+                            continue;
+                        }
+                    }
+                }
+
                 // Regular token (until next whitespace or opening paren)
                 {
                     int start = i;
@@ -227,11 +262,16 @@ namespace MTGProxyBuilder.Core.Services
                     return field switch
                     {
                         "name" or "n" => e => rx.IsMatch(e.Name),
-                        "source" or "src" or "s" => e => rx.IsMatch(e.Source),
+                        "source" or "src" => e => rx.IsMatch(e.Source),
+                        "type" or "t" => e => rx.IsMatch(e.TypeLine),
+                        "oracle" or "o" => e => rx.IsMatch(e.OracleText),
+                        "artist" or "a" => e => rx.IsMatch(e.Artist),
+                        "set" or "e" => e => rx.IsMatch(e.SetCode) || rx.IsMatch(e.SetName),
+                        "keyword" or "kw" => e => rx.IsMatch(e.Keywords),
                         _ => e => rx.IsMatch(e.Name)
                     };
                 }
-                catch { return _ => true; } // invalid regex, don't filter
+                catch { return _ => true; }
             }
 
             // Prefixed filters: field:value, field>=value, etc.
@@ -244,11 +284,33 @@ namespace MTGProxyBuilder.Core.Services
 
                 return field switch
                 {
-                    "name" or "n" => NameFilter(value),
-                    "source" or "src" or "s" => SourceFilter(value),
-                    "id" => e => e.Id.Contains(value, StringComparison.OrdinalIgnoreCase),
-                    "date" or "added" or "d" => DateFilter(op, value),
-                    _ => NameFilter(token) // unknown prefix, treat whole thing as name search
+                    // Text fields
+                    "name" or "n" => TextFilter(e => e.Name, value),
+                    "source" or "src" => TextFilter(e => e.Source, value),
+                    "type" or "t" => TextFilter(e => e.TypeLine, value),
+                    "oracle" or "o" => TextFilter(e => e.OracleText, value),
+                    "keyword" or "kw" => TextFilter(e => e.Keywords, value),
+                    "artist" or "a" => TextFilter(e => e.Artist, value),
+                    "set" or "s" or "e" or "edition" => SetFilter(value),
+                    "rarity" or "r" => RarityFilter(op, value),
+                    "color" or "c" => ColorFilter(e => e.Colors, value),
+                    "id" or "identity" => ColorFilter(e => e.ColorIdentity, value),
+                    "mana" or "m" => TextFilter(e => e.ManaCost, value),
+                    "cn" or "number" => TextFilter(e => e.CollectorNumber, value),
+
+                    // Numeric fields
+                    "cmc" or "mv" or "manavalue" => NumericFilter(e => e.CMC, op, value),
+                    "pow" or "power" => NumericFilter(e => ParseNumeric(e.Power), op, value),
+                    "tou" or "toughness" => NumericFilter(e => ParseNumeric(e.Toughness), op, value),
+                    "loy" or "loyalty" => NumericFilter(e => ParseNumeric(e.Loyalty), op, value),
+
+                    // Date
+                    "date" or "added" or "d" or "year" => DateFilter(op, value),
+
+                    // Entry ID
+                    "entryid" => TextFilter(e => e.Id, value),
+
+                    _ => NameFilter(token)
                 };
             }
 
@@ -263,13 +325,101 @@ namespace MTGProxyBuilder.Core.Services
         private static Func<BackArtEntry, bool> NameFilter(string value)
             => e => e.Name.Contains(value, StringComparison.OrdinalIgnoreCase);
 
-        private static Func<BackArtEntry, bool> SourceFilter(string value)
-            => e => e.Source.Contains(value, StringComparison.OrdinalIgnoreCase);
+        private static Func<BackArtEntry, bool> TextFilter(Func<BackArtEntry, string> field, string value)
+            => e => field(e).Contains(value, StringComparison.OrdinalIgnoreCase);
+
+        private static Func<BackArtEntry, bool> SetFilter(string value)
+            => e => e.SetCode.Equals(value, StringComparison.OrdinalIgnoreCase)
+                 || e.SetName.Contains(value, StringComparison.OrdinalIgnoreCase);
+
+        private static Func<BackArtEntry, bool> RarityFilter(string op, string value)
+        {
+            // Support both comparison and text match
+            if (op == ":" || op == "=")
+                return e => e.Rarity.Equals(value, StringComparison.OrdinalIgnoreCase);
+            if (op == "!=")
+                return e => !e.Rarity.Equals(value, StringComparison.OrdinalIgnoreCase);
+
+            // Numeric comparison: common=1, uncommon=2, rare=3, mythic=4
+            int targetRank = RarityRank(value);
+            return op switch
+            {
+                ">" => e => RarityRank(e.Rarity) > targetRank,
+                ">=" => e => RarityRank(e.Rarity) >= targetRank,
+                "<" => e => RarityRank(e.Rarity) < targetRank,
+                "<=" => e => RarityRank(e.Rarity) <= targetRank,
+                _ => e => e.Rarity.Equals(value, StringComparison.OrdinalIgnoreCase)
+            };
+        }
+
+        private static int RarityRank(string rarity) => rarity.ToLowerInvariant() switch
+        {
+            "common" => 1, "uncommon" => 2, "rare" => 3, "mythic" => 4,
+            "special" => 5, "bonus" => 6, _ => 0
+        };
+
+        private static Func<BackArtEntry, bool> ColorFilter(Func<BackArtEntry, string> field, string value)
+        {
+            string lower = value.ToLowerInvariant();
+
+            // Handle "colorless" or single "c" first (before letter parsing)
+            if (lower is "c" or "colorless")
+                return e => string.IsNullOrEmpty(field(e));
+            if (lower is "m" or "multicolor")
+                return e => field(e).Length > 1;
+
+            // Expand color names/letters to single letters for matching
+            var targetColors = new HashSet<char>();
+            foreach (char c in lower)
+            {
+                switch (c)
+                {
+                    case 'w': targetColors.Add('W'); break;
+                    case 'u': targetColors.Add('U'); break;
+                    case 'b': targetColors.Add('B'); break;
+                    case 'r': targetColors.Add('R'); break;
+                    case 'g': targetColors.Add('G'); break;
+                }
+            }
+
+            if (targetColors.Count == 0)
+                return e => field(e).Contains(value, StringComparison.OrdinalIgnoreCase);
+
+            return e =>
+            {
+                var entryColors = field(e).ToUpperInvariant().ToHashSet();
+                return targetColors.All(tc => entryColors.Contains(tc));
+            };
+        }
+
+        private static Func<BackArtEntry, bool> NumericFilter(Func<BackArtEntry, float> field, string op, string value)
+        {
+            if (!float.TryParse(value, out var target))
+                return _ => true;
+
+            return op switch
+            {
+                ">" => e => field(e) > target,
+                ">=" or ":>=" => e => field(e) >= target,
+                "<" => e => field(e) < target,
+                "<=" or ":<=" => e => field(e) <= target,
+                "=" or ":" => e => Math.Abs(field(e) - target) < 0.001f,
+                "!=" => e => Math.Abs(field(e) - target) >= 0.001f,
+                _ => _ => true
+            };
+        }
+
+        private static float ParseNumeric(string value)
+        {
+            if (float.TryParse(value, out var f)) return f;
+            // Handle "*" power/toughness as 0
+            return 0;
+        }
 
         private static Func<BackArtEntry, bool> DateFilter(string op, string value)
         {
             if (!DateTime.TryParse(value, out var date))
-                return _ => true; // invalid date, don't filter
+                return _ => true;
 
             return op switch
             {

@@ -42,6 +42,26 @@ namespace MTGProxyBuilder.Core.Models
             set { _addedDate = value; OnPropertyChanged(); }
         }
 
+        // ================================================================
+        //  CARD METADATA (populated from Scryfall when available)
+        // ================================================================
+
+        public string TypeLine { get; set; } = string.Empty;
+        public string OracleText { get; set; } = string.Empty;
+        public string ManaCost { get; set; } = string.Empty;
+        public float CMC { get; set; }
+        public string Rarity { get; set; } = string.Empty;
+        public string Colors { get; set; } = string.Empty;
+        public string ColorIdentity { get; set; } = string.Empty;
+        public string SetCode { get; set; } = string.Empty;
+        public string SetName { get; set; } = string.Empty;
+        public string Artist { get; set; } = string.Empty;
+        public string Power { get; set; } = string.Empty;
+        public string Toughness { get; set; } = string.Empty;
+        public string Loyalty { get; set; } = string.Empty;
+        public string Keywords { get; set; } = string.Empty;
+        public string CollectorNumber { get; set; } = string.Empty;
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)

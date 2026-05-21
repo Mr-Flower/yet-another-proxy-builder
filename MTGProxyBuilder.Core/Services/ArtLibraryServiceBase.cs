@@ -125,6 +125,36 @@ namespace MTGProxyBuilder.Core.Services
             return _entries.FirstOrDefault(e => e.Id == id);
         }
 
+        /// <summary>Populates card metadata on an existing entry. Call after AddFromFile when Scryfall data is available.</summary>
+        public void SetMetadata(string entryId, string? typeLine = null, string? oracleText = null,
+            string? manaCost = null, float? cmc = null, string? rarity = null,
+            string? colors = null, string? colorIdentity = null,
+            string? setCode = null, string? setName = null, string? artist = null,
+            string? power = null, string? toughness = null, string? loyalty = null,
+            string? keywords = null, string? collectorNumber = null)
+        {
+            var entry = GetById(entryId);
+            if (entry == null) return;
+
+            if (typeLine != null) entry.TypeLine = typeLine;
+            if (oracleText != null) entry.OracleText = oracleText;
+            if (manaCost != null) entry.ManaCost = manaCost;
+            if (cmc.HasValue) entry.CMC = cmc.Value;
+            if (rarity != null) entry.Rarity = rarity;
+            if (colors != null) entry.Colors = colors;
+            if (colorIdentity != null) entry.ColorIdentity = colorIdentity;
+            if (setCode != null) entry.SetCode = setCode;
+            if (setName != null) entry.SetName = setName;
+            if (artist != null) entry.Artist = artist;
+            if (power != null) entry.Power = power;
+            if (toughness != null) entry.Toughness = toughness;
+            if (loyalty != null) entry.Loyalty = loyalty;
+            if (keywords != null) entry.Keywords = keywords;
+            if (collectorNumber != null) entry.CollectorNumber = collectorNumber;
+
+            if (!_batchMode) Save();
+        }
+
         // ================================================================
         //  LIBRARY MANAGEMENT
         // ================================================================

@@ -613,6 +613,8 @@ namespace MTGProxyBuilder.UI.Dialogs
                     {
                         string libName = $"{capturedLabel} [{mpcSource}]";
                         var entry = _frontArtLibrary.AddFromFile(path, libName, mpcSource);
+                        if (entry != null && _scryfallCardsByPath.TryGetValue(path, out var sc))
+                            _frontArtLibrary.ApplyMetadata(entry.Id, sc);
                         StatusLabel.Text = entry != null
                             ? $"Saved \"{libName}\" to front art library"
                             : $"\"{libName}\" already in library";
