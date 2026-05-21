@@ -145,50 +145,12 @@ public partial class MainWindow : Window
         }
     }
 
-    // --- Art source radio buttons ---
-
-    private void ArtSourceChanged(object sender, RoutedEventArgs e)
-    {
-        if (Shell?.ActiveProject?.Inner is MainViewModel vm) vm.UseMpcFill = false;
-    }
-
-    private void ArtSourceMpcChanged(object sender, RoutedEventArgs e)
-    {
-        if (Shell?.ActiveProject?.Inner is MainViewModel vm) vm.UseMpcFill = true;
-    }
-
-    // --- Right-click on MPCFill result ---
-
-    private void OnMpcFillResultRightClick(object sender, MouseButtonEventArgs e)
-    {
-        if (Shell?.ActiveProject?.Inner is not MainViewModel vm || vm.SelectedMpcFillCard == null) return;
-
-        var card = vm.SelectedMpcFillCard;
-        bool isFav = vm.MpcSourceManager.IsFavorite(card.SourceId);
-
-        var menu = new ContextMenu();
-        var favItem = new MenuItem
-        {
-            Header = isFav ? $"Remove \"{card.Source}\" from favorites" : $"Add \"{card.Source}\" to favorites"
-        };
-        favItem.Click += (_, _) => vm.ToggleMpcFavoriteFromResultCommand.Execute(card);
-        menu.Items.Add(favItem);
-        menu.IsOpen = true;
-        e.Handled = true;
-    }
-
     // --- Double-click to add ---
 
     private void OnScryfallDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (Shell?.ActiveProject?.Inner is MainViewModel vm && vm.AddScryfallCardCommand.CanExecute(null))
             vm.AddScryfallCardCommand.Execute(null);
-    }
-
-    private void OnMpcFillDoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (Shell?.ActiveProject?.Inner is MainViewModel vm && vm.AddMpcFillCardCommand.CanExecute(null))
-            vm.AddMpcFillCardCommand.Execute(null);
     }
 
     // --- Color picker ---

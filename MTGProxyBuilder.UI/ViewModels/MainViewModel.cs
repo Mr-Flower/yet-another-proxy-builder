@@ -1221,16 +1221,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             if (string.IsNullOrWhiteSpace(ScryfallSearchQuery)) return;
 
             IsSearching = true;
-
-            if (UseMpcFill)
-            {
-                await SearchMpcFill();
-            }
-            else
-            {
-                await SearchScryfall();
-            }
-
+            await SearchScryfall();
             IsSearching = false;
             ClearBusy();
         }
