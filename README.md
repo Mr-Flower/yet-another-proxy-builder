@@ -51,6 +51,12 @@ The release is a self-contained single-file executable that includes everything 
 - **MPCFill Source Manager** — browse 271+ community art sources, favorite by clicking the star, filter searches to favorites only; Refresh button to reload from the API; favorites persist across sessions
 - **Front Art Library** — persistent library of saved card art with thumbnail grid, zoomable preview, search by name, filter by source, add from file, import from cache, and remove; accessible from the global toolbar without an open project
 - **Back Art Library** — standalone dialog with thumbnail grid, zoomable preview with DPI info, contributor filter dropdown, search box, set default back art, download all MPCFill card backs into the library; accessible from the global toolbar
+- **Thumbnail caching** — 200px JPEG thumbnails are auto-generated on first load and cached in a `Thumbnails/` subdirectory for fast subsequent browsing; "Regenerate Thumbnails" button to rebuild all
+- **Multi-select in libraries** — Ctrl+Click to toggle individual items, Shift+Click to range-select all items between the anchor and clicked tile; batch delete with confirmation showing count
+- **Library migration** — "Move Library..." relocates all images, thumbnails, and catalog to a user-chosen directory; the custom path persists in settings so the app uses the new location on restart
+- **Library export/import** — "Export as ZIP..." compresses the entire library (catalog + images) for backup or storage; "Import from ZIP..." restores entries from a previously exported archive, deduplicating by name
+- **Smart cache import** — "Import Downloaded Art" now auto-generates thumbnails for newly added entries and removes the source files from the download cache to avoid duplication
+- **Art selector search** — search textbox and source filter dropdown on both front and back art selector dialogs for real-time filtering of artwork tiles by name, source, or detail text
 - **Default back art** — set a default in the library; new cards automatically get the most common back art from the project (or the library default if the project is empty)
 - **Match Back Art** — right-click context menu to apply the project's most common back art to selected cards
 
@@ -165,6 +171,8 @@ MTGProxyBuilder/
 │   ├── Controls/
 │   │   ├── GridEditorCanvas.cs       # Multi-page canvas with drag-drop, selection, flip, outlines
 │   │   └── ImagePreviewPanel.xaml    # Reusable zoomable image preview with DPI info
+│   ├── Services/
+│   │   └── ThumbnailService.cs       # JPEG thumbnail generation and caching for libraries
 │   ├── Converters/                   # WPF value converters
 │   ├── Dialogs/
 │   │   ├── ArtSelectorDialog         # Front/back art picker with library, filters, preview
@@ -334,10 +342,11 @@ Both libraries are accessible from the global toolbar — no project needs to be
 **Front Art Library:**
 1. Click "Front Art Library" in the top toolbar
 2. Art is automatically added when you add cards from MPCFill search results
-3. Click "Import Downloaded Art" to bulk-import all previously cached MPCFill art with proper card names
+3. Click "Import Downloaded Art" to bulk-import all previously cached MPCFill art (thumbnails are auto-generated and cache files removed)
 4. Click "Add from File..." to import images manually
 5. Use the search box and source dropdown to filter
-6. When selecting art for a card, the library is searched first — matching art loads instantly without network calls
+6. Select multiple items with Ctrl+Click or Shift+Click for range selection; batch delete with "Remove Selected"
+7. When selecting art for a card, the library is searched first — matching art loads instantly without network calls
 
 **Back Art Library:**
 1. Click "Back Art Library" in the top toolbar
@@ -345,7 +354,14 @@ Both libraries are accessible from the global toolbar — no project needs to be
 3. Click a tile to see it in the preview panel (shows DPI, dimensions, source)
 4. Click "Set as Default" to auto-apply it to new cards
 5. Use the search box and contributor dropdown to filter
-6. When adding cards, they automatically get the project's most common back art (or the library default)
+6. Select multiple items with Ctrl+Click or Shift+Click; batch delete supported
+7. When adding cards, they automatically get the project's most common back art (or the library default)
+
+**Library Management (both libraries):**
+- Click "Move Library..." to relocate all images to a different folder (e.g. a larger drive)
+- Click "Export as ZIP..." to create a compressed backup of the entire library
+- Click "Import from ZIP..." to restore entries from a previously exported archive
+- Click "Regenerate Thumbnails" to rebuild all cached thumbnails
 
 ### Exporting PDF
 1. Click "Export PDF" in the toolbar
@@ -432,8 +448,10 @@ Both libraries are accessible from the global toolbar — no project needs to be
 | Image Cache | `%AppData%/MTGProxyBuilder/ImageCache/` | Downloaded card images + metadata.json (cleared on exit) |
 | Bleed Cache | `%AppData%/MTGProxyBuilder/BleedCache/` | Bleed-processed images (cleared on startup) |
 | Extracted Projects | `%AppData%/MTGProxyBuilder/ExtractedProjects/` | Temp images from opened projects (cleared on startup) |
-| Front Art Library | `%AppData%/MTGProxyBuilder/FrontArtLibrary/` | User's saved front art + catalog.json |
-| Back Art Library | `%AppData%/MTGProxyBuilder/BackArtLibrary/` | User's saved back art + catalog.json |
+| Front Art Library | `%AppData%/MTGProxyBuilder/FrontArtLibrary/` | User's saved front art + catalog.json (or custom path from settings) |
+| Front Thumbnails | `<FrontArtLibrary>/Thumbnails/` | Auto-generated 200px JPEG thumbnails |
+| Back Art Library | `%AppData%/MTGProxyBuilder/BackArtLibrary/` | User's saved back art + catalog.json (or custom path from settings) |
+| Back Thumbnails | `<BackArtLibrary>/Thumbnails/` | Auto-generated 200px JPEG thumbnails |
 | MPCFill Favorites | `%AppData%/MTGProxyBuilder/mpcfill_favorite_sources.json` | Favorited source PKs |
 | Projects | User-chosen location | `.mtgproj` ZIP archives |
 

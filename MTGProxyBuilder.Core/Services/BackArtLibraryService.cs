@@ -226,8 +226,8 @@ namespace MTGProxyBuilder.Core.Services
             }
             if (importedCatalog?.Entries == null) return 0;
 
-            int added = 0;
             var imageEntries = importedCatalog.Entries;
+            int countBefore = _entries.Count;
             BeginBatch();
             try
             {
@@ -243,8 +243,7 @@ namespace MTGProxyBuilder.Core.Services
                     try
                     {
                         zipImageEntry.ExtractToFile(tempPath, overwrite: true);
-                        var result = AddFromFile(tempPath, importEntry.Name, importEntry.Source);
-                        if (result != null) added++;
+                        AddFromFile(tempPath, importEntry.Name, importEntry.Source);
                     }
                     finally
                     {
@@ -255,7 +254,7 @@ namespace MTGProxyBuilder.Core.Services
             }
             finally { EndBatch(); }
 
-            return added;
+            return _entries.Count - countBefore;
         }
 
         // ================================================================
