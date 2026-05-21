@@ -647,79 +647,29 @@ namespace MTGProxyBuilder.UI.Controls
 
         private void DuplicateCards(List<int> cardIndices)
         {
-            var cards = CardsSource;
-            if (cards == null) return;
-            UndoSvc?.SaveState(cards);
-
-            // Sort descending so insertions don't shift later indices
-            foreach (var idx in cardIndices.OrderByDescending(i => i))
-            {
-                if (idx < 0 || idx >= cards.Count) continue;
-                var original = cards[idx];
-                var copy = new CardModel
-                {
-                    Name = original.Name,
-                    ArtworkPath = original.ArtworkPath,
-                    BackArtworkPath = original.BackArtworkPath,
-                    OriginalBackArtworkPath = original.OriginalBackArtworkPath,
-                    OverlayText = original.OverlayText,
-                    ScryfallId = original.ScryfallId,
-                    Quantity = original.Quantity,
-                    IncludeBack = original.IncludeBack,
-                    ManaCost = original.ManaCost,
-                    CMC = original.CMC,
-                    TypeLine = original.TypeLine,
-                    OracleText = original.OracleText,
-                    Rarity = original.Rarity,
-                    Colors = original.Colors,
-                    ColorIdentity = original.ColorIdentity,
-                    SetCode = original.SetCode,
-                    SetName = original.SetName,
-                    CollectorNumber = original.CollectorNumber,
-                    Artist = original.Artist,
-                    Power = original.Power,
-                    Toughness = original.Toughness,
-                    Loyalty = original.Loyalty,
-                    Keywords = original.Keywords,
-                    DateAdded = DateTime.Now
-                };
-                cards.Insert(idx + 1, copy);
-            }
+            if (CardsSource == null) return;
+            CanvasOperations.DuplicateCards(CardsSource, cardIndices, UndoSvc);
             _selectedSlots.Clear();
             SyncSelectedCard();
         }
 
         private void DeleteCards(List<int> cardIndices)
         {
-            var cards = CardsSource;
-            if (cards == null) return;
-            UndoSvc?.SaveState(cards);
-
-            foreach (var idx in cardIndices.OrderByDescending(i => i))
-            {
-                if (idx >= 0 && idx < cards.Count)
-                    cards.RemoveAt(idx);
-            }
+            if (CardsSource == null) return;
+            CanvasOperations.DeleteCards(CardsSource, cardIndices, UndoSvc);
             _selectedSlots.Clear();
             SyncSelectedCard();
         }
 
         private void FlipCards(List<int> cardIndices)
         {
-            foreach (var idx in cardIndices)
-            {
-                if (_flippedCardIndices.Contains(idx))
-                    _flippedCardIndices.Remove(idx);
-                else
-                    _flippedCardIndices.Add(idx);
-            }
+            CanvasOperations.FlipCards(_flippedCardIndices, cardIndices);
             _ = RedrawAsync();
         }
 
         private void FlipAll()
         {
-            _allFlipped = !_allFlipped;
-            _flippedCardIndices.Clear();
+            CanvasOperations.FlipAll(ref _allFlipped, _flippedCardIndices);
             _ = RedrawAsync();
         }
 
@@ -820,299 +770,15 @@ namespace MTGProxyBuilder.UI.Controls
             float cellW, float cellH, float bleed, float cardW, float cardH,
             float pageTop, float pageW, float pageH, bool flipped, bool selected)
         {
-            // Choose front or back image
             bool hasBackArt = !string.IsNullOrEmpty(card.BackArtworkPath);
             bool showNoBackPlaceholder = flipped && !hasBackArt;
-
-            string? imagePath = flipped
-                ? (hasBackArt ? card.BackArtworkPath : null)
-                : card.ArtworkPath;
-
+            string? imagePath = flipped ? (hasBackArt ? card.BackArtworkPath : null) : card.ArtworkPath;
             var bmp = showNoBackPlaceholder ? null : GetCachedImage(imagePath);
-            if (showNoBackPlaceholder)
-            {
-                DrawNoBackPlaceholder(x + bleed, y + bleed, cardW, cardH, card.Name);
-            }
-            else if (bmp != null)
-            {
-                var image = new Image { Source = bmp, Width = cardW, Height = cardH, Stretch = Stretch.Fill };
-                SetLeft(image, x + bleed); SetTop(image, y + bleed); Children.Add(image);
 
-                bool regMarksActive = PrintSettingsSource?.ShowRegistrationMarks == true;
-                if (bleed > 0 && !regMarksActive)
-                {
-                    var overlay = new System.Windows.Shapes.Path
-                    {
-                        Fill = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)), IsHitTestVisible = false
-                    };
-                    overlay.Data = new CombinedGeometry(GeometryCombineMode.Exclude,
-                        new RectangleGeometry(new Rect(0, 0, cellW, cellH)),
-                        new RectangleGeometry(new Rect(bleed, bleed, cardW, cardH)));
-                    SetLeft(overlay, x); SetTop(overlay, y); Children.Add(overlay);
-                }
-            }
-            else
-            {
-                DrawPlaceholderCard(card, x + bleed, y + bleed, cardW, cardH, flipped);
-            }
-
-            // Selection highlight
-            if (selected)
-            {
-                var selRect = new Rectangle
-                {
-                    Width = cellW, Height = cellH,
-                    Fill = Brushes.Transparent,
-                    Stroke = Brushes.DodgerBlue, StrokeThickness = 3,
-                    RadiusX = 2, RadiusY = 2, IsHitTestVisible = false
-                };
-                SetLeft(selRect, x); SetTop(selRect, y); Children.Add(selRect);
-            }
-
-            // Cut guides (disabled with registration marks)
-            bool regMarksOn = PrintSettingsSource?.ShowRegistrationMarks == true;
-            if (ShowCutGuides && !regMarksOn)
-            {
-                float cardLeft = x + bleed, cardTopY = y + bleed;
-                float cardRight = cardLeft + cardW, cardBottomY = cardTopY + cardH;
-                float pgTop = pageTop, pgBottom = pageTop + pageH;
-
-                var pen = new SolidColorBrush(Color.FromArgb(120, 0, 0, 0));
-                void Line(float x1, float y1, float x2, float y2)
-                {
-                    var l = new Line { X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, Stroke = pen, StrokeThickness = 0.5, IsHitTestVisible = false };
-                    Children.Add(l);
-                }
-                Line(cardLeft, pgTop, cardLeft, cardTopY);
-                Line(cardRight, pgTop, cardRight, cardTopY);
-                Line(cardLeft, cardBottomY, cardLeft, pgBottom);
-                Line(cardRight, cardBottomY, cardRight, pgBottom);
-                Line(0, cardTopY, cardLeft, cardTopY);
-                Line(cardRight, cardTopY, pageW, cardTopY);
-                Line(0, cardBottomY, cardLeft, cardBottomY);
-                Line(cardRight, cardBottomY, pageW, cardBottomY);
-            }
-
-            // Overlay text (e.g. "TOKEN") — front face only
-            if (!flipped && !string.IsNullOrEmpty(card.OverlayText))
-            {
-                float bannerH = cardH * 0.15f;
-                float bannerY = (y + bleed) + cardH - bannerH - cardH * 0.08f;
-
-                var banner = new Rectangle
-                {
-                    Width = cardW, Height = bannerH,
-                    Fill = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0)),
-                    IsHitTestVisible = false
-                };
-                SetLeft(banner, x + bleed); SetTop(banner, bannerY); Children.Add(banner);
-
-                var overlayTb = new TextBlock
-                {
-                    Text = card.OverlayText,
-                    Foreground = Brushes.White,
-                    FontSize = Math.Max(8, bannerH * 0.55),
-                    FontWeight = FontWeights.Bold,
-                    TextAlignment = TextAlignment.Center,
-                    Width = cardW,
-                    IsHitTestVisible = false
-                };
-                SetLeft(overlayTb, x + bleed);
-                SetTop(overlayTb, bannerY + (bannerH - overlayTb.FontSize) / 2);
-                Children.Add(overlayTb);
-            }
-
-            // Card outline guides (disabled with registration marks)
-            var ps = PrintSettingsSource;
-            if (ps != null && ps.ShowCardOutline && !ps.ShowRegistrationMarks)
-            {
-                DrawCardOutlinePreview(x, y, cellW, cellH, bleed, cardW, cardH, ps);
-            }
-
-        }
-
-        private void DrawCardOutlinePreview(float cellX, float cellY,
-            float cellW, float cellH, float bleed, float cardW, float cardH, PrintSettings ps)
-        {
-            // Parse color
-            SolidColorBrush brush;
-            try
-            {
-                string hex = ps.OutlineColor.TrimStart('#');
-                byte r = Convert.ToByte(hex[..2], 16);
-                byte g = Convert.ToByte(hex[2..4], 16);
-                byte b = Convert.ToByte(hex[4..6], 16);
-                brush = new SolidColorBrush(Color.FromRgb(r, g, b));
-            }
-            catch { brush = new SolidColorBrush(Color.FromRgb(0x66, 0xFF, 0x00)); }
-            brush.Freeze();
-
-            float weight = ps.LineWeight * 0.5f; // scale down for preview (points → screen)
-            float radiusPx = ps.CornerRadiusMm * MmToPx;
-            float cornerLenPx = ps.CornerLengthMm * MmToPx;
-
-            float cardLeft = cellX + bleed;
-            float cardTop = cellY + bleed;
-            float offset = weight / 2;
-
-            float ox, oy, ow, oh;
-            switch (ps.OutlineAlignment)
-            {
-                case OutlineAlignment.Inside:
-                    ox = cardLeft + offset; oy = cardTop + offset;
-                    ow = cardW - 2 * offset; oh = cardH - 2 * offset;
-                    break;
-                case OutlineAlignment.Outside:
-                    ox = cardLeft - offset; oy = cardTop - offset;
-                    ow = cardW + 2 * offset; oh = cardH + 2 * offset;
-                    break;
-                default:
-                    ox = cardLeft; oy = cardTop; ow = cardW; oh = cardH;
-                    break;
-            }
-
-            if (ps.OutlineType == OutlineType.Full)
-            {
-                var rect = new Rectangle
-                {
-                    Width = ow, Height = oh,
-                    Stroke = brush, StrokeThickness = weight,
-                    RadiusX = radiusPx, RadiusY = radiusPx,
-                    Fill = Brushes.Transparent, IsHitTestVisible = false
-                };
-                if (ps.OutlineLineType == LineType.Dashed)
-                    rect.StrokeDashArray = new DoubleCollection { 4, 2 };
-                SetLeft(rect, ox); SetTop(rect, oy);
-                Children.Add(rect);
-            }
-            else // Corners
-            {
-                float r = Math.Min(radiusPx, Math.Min(ow / 2, oh / 2));
-                float len = Math.Min(cornerLenPx, Math.Min(ow / 2 - r, oh / 2 - r));
-                if (len <= 0) len = 5;
-
-                DoubleCollection? dashArray = ps.OutlineLineType == LineType.Dashed
-                    ? new DoubleCollection { 4, 2 } : null;
-
-                void AddLine(float x1, float y1, float x2, float y2)
-                {
-                    var l = new Line
-                    {
-                        X1 = x1, Y1 = y1, X2 = x2, Y2 = y2,
-                        Stroke = brush, StrokeThickness = weight, IsHitTestVisible = false
-                    };
-                    if (dashArray != null) l.StrokeDashArray = dashArray;
-                    Children.Add(l);
-                }
-
-                if (r > 0)
-                {
-                    void AddCornerPath(Point lineStart, Point arcStart, Point arcEnd, Point lineEnd, SweepDirection sweep)
-                    {
-                        var fig = new PathFigure { StartPoint = lineStart, IsClosed = false, IsFilled = false };
-                        fig.Segments.Add(new LineSegment(arcStart, true));
-                        fig.Segments.Add(new ArcSegment(arcEnd, new Size(r, r), 0, false, sweep, true));
-                        fig.Segments.Add(new LineSegment(lineEnd, true));
-                        var geom = new PathGeometry(new[] { fig });
-                        var path = new System.Windows.Shapes.Path
-                        {
-                            Data = geom, Stroke = brush, StrokeThickness = weight, IsHitTestVisible = false
-                        };
-                        if (dashArray != null) path.StrokeDashArray = dashArray;
-                        Children.Add(path);
-                    }
-
-                    // Top-left: line up → arc → line right
-                    AddCornerPath(
-                        new Point(ox, oy + r + len),
-                        new Point(ox, oy + r),
-                        new Point(ox + r, oy),
-                        new Point(ox + r + len, oy),
-                        SweepDirection.Clockwise);
-
-                    // Top-right: line left → arc → line down
-                    AddCornerPath(
-                        new Point(ox + ow - r - len, oy),
-                        new Point(ox + ow - r, oy),
-                        new Point(ox + ow, oy + r),
-                        new Point(ox + ow, oy + r + len),
-                        SweepDirection.Clockwise);
-
-                    // Bottom-right: line up → arc → line left
-                    AddCornerPath(
-                        new Point(ox + ow, oy + oh - r - len),
-                        new Point(ox + ow, oy + oh - r),
-                        new Point(ox + ow - r, oy + oh),
-                        new Point(ox + ow - r - len, oy + oh),
-                        SweepDirection.Clockwise);
-
-                    // Bottom-left: line right → arc → line up
-                    AddCornerPath(
-                        new Point(ox + r + len, oy + oh),
-                        new Point(ox + r, oy + oh),
-                        new Point(ox, oy + oh - r),
-                        new Point(ox, oy + oh - r - len),
-                        SweepDirection.Clockwise);
-                }
-                else
-                {
-                    // Sharp L-corners
-                    AddLine(ox, oy + len, ox, oy); AddLine(ox, oy, ox + len, oy);
-                    AddLine(ox + ow - len, oy, ox + ow, oy); AddLine(ox + ow, oy, ox + ow, oy + len);
-                    AddLine(ox + ow, oy + oh - len, ox + ow, oy + oh); AddLine(ox + ow, oy + oh, ox + ow - len, oy + oh);
-                    AddLine(ox + len, oy + oh, ox, oy + oh); AddLine(ox, oy + oh, ox, oy + oh - len);
-                }
-            }
-        }
-
-        private void DrawNoBackPlaceholder(float x, float y, float w, float h, string cardName)
-        {
-            var rect = new Rectangle
-            {
-                Width = w, Height = h,
-                Fill = new SolidColorBrush(Color.FromArgb(255, 120, 120, 120)),
-                Stroke = new SolidColorBrush(Color.FromArgb(255, 90, 90, 90)),
-                StrokeThickness = 1, RadiusX = 4, RadiusY = 4
-            };
-            SetLeft(rect, x); SetTop(rect, y); Children.Add(rect);
-
-            var title = new TextBlock
-            {
-                Text = "No Back Art\nAssigned",
-                Foreground = Brushes.White, FontSize = Math.Max(11, w / 12),
-                FontWeight = FontWeights.SemiBold,
-                TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
-                Width = w - 10
-            };
-            SetLeft(title, x + 5); SetTop(title, y + h / 3 - 10); Children.Add(title);
-
-            var name = new TextBlock
-            {
-                Text = cardName, Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
-                FontSize = Math.Max(8, w / 18),
-                TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
-                Width = w - 10
-            };
-            SetLeft(name, x + 5); SetTop(name, y + h / 3 + 30); Children.Add(name);
-        }
-
-        private void DrawPlaceholderCard(CardModel card, float x, float y, float w, float h, bool flipped)
-        {
-            var rect = new Rectangle
-            {
-                Width = w, Height = h,
-                Fill = new SolidColorBrush(flipped ? Color.FromArgb(255, 80, 50, 50) : Color.FromArgb(255, 60, 60, 80)),
-                Stroke = Brushes.Gray, StrokeThickness = 1, RadiusX = 4, RadiusY = 4
-            };
-            SetLeft(rect, x); SetTop(rect, y); Children.Add(rect);
-
-            var nb = new TextBlock
-            {
-                Text = flipped ? "(Back)\n" + card.Name : (string.IsNullOrEmpty(card.Name) ? "No Image" : card.Name),
-                Foreground = Brushes.White, FontSize = Math.Max(10, w / 15),
-                TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, Width = w - 10
-            };
-            SetLeft(nb, x + 5); SetTop(nb, y + h / 3); Children.Add(nb);
+            CardVisualRenderer.PlaceCard(this, card, bmp,
+                x, y, cellW, cellH, bleed, cardW, cardH,
+                pageTop, pageW, pageH, flipped, selected,
+                ShowCutGuides, PrintSettingsSource);
         }
     }
 }

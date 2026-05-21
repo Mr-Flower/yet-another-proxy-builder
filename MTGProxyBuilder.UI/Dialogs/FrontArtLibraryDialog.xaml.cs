@@ -89,7 +89,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                 var border = new Border
                 {
                     Width = 100, Height = 150, Margin = new Thickness(4),
-                    Background = new SolidColorBrush(Color.FromRgb(0x3E, 0x3E, 0x42)),
+                    Background = AppBrushes.TileBg,
                     CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
                     BorderThickness = new Thickness(2), BorderBrush = Brushes.Transparent,
                     Tag = entry.Id,
@@ -111,7 +111,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                 var lbl = new TextBlock
                 {
                     Text = entry.Name,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                    Foreground = AppBrushes.TextSecondary,
                     FontSize = 9, TextTrimming = TextTrimming.CharacterEllipsis,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Margin = new Thickness(3, 4, 3, 0)
@@ -123,7 +123,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                     var srcLbl = new TextBlock
                     {
                         Text = entry.Source,
-                        Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                        Foreground = AppBrushes.TextMuted,
                         FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis,
                         HorizontalAlignment = HorizontalAlignment.Center,
                         Margin = new Thickness(3, 0, 3, 2)

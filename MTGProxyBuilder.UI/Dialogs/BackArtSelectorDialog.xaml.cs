@@ -77,61 +77,9 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private void AddOption(string label, string imagePath, bool isCurrent, string source = "")
         {
-            var border = new Border
-            {
-                Width = 100, Height = 150, Margin = new Thickness(4),
-                Background = new SolidColorBrush(Color.FromRgb(0x3E, 0x3E, 0x42)),
-                CornerRadius = new CornerRadius(4),
-                Cursor = Cursors.Hand,
-                BorderThickness = new Thickness(2),
-                BorderBrush = isCurrent ? Brushes.DodgerBlue : Brushes.Transparent,
-                ToolTip = label
-            };
+            var border = Controls.ArtTileBuilder.CreateOptionTile(label, imagePath, isCurrent, label, decodePixelWidth: 200);
 
-            var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Stretch };
-
-            // Thumbnail
-            var imgBorder = new Border
-            {
-                Height = 115, Background = Brushes.Black, CornerRadius = new CornerRadius(3, 3, 0, 0),
-                ClipToBounds = true
-            };
-            try
-            {
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.UriSource = new Uri(imagePath, UriKind.Absolute);
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.DecodePixelWidth = 200;
-                bmp.EndInit();
-                bmp.Freeze();
-                imgBorder.Child = new Image { Source = bmp, Stretch = Stretch.UniformToFill };
-            }
-            catch
-            {
-                imgBorder.Child = new TextBlock
-                {
-                    Text = "?", Foreground = Brushes.Gray, FontSize = 24,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-            }
-            stack.Children.Add(imgBorder);
-
-            // Label
-            var lbl = new TextBlock
-            {
-                Text = label + (isCurrent ? " *" : ""),
-                Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
-                FontSize = 10, TextTrimming = TextTrimming.CharacterEllipsis,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(4, 4, 4, 2)
-            };
-            stack.Children.Add(lbl);
-
-            border.Child = stack;
-
-            string path = imagePath; // capture for closure
+            string path = imagePath;
             border.MouseLeftButtonUp += (_, _) => SelectOption(label, path, border);
 
             OptionsPanel.Children.Add(border);
@@ -140,35 +88,7 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         private void AddActionTile(string label, Action action)
         {
-            var border = new Border
-            {
-                Width = 100, Height = 150, Margin = new Thickness(4),
-                Background = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x38)),
-                CornerRadius = new CornerRadius(4),
-                Cursor = Cursors.Hand,
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55))
-            };
-
-            var stack = new StackPanel
-            {
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center
-            };
-            stack.Children.Add(new TextBlock
-            {
-                Text = "+", FontSize = 28, Foreground = Brushes.Gray,
-                HorizontalAlignment = HorizontalAlignment.Center
-            });
-            stack.Children.Add(new TextBlock
-            {
-                Text = label, FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xAA, 0xAA, 0xAA)),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                TextAlignment = TextAlignment.Center
-            });
-
-            border.Child = stack;
+            var border = Controls.ArtTileBuilder.CreateActionTile(label);
             border.MouseLeftButtonUp += (_, _) => action();
 
             OptionsPanel.Children.Add(border);

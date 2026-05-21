@@ -95,6 +95,8 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly DeckImportService _deckImportService;
         private readonly MpcFillService _mpcFillService;
         private readonly MpcFillXmlImportService _mpcXmlImportService;
+        private readonly SearchCoordinator _searchCoordinator;
+        private readonly ImportCoordinator _importCoordinator;
         private readonly UndoService _undoService = new();
         private readonly CacheManager _cacheManager = new();
         private readonly UpdateCheckService _updateService = new();
@@ -153,6 +155,8 @@ namespace MTGProxyBuilder.UI.ViewModels
             MpcSourceManager = new MpcFillSourceManager();
             _mpcFillService = new MpcFillService(_imageCacheService, MpcSourceManager);
             _mpcXmlImportService = new MpcFillXmlImportService(_mpcFillService, _imageCacheService);
+            _searchCoordinator = new SearchCoordinator(_scryfallService, _mpcFillService, _appSettings, MpcSourceManager);
+            _importCoordinator = new ImportCoordinator(_searchCoordinator, _deckImportService, _mpcXmlImportService, _frontArtLibraryService);
             _mpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
             _mpcAdvMinDpi = _appSettings.Settings.MpcFillDefaultMinDpi;
             _mpcFuzzySearch = _appSettings.Settings.MpcFillDefaultFuzzySearch;
@@ -657,38 +661,11 @@ namespace MTGProxyBuilder.UI.ViewModels
         public ICommand BuildAdvancedQueryCommand { get; private set; } = null!;
         public ICommand ClearAdvancedSearchCommand { get; private set; } = null!;
 
-        /// <summary>Builds a Scryfall query string from the advanced search fields.</summary>
-        private string BuildAdvancedQuery()
-        {
-            var parts = new List<string>();
-
-            void Add(string prefix, string value, bool quote = false)
-            {
-                if (string.IsNullOrWhiteSpace(value)) return;
-                value = value.Trim();
-                if (quote && value.Contains(' '))
-                    parts.Add($"{prefix}\"{value}\"");
-                else
-                    parts.Add($"{prefix}{value}");
-            }
-
-            Add("", _advName); // bare name search
-            if (!string.IsNullOrWhiteSpace(_advType)) Add("t:", _advType, true);
-            if (!string.IsNullOrWhiteSpace(_advOracle)) Add("o:", _advOracle, true);
-            if (!string.IsNullOrWhiteSpace(_advColors)) Add("c:", _advColors);
-            if (!string.IsNullOrWhiteSpace(_advIdentity)) Add("id:", _advIdentity);
-            if (!string.IsNullOrWhiteSpace(_advCmcValue)) parts.Add($"cmc{_advCmcOp}{_advCmcValue}");
-            if (!string.IsNullOrWhiteSpace(_advRarity)) Add("r:", _advRarity);
-            if (!string.IsNullOrWhiteSpace(_advSet)) Add("s:", _advSet);
-            if (!string.IsNullOrWhiteSpace(_advFormat)) Add("f:", _advFormat);
-            if (!string.IsNullOrWhiteSpace(_advPowValue)) parts.Add($"pow{_advPowOp}{_advPowValue}");
-            if (!string.IsNullOrWhiteSpace(_advTouValue)) parts.Add($"tou{_advTouOp}{_advTouValue}");
-            if (!string.IsNullOrWhiteSpace(_advArtist)) Add("a:", _advArtist, true);
-            if (!string.IsNullOrWhiteSpace(_advKeyword)) Add("kw:", _advKeyword);
-            if (!string.IsNullOrWhiteSpace(_advIs)) Add("is:", _advIs);
-
-            return string.Join(" ", parts);
-        }
+        private string BuildAdvancedQuery() => AdvancedQueryBuilder.Build(
+            _advName, _advType, _advOracle, _advColors, _advIdentity,
+            _advCmcOp, _advCmcValue, _advRarity, _advSet, _advFormat,
+            _advPowOp, _advPowValue, _advTouOp, _advTouValue,
+            _advArtist, _advKeyword, _advIs);
 
         private void ApplyAdvancedQuery()
         {
@@ -1263,7 +1240,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             SetBusy("Searching Scryfall...");
             try
             {
-                var (results, error) = await _scryfallService.SearchCardAsync(ScryfallSearchQuery);
+                var (results, error) = await _searchCoordinator.SearchScryfallAsync(ScryfallSearchQuery);
                 if (error != null)
                 {
                     ScryfallResults.Clear();
@@ -1272,7 +1249,7 @@ namespace MTGProxyBuilder.UI.ViewModels
                 }
                 else
                 {
-                    ScryfallResults = new ObservableCollection<ScryfallCard>(results.Take(50));
+                    ScryfallResults = new ObservableCollection<ScryfallCard>(results);
                     MpcFillResults.Clear();
                     StatusText = $"Found {results.Count} result(s) on Scryfall";
                 }
@@ -1284,31 +1261,13 @@ namespace MTGProxyBuilder.UI.ViewModels
             }
         }
 
-        /// <summary>Build MpcFillSearchOptions from settings with per-search overrides applied.</summary>
-        private MpcFillSearchOptions BuildMpcFillSearchOptions()
-        {
-            var opts = MpcFillSearchOptions.FromSettings(_appSettings.Settings);
-            opts.MinimumDpi = MpcAdvMinDpi;
-            opts.FuzzySearch = MpcFuzzySearch;
-            return opts;
-        }
-
-        /// <summary>Build the MPCFill sources array respecting the user's favorites setting.</summary>
-        private object[][]? GetMpcFillSources()
-        {
-            return MpcUseFavoritesOnly && MpcSourceManager.HasFavorites
-                ? MpcSourceManager.BuildFavoritesArray()
-                : null; // null = all sources
-        }
-
         private async Task SearchMpcFill()
         {
             SetBusy("Searching MPCFill...");
             try
             {
-                var (results, error) = await _mpcFillService.SearchAsync(
-                    ScryfallSearchQuery, 50, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources(),
-                    maxResults: 50, options: BuildMpcFillSearchOptions());
+                var (results, error) = await _searchCoordinator.SearchMpcFillAsync(
+                    ScryfallSearchQuery, MpcAdvMinDpi, MpcFuzzySearch, MpcUseFavoritesOnly, MpcAdvName);
                 if (error != null)
                 {
                     MpcFillResults.Clear();
@@ -1317,11 +1276,7 @@ namespace MTGProxyBuilder.UI.ViewModels
                 }
                 else
                 {
-                    var filtered = results.AsEnumerable();
-                    if (!string.IsNullOrWhiteSpace(MpcAdvName))
-                        filtered = filtered.Where(c => c.Name.Contains(MpcAdvName, StringComparison.OrdinalIgnoreCase));
-
-                    MpcFillResults = new ObservableCollection<MpcFillCard>(filtered);
+                    MpcFillResults = new ObservableCollection<MpcFillCard>(results);
                     ScryfallResults.Clear();
 
                     string favInfo = MpcUseFavoritesOnly && MpcSourceManager.HasFavorites
@@ -1335,6 +1290,12 @@ namespace MTGProxyBuilder.UI.ViewModels
             }
         }
 
+        private MpcFillSearchOptions BuildMpcFillSearchOptions()
+            => _searchCoordinator.BuildSearchOptions(MpcAdvMinDpi, MpcFuzzySearch);
+
+        private object[][]? GetMpcFillSources()
+            => _searchCoordinator.GetSources(MpcUseFavoritesOnly);
+
         private async void AddScryfallCard()
         {
             if (SelectedScryfallCard == null) return;
@@ -1343,10 +1304,10 @@ namespace MTGProxyBuilder.UI.ViewModels
 
             try
             {
-                var frontPath = await _scryfallService.DownloadAndCacheImageAsync(SelectedScryfallCard);
+                var frontPath = await _searchCoordinator.DownloadScryfallArtAsync(SelectedScryfallCard);
                 string? backPath = null;
                 if (SelectedScryfallCard.GetBackImageUrl() != null)
-                    backPath = await _scryfallService.DownloadAndCacheImageAsync(SelectedScryfallCard, back: true);
+                    backPath = await _searchCoordinator.DownloadScryfallArtAsync(SelectedScryfallCard, back: true);
 
                 PushUndo();
                 var card = SelectedScryfallCard.ToCardModel(frontPath ?? string.Empty, backPath);
@@ -1598,27 +1559,15 @@ namespace MTGProxyBuilder.UI.ViewModels
             SetBusy($"Downloading art: {SelectedMpcFillCard.Name}...");
             try
             {
-                var path = await _mpcFillService.DownloadAndCacheImageAsync(SelectedMpcFillCard);
-
-                // Save to front art library for future local-first searches
-                if (path != null)
+                var (card, _) = await _importCoordinator.AddMpcFillCardAsync(SelectedMpcFillCard);
+                if (card != null)
                 {
-                    string libName = $"{SelectedMpcFillCard.Name} [{SelectedMpcFillCard.Source}]";
-                    _frontArtLibraryService.AddFromFile(path, libName, SelectedMpcFillCard.Source);
+                    PushUndo();
+                    ApplyDefaultBackArt(card);
+                    Cards.Add(card);
+                    ApplyFilterAndSort();
+                    StatusText = $"Added: {card.Name} (from MPCFill, {SelectedMpcFillCard.Source})";
                 }
-
-                PushUndo();
-                var card = new CardModel
-                {
-                    Name = SelectedMpcFillCard.Name.Split('(')[0].Trim(), // strip set info from name
-                    ArtworkPath = path ?? string.Empty,
-                    Artist = SelectedMpcFillCard.Source,
-                    DateAdded = DateTime.Now
-                };
-                ApplyDefaultBackArt(card);
-                Cards.Add(card);
-                ApplyFilterAndSort();
-                StatusText = $"Added: {card.Name} (from MPCFill, {SelectedMpcFillCard.Source})";
             }
             catch (Exception ex) { StatusText = $"Download failed: {ex.Message}"; }
             finally { ClearBusy(); }
@@ -1650,34 +1599,12 @@ namespace MTGProxyBuilder.UI.ViewModels
 
             PushUndo();
             SetBusy("Updating card art from MPCFill...");
-            int updated = 0, failed = 0;
 
             try
             {
-                for (int i = 0; i < Cards.Count; i++)
-                {
-                    var card = Cards[i];
-                    BusyMessage = $"Searching MPCFill {i + 1}/{Cards.Count}: {card.Name}...";
-                    await Task.Delay(10);
-
-                    var (results, error) = await _mpcFillService.SearchAsync(
-                        card.Name, 5, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources(),
-                        options: BuildMpcFillSearchOptions());
-                    if (error != null || results.Count == 0) { failed++; continue; }
-
-                    // Use the first result
-                    var best = results[0];
-                    BusyMessage = $"Downloading art {i + 1}/{Cards.Count}: {card.Name}...";
-                    var path = await _mpcFillService.DownloadAndCacheImageAsync(best);
-                    if (path != null)
-                    {
-                        card.ArtworkPath = path;
-                        updated++;
-                    }
-                    else { failed++; }
-
-                    await Task.Delay(50); // rate limiting
-                }
+                var (updated, failed) = await _importCoordinator.UpdateAllArtFromMpcFillAsync(
+                    Cards, MpcAdvMinDpi, MpcFuzzySearch, MpcUseFavoritesOnly,
+                    onProgress: msg => BusyMessage = msg);
 
                 StatusText = $"Updated {updated} card(s) with MPCFill art" + (failed > 0 ? $", {failed} not found" : "");
                 MessageBox.Show(
@@ -1706,7 +1633,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
             try
             {
-                var (project, parseError) = _mpcXmlImportService.ParseXml(dialog.FileName);
+                var (project, parseError) = _importCoordinator.ParseXml(dialog.FileName);
                 if (project == null || parseError != null)
                 {
                     ClearBusy();
@@ -1721,80 +1648,27 @@ namespace MTGProxyBuilder.UI.ViewModels
 
                 PushUndo();
 
-                // Build a back-image lookup: slot → back card identifier
-                var backsBySlot = new Dictionary<int, MpcFillXmlCard>();
-                foreach (var back in project.Backs)
-                    foreach (var slot in back.Slots)
-                        backsBySlot[slot] = back;
+                var result = await _importCoordinator.ImportXmlCardsAsync(project,
+                    onProgress: msg => BusyMessage = msg);
 
-                var importedCards = new List<CardModel>();
-                int downloaded = 0;
-                int failed = 0;
-
-                for (int i = 0; i < project.Fronts.Count; i++)
-                {
-                    var front = project.Fronts[i];
-                    string cardName = MpcFillXmlImportService.CleanCardName(front);
-                    int quantity = front.Slots.Count;
-
-                    BusyMessage = $"Downloading {i + 1}/{project.Fronts.Count}: {cardName}" +
-                        (quantity > 1 ? $" (x{quantity})" : "") + "...";
-                    await Task.Delay(10);
-
-                    // Download front image
-                    string? frontPath = null;
-                    if (!string.IsNullOrEmpty(front.Id))
-                        frontPath = await _mpcXmlImportService.DownloadImageByIdAsync(front.Id);
-
-                    if (frontPath == null) { failed++; continue; }
-
-                    // Check for custom back on any of this card's slots
-                    string? backPath = null;
-                    var firstSlot = front.Slots.FirstOrDefault();
-                    if (backsBySlot.TryGetValue(firstSlot, out var backCard) && !string.IsNullOrEmpty(backCard.Id))
-                    {
-                        BusyMessage = $"Downloading back for: {cardName}...";
-                        backPath = await _mpcXmlImportService.DownloadImageByIdAsync(backCard.Id);
-                    }
-
-                    // If no custom back, try the common cardback
-                    if (backPath == null && !string.IsNullOrEmpty(project.CommonCardbackId))
-                    {
-                        backPath = await _mpcXmlImportService.DownloadImageByIdAsync(project.CommonCardbackId);
-                    }
-
-                    var card = new CardModel
-                    {
-                        Name = cardName,
-                        ArtworkPath = frontPath,
-                        BackArtworkPath = backPath,
-                        IncludeBack = backPath != null,
-                        Quantity = quantity,
-                        DateAdded = DateTime.Now
-                    };
-
-                    // Apply default back art if no back was found
-                    ApplyDefaultBackArt(card);
-                    importedCards.Add(card);
-                    downloaded++;
-
-                    await Task.Delay(50);
-                }
-
-                // Batch-add
-                BusyMessage = $"Adding {importedCards.Count} cards to project...";
+                // Apply default back art and batch-add
+                BusyMessage = $"Adding {result.Cards.Count} cards to project...";
                 await Task.Delay(50);
 
                 Cards.CollectionChanged -= OnCardsCollectionChanged;
-                foreach (var c in importedCards) Cards.Add(c);
+                foreach (var c in result.Cards)
+                {
+                    ApplyDefaultBackArt(c);
+                    Cards.Add(c);
+                }
                 Cards.CollectionChanged += OnCardsCollectionChanged;
 
                 _currentProject.PageSettings.CenterGrid();
                 ApplyFilterAndSort();
 
-                int totalAdded = importedCards.Sum(c => c.Quantity);
-                string summary = $"Imported {downloaded} card(s) ({totalAdded} total) from MPCFill XML";
-                if (failed > 0) summary += $"\n{failed} image(s) failed to download";
+                int totalAdded = result.Cards.Sum(c => c.Quantity);
+                string summary = $"Imported {result.Downloaded} card(s) ({totalAdded} total) from MPCFill XML";
+                if (result.Failed > 0) summary += $"\n{result.Failed} image(s) failed to download";
                 StatusText = summary;
 
                 MessageBox.Show(summary, "Import Complete", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -1834,8 +1708,8 @@ namespace MTGProxyBuilder.UI.ViewModels
                 BusyMessage = $"Fetching deck list from {sourceName}...";
                 await Task.Delay(50);
 
-                var (deck, error) = await _deckImportService.ImportAsync(ImportDeckUrl);
-                if (deck == null || error != null)
+                var (fetchedDeck, error) = await _importCoordinator.FetchDeckAsync(ImportDeckUrl);
+                if (fetchedDeck is not { } deck || error != null)
                 {
                     ClearBusy();
                     MessageBox.Show($"Failed to fetch deck:\n{error}", $"{sourceName} Error",
@@ -1849,128 +1723,21 @@ namespace MTGProxyBuilder.UI.ViewModels
                 BusyMessage = $"Found deck: {deck.Name}\n{uniqueCards} unique cards, {totalQty} total ({deck.Format})";
                 await Task.Delay(800);
 
-                // Collect cards into a batch to avoid per-card canvas redraws (prevents flashing)
-                var importedCards = new List<CardModel>();
-                int failed = 0;
-                int skippedDupes = 0;
+                var result = await _importCoordinator.ImportDeckCardsAsync(
+                    deck, Cards, IgnoreDuplicates, UseMpcFill,
+                    MpcAdvMinDpi, MpcFuzzySearch, MpcUseFavoritesOnly,
+                    onProgress: msg => BusyMessage = msg);
 
-                // Build lookup of existing cards for duplicate detection
-                var existingByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-                if (IgnoreDuplicates)
-                {
-                    foreach (var c in Cards)
-                    {
-                        if (existingByName.ContainsKey(c.Name))
-                            existingByName[c.Name] += c.Quantity;
-                        else
-                            existingByName[c.Name] = c.Quantity;
-                    }
-                }
-
-                for (int i = 0; i < deck.Entries.Count; i++)
-                {
-                    var entry = deck.Entries[i];
-
-                    // Duplicate check
-                    if (IgnoreDuplicates && existingByName.ContainsKey(entry.CardName))
-                    {
-                        bool isBasicLand = IsBasicLand(entry.CardName);
-                        if (isBasicLand)
-                        {
-                            // Only add the difference if deck needs more than we have
-                            int have = existingByName[entry.CardName];
-                            int need = entry.Quantity;
-                            if (need <= have)
-                            {
-                                skippedDupes++;
-                                continue;
-                            }
-                            // Reduce quantity to only add the extras
-                            entry = new DeckImportEntry
-                            {
-                                CardName = entry.CardName,
-                                Quantity = need - have,
-                                ScryfallId = entry.ScryfallId,
-                                Board = entry.Board
-                            };
-                        }
-                        else
-                        {
-                            skippedDupes++;
-                            continue;
-                        }
-                    }
-
-                    BusyMessage = $"Looking up card {i + 1}/{uniqueCards}: {entry.CardName}" +
-                        (entry.Quantity > 1 ? $" (x{entry.Quantity})" : "") + "...";
-                    await Task.Delay(10);
-
-                    ScryfallCard? scryfallCard = null;
-
-                    if (!string.IsNullOrEmpty(entry.ScryfallId))
-                        scryfallCard = await _scryfallService.GetCardByIdAsync(entry.ScryfallId);
-
-                    if (scryfallCard == null)
-                    {
-                        BusyMessage = $"Searching Scryfall for: {entry.CardName}...";
-                        scryfallCard = await _scryfallService.GetCardByNameAsync(entry.CardName);
-                    }
-
-                    if (scryfallCard == null) { failed++; continue; }
-
-                    BusyMessage = $"Downloading artwork {i + 1}/{uniqueCards}: {entry.CardName}...";
-                    await Task.Delay(10);
-
-                    string? frontPath = null;
-                    string? backPath = null;
-
-                    if (UseMpcFill)
-                    {
-                        // Use MPCFill for front art with the user's selected options
-                        var (mpcResults, _) = await _mpcFillService.SearchAsync(
-                            entry.CardName, 10, MpcAdvMinDpi, MpcFuzzySearch, GetMpcFillSources(),
-                            maxResults: 10, options: BuildMpcFillSearchOptions());
-                        var bestMatch = mpcResults.FirstOrDefault(mc =>
-                            mc.Name.Contains(entry.CardName, StringComparison.OrdinalIgnoreCase));
-                        if (bestMatch != null)
-                            frontPath = await _mpcFillService.DownloadAndCacheImageAsync(bestMatch);
-
-                        // Fall back to Scryfall if MPCFill had no match
-                        if (frontPath == null)
-                            frontPath = await _scryfallService.DownloadAndCacheImageAsync(scryfallCard);
-                    }
-                    else
-                    {
-                        frontPath = await _scryfallService.DownloadAndCacheImageAsync(scryfallCard);
-                    }
-
-                    // Always get back art from Scryfall (for double-faced cards)
-                    if (scryfallCard.GetBackImageUrl() != null)
-                        backPath = await _scryfallService.DownloadAndCacheImageAsync(scryfallCard, back: true);
-
-                    var card = scryfallCard.ToCardModel(frontPath ?? string.Empty, backPath);
-                    card.Quantity = entry.Quantity;
-                    ApplyDefaultBackArt(card);
-                    importedCards.Add(card);
-
-                    // Track what we're adding for subsequent duplicate checks within same import
-                    if (IgnoreDuplicates)
-                    {
-                        if (existingByName.ContainsKey(entry.CardName))
-                            existingByName[entry.CardName] += entry.Quantity;
-                        else
-                            existingByName[entry.CardName] = entry.Quantity;
-                    }
-
-                    await Task.Delay(100);
-                }
-
-                // Batch-add all cards at once — suppresses per-card redraws
-                BusyMessage = $"Adding {importedCards.Count} cards to project...";
+                // Batch-add with default back art
+                BusyMessage = $"Adding {result.Cards.Count} cards to project...";
                 await Task.Delay(50);
 
                 Cards.CollectionChanged -= OnCardsCollectionChanged;
-                foreach (var c in importedCards) Cards.Add(c);
+                foreach (var c in result.Cards)
+                {
+                    ApplyDefaultBackArt(c);
+                    Cards.Add(c);
+                }
                 Cards.CollectionChanged += OnCardsCollectionChanged;
 
                 _currentProject.PageSettings.CenterGrid();
@@ -1978,10 +1745,10 @@ namespace MTGProxyBuilder.UI.ViewModels
 
                 ImportDeckUrl = string.Empty;
 
-                int totalAdded = importedCards.Sum(c => c.Quantity);
-                string summary = $"Imported {importedCards.Count} unique card(s) ({totalAdded} total) from \"{deck.Name}\" ({sourceName})";
-                if (skippedDupes > 0) summary += $"\n{skippedDupes} duplicate(s) skipped";
-                if (failed > 0) summary += $"\n{failed} card(s) could not be found on Scryfall";
+                int totalAdded = result.Cards.Sum(c => c.Quantity);
+                string summary = $"Imported {result.Cards.Count} unique card(s) ({totalAdded} total) from \"{deck.Name}\" ({sourceName})";
+                if (result.SkippedDupes > 0) summary += $"\n{result.SkippedDupes} duplicate(s) skipped";
+                if (result.Failed > 0) summary += $"\n{result.Failed} card(s) could not be found on Scryfall";
                 StatusText = summary;
 
                 MessageBox.Show(summary, "Import Complete", MessageBoxButton.OK, MessageBoxImage.Information);
