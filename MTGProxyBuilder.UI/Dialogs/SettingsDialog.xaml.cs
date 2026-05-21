@@ -1,5 +1,7 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
 using MTGProxyBuilder.Core.Services;
 
 namespace MTGProxyBuilder.UI.Dialogs
@@ -67,6 +69,10 @@ namespace MTGProxyBuilder.UI.Dialogs
             ExcludeNsfwBox.IsChecked = s.MpcFillExcludeNsfw;
             ExcludeAiArtBox.IsChecked = s.MpcFillExcludeAiArt;
 
+            // Library paths
+            FrontLibPathBox.Text = s.FrontArtLibraryPath ?? "(default)";
+            BackLibPathBox.Text = s.BackArtLibraryPath ?? "(default)";
+
             UpdateFavoritesInfo();
         }
 
@@ -112,6 +118,39 @@ namespace MTGProxyBuilder.UI.Dialogs
         {
             var tag = (box.SelectedItem as ComboBoxItem)?.Tag?.ToString();
             return int.TryParse(tag, out var v) ? v : fallback;
+        }
+
+        private void OnBrowseFrontLibPath(object sender, RoutedEventArgs e)
+        {
+            var path = BrowseForCatalog("Select front art library catalog.json");
+            if (path != null) FrontLibPathBox.Text = path;
+        }
+
+        private void OnBrowseBackLibPath(object sender, RoutedEventArgs e)
+        {
+            var path = BrowseForCatalog("Select back art library catalog.json");
+            if (path != null) BackLibPathBox.Text = path;
+        }
+
+        private void OnResetFrontLibPath(object sender, RoutedEventArgs e)
+        {
+            FrontLibPathBox.Text = "(default)";
+        }
+
+        private void OnResetBackLibPath(object sender, RoutedEventArgs e)
+        {
+            BackLibPathBox.Text = "(default)";
+        }
+
+        private static string? BrowseForCatalog(string title)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "Library Catalog (catalog.json)|catalog.json",
+                Title = title
+            };
+            if (dialog.ShowDialog() != true) return null;
+            return Path.GetDirectoryName(dialog.FileName);
         }
 
         private void OnSave(object sender, RoutedEventArgs e)
@@ -160,6 +199,10 @@ namespace MTGProxyBuilder.UI.Dialogs
             // Content filters
             s.MpcFillExcludeNsfw = ExcludeNsfwBox.IsChecked == true;
             s.MpcFillExcludeAiArt = ExcludeAiArtBox.IsChecked == true;
+
+            // Library paths
+            s.FrontArtLibraryPath = FrontLibPathBox.Text == "(default)" ? null : FrontLibPathBox.Text;
+            s.BackArtLibraryPath = BackLibPathBox.Text == "(default)" ? null : BackLibPathBox.Text;
 
             _settingsService.Save();
             DialogResult = true;

@@ -21,8 +21,8 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly MpcFillSourceManager _mpcSourceManager = new();
         private readonly ImageCacheService _imageCacheService;
         private readonly MpcFillService _mpcFillService;
-        private readonly BackArtLibraryService _backArtLibraryService = new();
-        private readonly FrontArtLibraryService _frontArtLibraryService = new();
+        private readonly BackArtLibraryService _backArtLibraryService;
+        private readonly FrontArtLibraryService _frontArtLibraryService;
         private readonly UpdateCheckService _updateService = new();
         private bool _updateAvailable;
         private string _updateMessage = string.Empty;
@@ -34,6 +34,8 @@ namespace MTGProxyBuilder.UI.ViewModels
         {
             _imageCacheService = new ImageCacheService();
             _mpcFillService = new MpcFillService(_imageCacheService, _mpcSourceManager);
+            _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
+            _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
             Projects = new ObservableCollection<ProjectViewModel>();
 
             NewProjectCommand = new RelayCommand(_ => NewProject());
