@@ -34,6 +34,42 @@
                 <TextBox x:Name="BleedBox" Padding="6,4" FontSize="12" Width="80" HorizontalAlignment="Left"
                          Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="0,0,0,10"/>
 
+                <TextBlock Text="ART LIBRARIES" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,8,0,8"/>
+
+                <TextBlock Text="Front Art Library Location" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="FrontLibPathBox" Padding="6,4" FontSize="11" IsReadOnly="True"
+                             Background="#3E3E42" Foreground="#AAA" BorderBrush="#555"/>
+                    <Button Grid.Column="1" Content="Browse..." Padding="8,4" Margin="4,0,0,0"
+                            Background="#3E3E42" Foreground="#CCC" BorderThickness="0" Cursor="Hand" FontSize="11"
+                            Click="OnBrowseFrontLibPath"/>
+                    <Button Grid.Column="2" Content="Reset" Padding="8,4" Margin="4,0,0,0"
+                            Background="Transparent" Foreground="#888" BorderThickness="0" Cursor="Hand" FontSize="11"
+                            Click="OnResetFrontLibPath"/>
+                </Grid>
+
+                <TextBlock Text="Back Art Library Location" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="BackLibPathBox" Padding="6,4" FontSize="11" IsReadOnly="True"
+                             Background="#3E3E42" Foreground="#AAA" BorderBrush="#555"/>
+                    <Button Grid.Column="1" Content="Browse..." Padding="8,4" Margin="4,0,0,0"
+                            Background="#3E3E42" Foreground="#CCC" BorderThickness="0" Cursor="Hand" FontSize="11"
+                            Click="OnBrowseBackLibPath"/>
+                    <Button Grid.Column="2" Content="Reset" Padding="8,4" Margin="4,0,0,0"
+                            Background="Transparent" Foreground="#888" BorderThickness="0" Cursor="Hand" FontSize="11"
+                            Click="OnResetBackLibPath"/>
+                </Grid>
+
                 <TextBlock Text="UPDATES" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,8,0,8"/>
                 <CheckBox x:Name="UpdateCheckBox" Content="Check for updates on startup" Foreground="#CCC" FontSize="11" Margin="0,0,0,10"/>
 

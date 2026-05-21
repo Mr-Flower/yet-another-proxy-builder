@@ -128,23 +128,52 @@ namespace MTGProxyBuilder.Core.Services
         //  LIBRARY MANAGEMENT
         // ================================================================
 
-        /// <summary>Moves all library files to a new directory and updates all paths.</summary>
-        public void MoveToDirectory(string newDirectory, Action<int, int>? onProgress = null)
+        /// <summary>
+        /// Moves all library files to a new directory and updates all paths.
+        /// If the destination already contains a catalog.json, new entries are merged in.
+        /// Returns the list of entry IDs that were newly added (for thumbnail generation).
+        /// </summary>
+        public List<string> MoveToDirectory(string newDirectory, Action<int, int>? onProgress = null)
         {
             Directory.CreateDirectory(newDirectory);
             string oldDirectory = _libraryDirectory;
+            var newEntryIds = new List<string>();
 
-            for (int i = 0; i < _entries.Count; i++)
+            // Check if destination already has a library
+            string destCatalogPath = Path.Combine(newDirectory, "catalog.json");
+            var existingNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (File.Exists(destCatalogPath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(destCatalogPath);
+                    var existingCatalog = JsonConvert.DeserializeObject<FrontArtLibraryCatalog>(json);
+                    if (existingCatalog?.Entries != null)
+                    {
+                        foreach (var e in existingCatalog.Entries)
+                            existingNames.Add(e.Name);
+                        _entries.InsertRange(0, existingCatalog.Entries.Where(e => File.Exists(e.FilePath)));
+                    }
+                }
+                catch { }
+            }
+
+            // Copy files from old location, skipping duplicates if merging
+            int total = _entries.Count;
+            for (int i = 0; i < total; i++)
             {
                 var entry = _entries[i];
-                if (File.Exists(entry.FilePath))
+                if (File.Exists(entry.FilePath) && entry.FilePath.StartsWith(oldDirectory, StringComparison.OrdinalIgnoreCase))
                 {
                     string fileName = Path.GetFileName(entry.FilePath);
                     string destPath = Path.Combine(newDirectory, fileName);
                     File.Copy(entry.FilePath, destPath, overwrite: true);
                     entry.FilePath = destPath;
+
+                    if (!existingNames.Contains(entry.Name))
+                        newEntryIds.Add(entry.Id);
                 }
-                onProgress?.Invoke(i + 1, _entries.Count);
+                onProgress?.Invoke(i + 1, total);
             }
 
             // Move Thumbnails subdirectory if it exists
@@ -158,7 +187,7 @@ namespace MTGProxyBuilder.Core.Services
             }
 
             _libraryDirectory = newDirectory;
-            _catalogPath = Path.Combine(newDirectory, "catalog.json");
+            _catalogPath = destCatalogPath;
             Save();
 
             // Clean up old directory
@@ -168,6 +197,8 @@ namespace MTGProxyBuilder.Core.Services
                     Directory.Delete(oldDirectory, recursive: true);
             }
             catch { }
+
+            return newEntryIds;
         }
 
         /// <summary>Exports the library to a ZIP archive.</summary>

@@ -102,6 +102,7 @@ The release is a self-contained single-file executable that includes everything 
 - **Default bleed** — default bleed width for new projects
 - **Default card size preset** — applied to new projects automatically
 - **Update check toggle** — enable/disable automatic version checking
+- **Art library paths** — browse for an existing `catalog.json` to point the front or back art library at a custom directory; Reset button returns to the default AppData location; changes take effect on next app restart
 - **MPCFill search defaults** — default sort order, min/max DPI, max file size, fuzzy search, cardback filtering
 - **MPCFill card types** — choose which types to search: Cards, Tokens, Card Backs
 - **MPCFill languages** — filter by any combination of 11 languages (EN, JA, FR, DE, ES, IT, PT, ZH, RU, AR, SA)
@@ -358,10 +359,11 @@ Both libraries are accessible from the global toolbar — no project needs to be
 7. When adding cards, they automatically get the project's most common back art (or the library default)
 
 **Library Management (both libraries):**
-- Click "Move Library..." to relocate all images to a different folder (e.g. a larger drive)
+- Click "Move Library..." to relocate all images to a different folder (e.g. a larger drive); if the destination already contains a library (`catalog.json`), new entries are merged in and thumbnails are generated for the additions
 - Click "Export as ZIP..." to create a compressed backup of the entire library
 - Click "Import from ZIP..." to restore entries from a previously exported archive
 - Click "Regenerate Thumbnails" to rebuild all cached thumbnails
+- In Settings, browse for an existing `catalog.json` to point the library at a different location without moving files
 
 ### Exporting PDF
 1. Click "Export PDF" in the toolbar

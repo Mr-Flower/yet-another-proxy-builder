@@ -429,11 +429,28 @@ namespace MTGProxyBuilder.UI.Dialogs
 
             StatusLabel.Text = "Moving library...";
 
-            await Task.Run(() => _library.MoveToDirectory(newDir,
+            List<string>? newEntryIds = null;
+            await Task.Run(() => newEntryIds = _library.MoveToDirectory(newDir,
                 onProgress: (done, total) =>
                     Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Moving {done}/{total}...")));
 
             _thumbnails = new ThumbnailService(_library.LibraryDirectory);
+
+            // Generate thumbnails for newly merged entries
+            if (newEntryIds != null && newEntryIds.Count > 0)
+            {
+                var toGenerate = _library.Entries
+                    .Where(e => newEntryIds.Contains(e.Id) && File.Exists(e.FilePath))
+                    .Select(e => (e.Id, e.FilePath))
+                    .ToList();
+                if (toGenerate.Count > 0)
+                {
+                    StatusLabel.Text = $"Generating thumbnails for {toGenerate.Count} new image(s)...";
+                    await Task.Run(() => _thumbnails.RegenerateAll(toGenerate,
+                        onProgress: (done, total) =>
+                            Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Generating thumbnails {done}/{total}...")));
+                }
+            }
 
             if (_appSettings != null)
             {

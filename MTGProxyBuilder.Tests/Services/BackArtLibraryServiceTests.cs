@@ -253,6 +253,68 @@ public class BackArtLibraryServiceTests : IDisposable
         Assert.True(File.Exists(found.FilePath));
     }
 
+    [Fact]
+    public void MoveToDirectory_ReturnsNewEntryIds()
+    {
+        string srcDir = Path.Combine(_testDir, "MoveRetSrc");
+        string destDir = Path.Combine(_testDir, "MoveRetDest");
+        var svc = new BackArtLibraryService(srcDir);
+
+        var entry = svc.AddFromFile(_testImagePath, $"MoveRet_{Guid.NewGuid():N}");
+        Assert.NotNull(entry);
+
+        var newIds = svc.MoveToDirectory(destDir);
+        Assert.Single(newIds);
+        Assert.Equal(entry!.Id, newIds[0]);
+    }
+
+    [Fact]
+    public void MoveToDirectory_MergesWithExistingCatalog()
+    {
+        // Create an existing library at the destination
+        string destDir = Path.Combine(_testDir, "MergeDest");
+        var existingLib = new BackArtLibraryService(destDir);
+        var existing = existingLib.AddFromFile(_testImagePath, $"Existing_{Guid.NewGuid():N}", "DestSource");
+        Assert.NotNull(existing);
+
+        // Create a source library with a different entry
+        string srcDir = Path.Combine(_testDir, "MergeSrc");
+        var srcLib = new BackArtLibraryService(srcDir);
+        var incoming = srcLib.AddFromFile(_testImagePath, $"Incoming_{Guid.NewGuid():N}", "SrcSource");
+        Assert.NotNull(incoming);
+
+        // Move source into destination (which already has a catalog)
+        var newIds = srcLib.MoveToDirectory(destDir);
+
+        // Should have merged: 2 total entries, only the incoming one is "new"
+        Assert.Single(newIds);
+        Assert.Equal(incoming!.Id, newIds[0]);
+        Assert.Equal(2, srcLib.Entries.Count);
+        Assert.Contains(srcLib.Entries, e => e.Name == existing!.Name);
+        Assert.Contains(srcLib.Entries, e => e.Name == incoming.Name);
+    }
+
+    [Fact]
+    public void MoveToDirectory_MergeSkipsDuplicateNames()
+    {
+        string sharedName = $"Shared_{Guid.NewGuid():N}";
+
+        // Existing library at destination with an entry
+        string destDir = Path.Combine(_testDir, "MergeDupDest");
+        var existingLib = new BackArtLibraryService(destDir);
+        existingLib.AddFromFile(_testImagePath, sharedName, "DestSource");
+
+        // Source library with the same name
+        string srcDir = Path.Combine(_testDir, "MergeDupSrc");
+        var srcLib = new BackArtLibraryService(srcDir);
+        srcLib.AddFromFile(_testImagePath, sharedName, "SrcSource");
+
+        var newIds = srcLib.MoveToDirectory(destDir);
+
+        // The incoming entry has the same name as existing, so it's not "new"
+        Assert.Empty(newIds);
+    }
+
     // --- ExportToZip / ImportFromZip Tests ---
 
     [Fact]
