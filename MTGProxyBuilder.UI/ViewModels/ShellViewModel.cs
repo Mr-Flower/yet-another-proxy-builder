@@ -22,8 +22,8 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly ImageCacheService _imageCacheService;
         private readonly ScryfallService _scryfallService;
         private readonly MpcFillService _mpcFillService;
-        private readonly BackArtLibraryService _backArtLibraryService;
-        private readonly FrontArtLibraryService _frontArtLibraryService;
+        private BackArtLibraryService _backArtLibraryService;
+        private FrontArtLibraryService _frontArtLibraryService;
         private readonly UpdateCheckService _updateService = new();
         private bool _updateAvailable;
         private string _updateMessage = string.Empty;
@@ -248,9 +248,18 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         private void OpenSettings()
         {
+            string? oldFrontPath = _appSettings.Settings.FrontArtLibraryPath;
+            string? oldBackPath = _appSettings.Settings.BackArtLibraryPath;
+
             var dialog = new Dialogs.SettingsDialog(_appSettings, _mpcSourceManager, _mpcFillService);
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
+
+            // Reload library services if paths changed
+            if (_appSettings.Settings.FrontArtLibraryPath != oldFrontPath)
+                _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
+            if (_appSettings.Settings.BackArtLibraryPath != oldBackPath)
+                _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
         }
 
         private void ManageFrontArtLibrary()

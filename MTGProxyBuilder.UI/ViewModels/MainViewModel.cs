@@ -88,8 +88,8 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly PdfGeneratorService _pdfGeneratorService;
         private readonly ScryfallService _scryfallService;
         private readonly ImageCacheService _imageCacheService;
-        private readonly BackArtLibraryService _backArtLibraryService;
-        private readonly FrontArtLibraryService _frontArtLibraryService;
+        private BackArtLibraryService _backArtLibraryService;
+        private FrontArtLibraryService _frontArtLibraryService;
         private readonly MoxfieldService _moxfieldService;
         private readonly ArchidektService _archidektService;
         private readonly DeckImportService _deckImportService;
@@ -263,14 +263,25 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         private void OpenSettings()
         {
+            string? oldFrontPath = _appSettings.Settings.FrontArtLibraryPath;
+            string? oldBackPath = _appSettings.Settings.BackArtLibraryPath;
+
             var dialog = new Dialogs.SettingsDialog(_appSettings, MpcSourceManager, _mpcFillService);
             dialog.Owner = Application.Current.MainWindow;
             if (dialog.ShowDialog() == true)
             {
-                // Sync the persisted settings to VM properties
                 MpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
                 MpcAdvMinDpi = _appSettings.Settings.MpcFillDefaultMinDpi;
                 MpcFuzzySearch = _appSettings.Settings.MpcFillDefaultFuzzySearch;
+            }
+
+            // Reload library services if paths changed
+            if (_appSettings.Settings.FrontArtLibraryPath != oldFrontPath)
+                _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
+            if (_appSettings.Settings.BackArtLibraryPath != oldBackPath)
+            {
+                _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
+                RefreshBackArtLibrary();
             }
         }
 
