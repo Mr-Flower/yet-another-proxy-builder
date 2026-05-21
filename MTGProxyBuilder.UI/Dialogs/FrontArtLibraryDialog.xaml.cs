@@ -323,6 +323,14 @@ namespace MTGProxyBuilder.UI.Dialogs
                 }
             }
 
+            // Apply MPCFill defaults (SetCode=MPC, SetName=MPCFill.com, Artist=source) for entries still missing metadata
+            foreach (var (id, _) in newEntries)
+            {
+                var entry = _library.GetById(id);
+                if (entry != null)
+                    _library.ApplyMpcFillDefaults(id, entry.Source);
+            }
+
             // Generate thumbnails for newly added entries
             if (newEntries.Count > 0)
             {

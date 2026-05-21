@@ -376,7 +376,11 @@ namespace MTGProxyBuilder.UI.Dialogs
                         if (cached == null) { skipped++; continue; }
                         string displayName = $"{cb.Name} [{cb.Source}]";
                         var entry = _library.AddFromFile(cached, displayName, cb.Source);
-                        if (entry != null) added++;
+                        if (entry != null)
+                        {
+                            _library.ApplyMpcFillDefaults(entry.Id, cb.Source);
+                            added++;
+                        }
                         else skipped++;
                     }
                 }

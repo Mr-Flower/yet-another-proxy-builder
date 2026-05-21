@@ -227,7 +227,9 @@ namespace MTGProxyBuilder.UI.ViewModels
             if (path != null)
             {
                 string libName = $"{mpcCard.Name} [{mpcCard.Source}]";
-                _frontLibrary.AddFromFile(path, libName, mpcCard.Source);
+                var entry = _frontLibrary.AddFromFile(path, libName, mpcCard.Source);
+                if (entry != null)
+                    _frontLibrary.ApplyMpcFillDefaults(entry.Id, mpcCard.Source);
             }
 
             var card = new CardModel

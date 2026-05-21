@@ -541,7 +541,11 @@ namespace MTGProxyBuilder.UI.Dialogs
                         if (cached == null) { skipped++; continue; }
                         string displayName = $"{cb.Name} [{cb.Source}]";
                         var entry = _backLibrary.AddFromFile(cached, displayName, cb.Source);
-                        if (entry != null) added++;
+                        if (entry != null)
+                        {
+                            _backLibrary.ApplyMpcFillDefaults(entry.Id, cb.Source);
+                            added++;
+                        }
                         else skipped++;
                     }
                 }
@@ -615,11 +619,11 @@ namespace MTGProxyBuilder.UI.Dialogs
                         var entry = _frontArtLibrary.AddFromFile(path, libName, mpcSource);
                         if (entry != null)
                         {
-                            // Apply metadata from the Scryfall data we already have for this card
                             var sc = _scryfallCardsByPath.TryGetValue(path, out var exact) ? exact
                                    : _scryfallCardsByPath.Values.FirstOrDefault();
                             if (sc != null)
                                 _frontArtLibrary.ApplyMetadata(entry.Id, sc);
+                            _frontArtLibrary.ApplyMpcFillDefaults(entry.Id, mpcSource);
                         }
                         StatusLabel.Text = entry != null
                             ? $"Saved \"{libName}\" to front art library"
@@ -712,6 +716,7 @@ namespace MTGProxyBuilder.UI.Dialogs
 
                         if (scryfallCard != null)
                             _frontArtLibrary.ApplyMetadata(entry.Id, scryfallCard);
+                        _frontArtLibrary.ApplyMpcFillDefaults(entry.Id, source);
                     }
                     else skipped++;
                 }
