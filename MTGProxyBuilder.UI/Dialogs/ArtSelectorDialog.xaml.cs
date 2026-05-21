@@ -613,8 +613,14 @@ namespace MTGProxyBuilder.UI.Dialogs
                     {
                         string libName = $"{capturedLabel} [{mpcSource}]";
                         var entry = _frontArtLibrary.AddFromFile(path, libName, mpcSource);
-                        if (entry != null && _scryfallCardsByPath.TryGetValue(path, out var sc))
-                            _frontArtLibrary.ApplyMetadata(entry.Id, sc);
+                        if (entry != null)
+                        {
+                            // Apply metadata from the Scryfall data we already have for this card
+                            var sc = _scryfallCardsByPath.TryGetValue(path, out var exact) ? exact
+                                   : _scryfallCardsByPath.Values.FirstOrDefault();
+                            if (sc != null)
+                                _frontArtLibrary.ApplyMetadata(entry.Id, sc);
+                        }
                         StatusLabel.Text = entry != null
                             ? $"Saved \"{libName}\" to front art library"
                             : $"\"{libName}\" already in library";
@@ -683,6 +689,9 @@ namespace MTGProxyBuilder.UI.Dialogs
                 return;
             }
 
+            // Use the Scryfall data we already have for this card (all entries are proxies of the same card)
+            var scryfallCard = _scryfallCardsByPath.Values.FirstOrDefault();
+
             int added = 0, skipped = 0;
             var newEntries = new List<(string Id, string FilePath)>();
             var importedCacheKeys = new List<string>();
@@ -701,44 +710,13 @@ namespace MTGProxyBuilder.UI.Dialogs
                         newEntries.Add((entry.Id, entry.FilePath));
                         importedCacheKeys.Add(key);
 
-                        // Apply Scryfall metadata if available
-                        if (_scryfallCardsByPath.TryGetValue(path, out var sc))
-                            _frontArtLibrary.ApplyMetadata(entry.Id, sc);
+                        if (scryfallCard != null)
+                            _frontArtLibrary.ApplyMetadata(entry.Id, scryfallCard);
                     }
                     else skipped++;
                 }
             }
             finally { _frontArtLibrary.EndBatch(); }
-
-            // Populate metadata from Scryfall for entries that don't already have it (one lookup per unique card name)
-            if (newEntries.Count > 0 && _frontArtLibrary != null)
-            {
-                var scryfallCache = new Dictionary<string, ScryfallCard?>(StringComparer.OrdinalIgnoreCase);
-                int looked = 0;
-                for (int i = 0; i < newEntries.Count; i++)
-                {
-                    var entry = _frontArtLibrary.GetById(newEntries[i].Id);
-                    if (entry == null || !string.IsNullOrEmpty(entry.TypeLine)) continue;
-
-                    string cardName = entry.Name;
-                    int bracketIdx = cardName.LastIndexOf('[');
-                    if (bracketIdx > 0) cardName = cardName[..bracketIdx].Trim();
-
-                    if (!scryfallCache.TryGetValue(cardName, out var sc))
-                    {
-                        StatusLabel.Text = $"Looking up metadata {++looked}: {cardName}...";
-                        try { sc = await _scryfall.GetCardByNameAsync(cardName); }
-                        catch { sc = null; }
-                        scryfallCache[cardName] = sc;
-                        await Task.Delay(100);
-                    }
-
-                    if (sc != null)
-                        _frontArtLibrary.ApplyMetadata(entry.Id, sc);
-                }
-                if (looked > 0)
-                    StatusLabel.Text = $"Looked up metadata for {looked} unique card(s)";
-            }
 
             // Generate thumbnails for newly added entries
             if (newEntries.Count > 0 && _frontThumbnails != null)
