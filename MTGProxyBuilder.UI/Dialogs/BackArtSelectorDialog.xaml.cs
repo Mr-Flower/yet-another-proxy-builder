@@ -80,7 +80,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             var border = new Border
             {
                 Width = 100, Height = 150, Margin = new Thickness(4),
-                Background = new SolidColorBrush(Color.FromRgb(0x3E, 0x3E, 0x42)),
+                Background = AppBrushes.TileBg,
                 CornerRadius = new CornerRadius(4),
                 Cursor = Cursors.Hand,
                 BorderThickness = new Thickness(2),
@@ -122,7 +122,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             var lbl = new TextBlock
             {
                 Text = label + (isCurrent ? " *" : ""),
-                Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                Foreground = AppBrushes.TextSecondary,
                 FontSize = 10, TextTrimming = TextTrimming.CharacterEllipsis,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(4, 4, 4, 2)
@@ -143,11 +143,11 @@ namespace MTGProxyBuilder.UI.Dialogs
             var border = new Border
             {
                 Width = 100, Height = 150, Margin = new Thickness(4),
-                Background = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x38)),
+                Background = AppBrushes.ActionTileBg,
                 CornerRadius = new CornerRadius(4),
                 Cursor = Cursors.Hand,
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55))
+                BorderBrush = AppBrushes.Border
             };
 
             var stack = new StackPanel
@@ -163,7 +163,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             stack.Children.Add(new TextBlock
             {
                 Text = label, FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xAA, 0xAA, 0xAA)),
+                Foreground = AppBrushes.Label,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 TextAlignment = TextAlignment.Center
             });

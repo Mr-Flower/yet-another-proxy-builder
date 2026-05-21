@@ -163,10 +163,10 @@ namespace MTGProxyBuilder.UI.Dialogs
                         var border = new Border
                         {
                             Width = 110, Height = 165, Margin = new Thickness(4),
-                            Background = new SolidColorBrush(Color.FromRgb(0x3E, 0x3E, 0x42)),
+                            Background = AppBrushes.TileBg,
                             CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
                             BorderThickness = new Thickness(2),
-                            BorderBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                            BorderBrush = AppBrushes.AccentGreen,
                             ToolTip = $"{entry.Name}\nLibrary | {entry.Source}"
                         };
                         var stack = new StackPanel();
@@ -183,7 +183,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                         var lbl = new TextBlock
                         {
                             Text = "\u2605 " + entry.Name,
-                            Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
+                            Foreground = AppBrushes.AccentGreen,
                             FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis,
                             HorizontalAlignment = HorizontalAlignment.Center,
                             Margin = new Thickness(3, 4, 3, 0)
@@ -192,7 +192,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                         var detailLbl = new TextBlock
                         {
                             Text = $"Library | {entry.Source}",
-                            Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                            Foreground = AppBrushes.TextMuted,
                             FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center,
                             Margin = new Thickness(3, 0, 3, 2)
                         };
@@ -392,10 +392,10 @@ namespace MTGProxyBuilder.UI.Dialogs
                     var border = new Border
                     {
                         Width = 110, Height = 165, Margin = new Thickness(4),
-                        Background = new SolidColorBrush(Color.FromRgb(0x3E, 0x3E, 0x42)),
+                        Background = AppBrushes.TileBg,
                         CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
                         BorderThickness = new Thickness(2),
-                        BorderBrush = isDefault ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)) : Brushes.Transparent,
+                        BorderBrush = isDefault ? AppBrushes.AccentGreen : Brushes.Transparent,
                         ToolTip = $"{entry.Name}\n{(isDefault ? "DEFAULT\n" : "")}From library"
                     };
 
@@ -415,8 +415,8 @@ namespace MTGProxyBuilder.UI.Dialogs
                     {
                         Text = (isDefault ? "\u2605 " : "") + entry.Name,
                         Foreground = isDefault
-                            ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
-                            : new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                            ? AppBrushes.AccentGreen
+                            : AppBrushes.TextSecondary,
                         FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis,
                         HorizontalAlignment = HorizontalAlignment.Center,
                         Margin = new Thickness(3, 4, 3, 0)
@@ -426,7 +426,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                     var detailLbl = new TextBlock
                     {
                         Text = "From library",
-                        Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                        Foreground = AppBrushes.TextMuted,
                         FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center,
                         Margin = new Thickness(3, 0, 3, 2)
                     };
@@ -583,7 +583,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             var border = new Border
             {
                 Width = 110, Height = 165, Margin = new Thickness(4),
-                Background = new SolidColorBrush(Color.FromRgb(0x3E, 0x3E, 0x42)),
+                Background = AppBrushes.TileBg,
                 CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
                 BorderThickness = new Thickness(2),
                 BorderBrush = isCurrent ? Brushes.DodgerBlue : Brushes.Transparent,
@@ -622,7 +622,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             var lbl = new TextBlock
             {
                 Text = label + (isCurrent ? " *" : ""),
-                Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                Foreground = AppBrushes.TextSecondary,
                 FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(3, 4, 3, 0)
@@ -631,7 +631,7 @@ namespace MTGProxyBuilder.UI.Dialogs
 
             var detailLbl = new TextBlock
             {
-                Text = detail, Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                Text = detail, Foreground = AppBrushes.TextMuted,
                 FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(3, 0, 3, 2)
@@ -701,10 +701,10 @@ namespace MTGProxyBuilder.UI.Dialogs
             var border = new Border
             {
                 Width = 110, Height = 165, Margin = new Thickness(4),
-                Background = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x38)),
+                Background = AppBrushes.ActionTileBg,
                 CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55))
+                BorderBrush = AppBrushes.Border
             };
 
             var stack = new StackPanel
@@ -720,7 +720,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             stack.Children.Add(new TextBlock
             {
                 Text = label, FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xAA, 0xAA, 0xAA)),
+                Foreground = AppBrushes.Label,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 TextAlignment = TextAlignment.Center
             });

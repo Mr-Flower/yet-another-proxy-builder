@@ -91,7 +91,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                 var border = new Border
                 {
                     Width = 100, Height = 150, Margin = new Thickness(4),
-                    Background = new SolidColorBrush(Color.FromRgb(0x3E, 0x3E, 0x42)),
+                    Background = AppBrushes.TileBg,
                     CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
                     BorderThickness = new Thickness(2), BorderBrush = Brushes.Transparent,
                     Tag = entry.Id,
@@ -116,8 +116,8 @@ namespace MTGProxyBuilder.UI.Dialogs
                 {
                     Text = isDefault ? "\u2605 " + entry.Name : entry.Name,
                     Foreground = isDefault
-                        ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
-                        : new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                        ? AppBrushes.AccentGreen
+                        : AppBrushes.TextSecondary,
                     FontSize = 9, TextTrimming = TextTrimming.CharacterEllipsis,
                     FontWeight = isDefault ? FontWeights.Bold : FontWeights.Normal,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -130,7 +130,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                     var srcLbl = new TextBlock
                     {
                         Text = entry.Source,
-                        Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                        Foreground = AppBrushes.TextMuted,
                         FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis,
                         HorizontalAlignment = HorizontalAlignment.Center,
                         Margin = new Thickness(3, 0, 3, 2)
@@ -139,7 +139,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                 }
 
                 if (isDefault)
-                    border.BorderBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50));
+                    border.BorderBrush = AppBrushes.AccentGreen;
 
                 border.Child = stack;
 
@@ -242,7 +242,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                     if (_selectedEntryIds.Contains(id))
                         b.BorderBrush = Brushes.DodgerBlue;
                     else if (_library.IsDefault(id))
-                        b.BorderBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50));
+                        b.BorderBrush = AppBrushes.AccentGreen;
                     else
                         b.BorderBrush = Brushes.Transparent;
                 }

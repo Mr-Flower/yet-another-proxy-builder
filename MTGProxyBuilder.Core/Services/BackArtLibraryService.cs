@@ -1,42 +1,23 @@
-using System.IO.Compression;
 using MTGProxyBuilder.Core.Models;
 using Newtonsoft.Json;
 
 namespace MTGProxyBuilder.Core.Services
 {
-    public class BackArtLibraryCatalog
+    public class BackArtLibraryCatalog : ArtLibraryCatalog
     {
-        [JsonProperty("entries")]
-        public List<BackArtEntry> Entries { get; set; } = new();
-
         [JsonProperty("defaultEntryId")]
         public string? DefaultEntryId { get; set; }
     }
 
-    public class BackArtLibraryService
+    public class BackArtLibraryService : ArtLibraryServiceBase<BackArtLibraryCatalog>
     {
-        private string _libraryDirectory;
-        private string _catalogPath;
-        private List<BackArtEntry> _entries = new();
         private string? _defaultEntryId;
 
         public BackArtLibraryService(string? customDirectory = null)
-        {
-            _libraryDirectory = customDirectory ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MTGProxyBuilder", "BackArtLibrary");
-            Directory.CreateDirectory(_libraryDirectory);
-            _catalogPath = Path.Combine(_libraryDirectory, "catalog.json");
-            Load();
-        }
-
-        public string LibraryDirectory => _libraryDirectory;
-
-        public IReadOnlyList<BackArtEntry> Entries => _entries.AsReadOnly();
+            : base("BackArtLibrary", customDirectory) { }
 
         public string? DefaultEntryId => _defaultEntryId;
 
-        /// <summary>Returns the default back art file path, or null if none is set.</summary>
         public string? DefaultBackArtPath
         {
             get
@@ -55,293 +36,30 @@ namespace MTGProxyBuilder.Core.Services
 
         public bool IsDefault(string entryId) => _defaultEntryId == entryId;
 
-        private bool _batchMode;
-        private HashSet<string>? _batchNameIndex;
-
-        /// <summary>Begin a batch operation. Suppresses Save() until EndBatch() is called.</summary>
-        public void BeginBatch()
+        public override bool Remove(string entryId)
         {
-            _batchMode = true;
-            _batchNameIndex = new HashSet<string>(
-                _entries.Select(e => e.Name),
-                StringComparer.OrdinalIgnoreCase);
-        }
-
-        /// <summary>End a batch operation and persist all changes at once.</summary>
-        public void EndBatch()
-        {
-            _batchMode = false;
-            _batchNameIndex = null;
-            Save();
-        }
-
-        public BackArtEntry? AddFromFile(string sourceFilePath, string? displayName = null, string? contributor = null)
-        {
-            if (!File.Exists(sourceFilePath))
-                return null;
-
-            string name = displayName ?? Path.GetFileNameWithoutExtension(sourceFilePath);
-
-            if (_batchNameIndex != null)
+            bool removed = base.Remove(entryId);
+            if (removed && _defaultEntryId == entryId)
             {
-                if (!_batchNameIndex.Add(name))
-                    return _entries.FirstOrDefault(e =>
-                        string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
-            }
-            else
-            {
-                var existing = _entries.FirstOrDefault(e =>
-                    string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
-                if (existing != null)
-                    return existing;
-            }
-
-            string id = Guid.NewGuid().ToString("N")[..12];
-            string ext = Path.GetExtension(sourceFilePath);
-            string destFileName = $"{id}{ext}";
-            string destPath = Path.Combine(_libraryDirectory, destFileName);
-
-            File.Copy(sourceFilePath, destPath, overwrite: true);
-
-            var entry = new BackArtEntry
-            {
-                Id = id,
-                Name = name,
-                FilePath = destPath,
-                Source = contributor ?? "Local",
-                AddedDate = DateTime.Now
-            };
-
-            _entries.Add(entry);
-            if (!_batchMode)
-                Save();
-            return entry;
-        }
-
-        public bool Remove(string entryId)
-        {
-            var entry = _entries.FirstOrDefault(e => e.Id == entryId);
-            if (entry == null) return false;
-
-            if (File.Exists(entry.FilePath))
-            {
-                try { File.Delete(entry.FilePath); }
-                catch { }
-            }
-
-            _entries.Remove(entry);
-            if (_defaultEntryId == entryId)
                 _defaultEntryId = null;
-            Save();
-            return true;
+                Save();
+            }
+            return removed;
         }
 
-        public BackArtEntry? GetById(string id)
+        protected override void OnLoadCatalog(BackArtLibraryCatalog catalog)
         {
-            return _entries.FirstOrDefault(e => e.Id == id);
+            _defaultEntryId = catalog.DefaultEntryId;
         }
 
-        // ================================================================
-        //  LIBRARY MANAGEMENT
-        // ================================================================
-
-        /// <summary>
-        /// Moves all library files to a new directory and updates all paths.
-        /// If the destination already contains a catalog.json, new entries are merged in.
-        /// Returns the list of entry IDs that were newly added (for thumbnail generation).
-        /// </summary>
-        public List<string> MoveToDirectory(string newDirectory, Action<int, int>? onProgress = null)
+        protected override void OnSaveCatalog(BackArtLibraryCatalog catalog)
         {
-            Directory.CreateDirectory(newDirectory);
-            string oldDirectory = _libraryDirectory;
-            var newEntryIds = new List<string>();
-
-            // Check if destination already has a library
-            string destCatalogPath = Path.Combine(newDirectory, "catalog.json");
-            var existingNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (File.Exists(destCatalogPath))
-            {
-                try
-                {
-                    string json = File.ReadAllText(destCatalogPath);
-                    var existingCatalog = JsonConvert.DeserializeObject<BackArtLibraryCatalog>(json);
-                    if (existingCatalog?.Entries != null)
-                    {
-                        foreach (var e in existingCatalog.Entries)
-                            existingNames.Add(e.Name);
-                        // Load existing entries into our list
-                        _entries.InsertRange(0, existingCatalog.Entries.Where(e => File.Exists(e.FilePath)));
-                        _defaultEntryId ??= existingCatalog.DefaultEntryId;
-                    }
-                }
-                catch { }
-            }
-
-            // Copy files from old location, skipping duplicates if merging
-            int total = _entries.Count;
-            for (int i = 0; i < total; i++)
-            {
-                var entry = _entries[i];
-                // Only copy files that are still in the old directory
-                if (File.Exists(entry.FilePath) && entry.FilePath.StartsWith(oldDirectory, StringComparison.OrdinalIgnoreCase))
-                {
-                    string fileName = Path.GetFileName(entry.FilePath);
-                    string destPath = Path.Combine(newDirectory, fileName);
-                    File.Copy(entry.FilePath, destPath, overwrite: true);
-                    entry.FilePath = destPath;
-
-                    if (!existingNames.Contains(entry.Name))
-                        newEntryIds.Add(entry.Id);
-                }
-                onProgress?.Invoke(i + 1, total);
-            }
-
-            // Move Thumbnails subdirectory if it exists
-            var oldThumbDir = Path.Combine(oldDirectory, "Thumbnails");
-            if (Directory.Exists(oldThumbDir))
-            {
-                var newThumbDir = Path.Combine(newDirectory, "Thumbnails");
-                Directory.CreateDirectory(newThumbDir);
-                foreach (var file in Directory.GetFiles(oldThumbDir))
-                    File.Copy(file, Path.Combine(newThumbDir, Path.GetFileName(file)), overwrite: true);
-            }
-
-            _libraryDirectory = newDirectory;
-            _catalogPath = destCatalogPath;
-            Save();
-
-            // Clean up old directory
-            try
-            {
-                if (Directory.Exists(oldDirectory) && !string.Equals(oldDirectory, newDirectory, StringComparison.OrdinalIgnoreCase))
-                    Directory.Delete(oldDirectory, recursive: true);
-            }
-            catch { }
-
-            return newEntryIds;
+            catalog.DefaultEntryId = _defaultEntryId;
         }
 
-        /// <summary>Exports the library to a ZIP archive.</summary>
-        public void ExportToZip(string zipFilePath, Action<int, int>? onProgress = null)
+        protected override void OnMergeExistingCatalog(BackArtLibraryCatalog existingCatalog)
         {
-            if (File.Exists(zipFilePath)) File.Delete(zipFilePath);
-
-            using var zip = ZipFile.Open(zipFilePath, ZipArchiveMode.Create);
-
-            // Add catalog
-            if (File.Exists(_catalogPath))
-                zip.CreateEntryFromFile(_catalogPath, "catalog.json", CompressionLevel.Optimal);
-
-            // Add all image files
-            var imageFiles = _entries.Where(e => File.Exists(e.FilePath)).ToList();
-            for (int i = 0; i < imageFiles.Count; i++)
-            {
-                string fileName = Path.GetFileName(imageFiles[i].FilePath);
-                zip.CreateEntryFromFile(imageFiles[i].FilePath, fileName, CompressionLevel.Optimal);
-                onProgress?.Invoke(i + 1, imageFiles.Count);
-            }
-        }
-
-        /// <summary>Imports entries from a ZIP archive into the current library. Returns count of new entries added.</summary>
-        public int ImportFromZip(string zipFilePath, Action<int, int>? onProgress = null)
-        {
-            using var zip = ZipFile.OpenRead(zipFilePath);
-
-            // Read catalog from ZIP to get entry metadata
-            var catalogEntry = zip.GetEntry("catalog.json");
-            if (catalogEntry == null) return 0;
-
-            BackArtLibraryCatalog? importedCatalog;
-            using (var stream = catalogEntry.Open())
-            using (var reader = new StreamReader(stream))
-            {
-                var json = reader.ReadToEnd();
-                importedCatalog = JsonConvert.DeserializeObject<BackArtLibraryCatalog>(json);
-            }
-            if (importedCatalog?.Entries == null) return 0;
-
-            var imageEntries = importedCatalog.Entries;
-            int countBefore = _entries.Count;
-            BeginBatch();
-            try
-            {
-                for (int i = 0; i < imageEntries.Count; i++)
-                {
-                    var importEntry = imageEntries[i];
-                    string fileName = Path.GetFileName(importEntry.FilePath);
-                    var zipImageEntry = zip.GetEntry(fileName);
-                    if (zipImageEntry == null) continue;
-
-                    // Extract to temp, then add via normal flow
-                    string tempPath = Path.Combine(Path.GetTempPath(), fileName);
-                    try
-                    {
-                        zipImageEntry.ExtractToFile(tempPath, overwrite: true);
-                        AddFromFile(tempPath, importEntry.Name, importEntry.Source);
-                    }
-                    finally
-                    {
-                        try { File.Delete(tempPath); } catch { }
-                    }
-                    onProgress?.Invoke(i + 1, imageEntries.Count);
-                }
-            }
-            finally { EndBatch(); }
-
-            return _entries.Count - countBefore;
-        }
-
-        // ================================================================
-        //  PERSISTENCE
-        // ================================================================
-
-        private void Load()
-        {
-            try
-            {
-                if (File.Exists(_catalogPath))
-                {
-                    string json = File.ReadAllText(_catalogPath);
-
-                    // Try new format first
-                    var catalog = JsonConvert.DeserializeObject<BackArtLibraryCatalog>(json);
-                    if (catalog?.Entries != null && catalog.Entries.Count > 0)
-                    {
-                        _entries = catalog.Entries;
-                        _defaultEntryId = catalog.DefaultEntryId;
-                    }
-                    else
-                    {
-                        // Fall back to old format (just a list)
-                        _entries = JsonConvert.DeserializeObject<List<BackArtEntry>>(json) ?? new();
-                    }
-
-                    _entries.RemoveAll(e => !File.Exists(e.FilePath));
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Back art library load error: {ex.Message}");
-                _entries = new();
-            }
-        }
-
-        private void Save()
-        {
-            try
-            {
-                var catalog = new BackArtLibraryCatalog
-                {
-                    Entries = _entries,
-                    DefaultEntryId = _defaultEntryId
-                };
-                string json = JsonConvert.SerializeObject(catalog, Formatting.Indented);
-                File.WriteAllText(_catalogPath, json);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Back art library save error: {ex.Message}");
-            }
+            _defaultEntryId ??= existingCatalog.DefaultEntryId;
         }
     }
 }
