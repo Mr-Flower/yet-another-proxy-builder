@@ -115,6 +115,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         public void NewProject()
         {
             var vm = new MainViewModel();
+            vm.UseSharedLibraries(_frontArtLibraryService, _backArtLibraryService);
             ApplyDefaults(vm);
             var tab = new ProjectViewModel(vm);
             Projects.Add(tab);
@@ -162,6 +163,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             try
             {
                 var vm = new MainViewModel();
+                vm.UseSharedLibraries(_frontArtLibraryService, _backArtLibraryService);
                 var serializer = new ProjectSerializationService();
                 var project = await serializer.LoadProjectAsync(dialog.FileName,
                     msg => Application.Current.Dispatcher.Invoke(() => LoadingMessage = msg));
@@ -255,11 +257,23 @@ namespace MTGProxyBuilder.UI.ViewModels
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
 
-            // Reload library services if paths changed
+            // Reload library services if paths changed, and push to all open projects
+            bool changed = false;
             if (_appSettings.Settings.FrontArtLibraryPath != oldFrontPath)
+            {
                 _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
+                changed = true;
+            }
             if (_appSettings.Settings.BackArtLibraryPath != oldBackPath)
+            {
                 _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
+                changed = true;
+            }
+            if (changed)
+            {
+                foreach (var p in Projects)
+                    p.Inner.UseSharedLibraries(_frontArtLibraryService, _backArtLibraryService);
+            }
         }
 
         private void ManageFrontArtLibrary()

@@ -244,6 +244,17 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         }
 
+        /// <summary>
+        /// Replaces the library services with shared instances from the ShellViewModel.
+        /// Call after construction to ensure all ViewModels use the same library data.
+        /// </summary>
+        public void UseSharedLibraries(FrontArtLibraryService frontLibrary, BackArtLibraryService backLibrary)
+        {
+            _frontArtLibraryService = frontLibrary;
+            _backArtLibraryService = backLibrary;
+            RefreshBackArtLibrary();
+        }
+
         private async Task CheckForUpdateAsync()
         {
             try
