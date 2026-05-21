@@ -53,7 +53,17 @@ namespace MTGProxyBuilder.UI.Dialogs
             SourceFilter.SelectedIndex = 0;
         }
 
-        private void OnFilterChanged(object sender, object e)
+        private void OnSearchKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter) RefreshGrid();
+        }
+
+        private void OnSearchClick(object sender, RoutedEventArgs e)
+        {
+            RefreshGrid();
+        }
+
+        private void OnSourceFilterChanged(object sender, object e)
         {
             RefreshGrid();
         }
@@ -69,13 +79,13 @@ namespace MTGProxyBuilder.UI.Dialogs
             RemoveBtn.Content = "Remove Selected";
             DefaultBtn.IsEnabled = false;
 
-            string nameFilter = SearchBox?.Text?.Trim() ?? "";
+            string searchQuery = SearchBox?.Text?.Trim() ?? "";
             string sourceFilter = SourceFilter?.SelectedItem as string ?? "All Contributors";
 
             var entries = _library.Entries.Where(e => File.Exists(e.FilePath)).AsEnumerable();
 
-            if (!string.IsNullOrEmpty(nameFilter))
-                entries = entries.Where(e => e.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+            var searchPredicate = LibrarySearchParser.Parse(searchQuery);
+            entries = entries.Where(searchPredicate);
 
             if (sourceFilter != "All Contributors")
                 entries = entries.Where(e => e.Source.Equals(sourceFilter, StringComparison.OrdinalIgnoreCase));
