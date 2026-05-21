@@ -37,20 +37,17 @@ namespace MTGProxyBuilder.Core.Services
         }
 
         /// <summary>
-        /// Applies MPCFill-specific defaults for entries without Scryfall metadata.
-        /// Sets SetCode=MPC, SetName=MPCFill.com, Artist=source contributor name.
+        /// Applies MPCFill-specific overrides: SetCode=MPC, SetName=MPCFill.com,
+        /// Artist=source contributor name. These always overwrite because the art
+        /// comes from MPCFill regardless of the original card's printing.
         /// </summary>
         public static void ApplyMpcFillDefaults<TCatalog>(this ArtLibraryServiceBase<TCatalog> library,
             string entryId, string source) where TCatalog : ArtLibraryCatalog, new()
         {
-            var entry = library.GetById(entryId);
-            if (entry == null) return;
-
-            // Only apply defaults to fields that are still empty (don't overwrite Scryfall data)
             library.SetMetadata(entryId,
-                setCode: string.IsNullOrEmpty(entry.SetCode) ? "MPC" : null,
-                setName: string.IsNullOrEmpty(entry.SetName) ? "MPCFill.com" : null,
-                artist: string.IsNullOrEmpty(entry.Artist) ? source : null);
+                setCode: "MPC",
+                setName: "MPCFill.com",
+                artist: source);
         }
     }
 }
