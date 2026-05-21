@@ -295,32 +295,31 @@ namespace MTGProxyBuilder.UI.Dialogs
             }
             finally { _library.EndBatch(); }
 
-            // Populate metadata from Scryfall for newly added entries
+            // Populate metadata from Scryfall for newly added entries (one lookup per unique card name)
             if (newEntries.Count > 0 && _scryfall != null)
             {
-                StatusLabel.Text = $"Looking up card metadata for {newEntries.Count} new image(s)...";
+                var scryfallCache = new Dictionary<string, ScryfallCard?>(StringComparer.OrdinalIgnoreCase);
+                int looked = 0;
                 for (int i = 0; i < newEntries.Count; i++)
                 {
                     var entry = _library.GetById(newEntries[i].Id);
                     if (entry == null || !string.IsNullOrEmpty(entry.TypeLine)) continue;
 
-                    // Extract card name from display name (e.g. "Lightning Bolt [Chilli_Axe]" → "Lightning Bolt")
                     string cardName = entry.Name;
                     int bracketIdx = cardName.LastIndexOf('[');
                     if (bracketIdx > 0) cardName = cardName[..bracketIdx].Trim();
 
-                    StatusLabel.Text = $"Looking up metadata {i + 1}/{newEntries.Count}: {cardName}...";
-                    await Task.Delay(10);
-
-                    try
+                    if (!scryfallCache.TryGetValue(cardName, out var sc))
                     {
-                        var sc = await _scryfall.GetCardByNameAsync(cardName);
-                        if (sc != null)
-                            _library.ApplyMetadata(entry.Id, sc);
+                        StatusLabel.Text = $"Looking up metadata {++looked}: {cardName}...";
+                        try { sc = await _scryfall.GetCardByNameAsync(cardName); }
+                        catch { sc = null; }
+                        scryfallCache[cardName] = sc;
+                        await Task.Delay(100);
                     }
-                    catch { }
 
-                    await Task.Delay(100); // rate limiting
+                    if (sc != null)
+                        _library.ApplyMetadata(entry.Id, sc);
                 }
             }
 

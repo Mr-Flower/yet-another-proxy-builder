@@ -710,9 +710,10 @@ namespace MTGProxyBuilder.UI.Dialogs
             }
             finally { _frontArtLibrary.EndBatch(); }
 
-            // Populate metadata from Scryfall for entries that don't already have it
+            // Populate metadata from Scryfall for entries that don't already have it (one lookup per unique card name)
             if (newEntries.Count > 0 && _frontArtLibrary != null)
             {
+                var scryfallCache = new Dictionary<string, ScryfallCard?>(StringComparer.OrdinalIgnoreCase);
                 int looked = 0;
                 for (int i = 0; i < newEntries.Count; i++)
                 {
@@ -723,23 +724,20 @@ namespace MTGProxyBuilder.UI.Dialogs
                     int bracketIdx = cardName.LastIndexOf('[');
                     if (bracketIdx > 0) cardName = cardName[..bracketIdx].Trim();
 
-                    StatusLabel.Text = $"Looking up metadata {i + 1}/{newEntries.Count}: {cardName}...";
-
-                    try
+                    if (!scryfallCache.TryGetValue(cardName, out var sc))
                     {
-                        var sc = await _scryfall.GetCardByNameAsync(cardName);
-                        if (sc != null)
-                        {
-                            _frontArtLibrary.ApplyMetadata(entry.Id, sc);
-                            looked++;
-                        }
+                        StatusLabel.Text = $"Looking up metadata {++looked}: {cardName}...";
+                        try { sc = await _scryfall.GetCardByNameAsync(cardName); }
+                        catch { sc = null; }
+                        scryfallCache[cardName] = sc;
+                        await Task.Delay(100);
                     }
-                    catch { }
 
-                    await Task.Delay(100);
+                    if (sc != null)
+                        _frontArtLibrary.ApplyMetadata(entry.Id, sc);
                 }
                 if (looked > 0)
-                    StatusLabel.Text = $"Populated metadata for {looked} of {newEntries.Count} entries";
+                    StatusLabel.Text = $"Looked up metadata for {looked} unique card(s)";
             }
 
             // Generate thumbnails for newly added entries
