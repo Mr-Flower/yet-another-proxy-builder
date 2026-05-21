@@ -11,6 +11,7 @@ using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
+using MTGProxyBuilder.UI.Services;
 
 namespace MTGProxyBuilder.UI.Dialogs
 {
@@ -27,12 +28,18 @@ namespace MTGProxyBuilder.UI.Dialogs
         private readonly IList<CardModel>? _allCards;
         private readonly object[][]? _mpcSourcesOverride;
         private readonly FrontArtLibraryService? _frontArtLibrary;
+        private readonly ThumbnailService? _frontThumbnails;
+        private readonly ThumbnailService? _backThumbnails;
         private MpcFillSearchOptions _mpcSearchOptions;
 
         public string? ResultPath { get; private set; }
 
         // Maps normal-size Scryfall tile paths to their card data for full-size upgrade on selection
         private readonly Dictionary<string, ScryfallCard> _scryfallCardsByPath = new(StringComparer.OrdinalIgnoreCase);
+
+        // Tile tracking for search/filter
+        private record TileInfo(Border Tile, string Name, string Source, string Detail, bool IsAction = false);
+        private readonly List<TileInfo> _allTiles = new();
 
         /// <summary>When true, the result should be applied to all cards with matching name.</summary>
         public bool ApplyToSameName { get; private set; }
@@ -63,6 +70,8 @@ namespace MTGProxyBuilder.UI.Dialogs
             _mpcSourcesOverride = mpcSourcesOverride;
             _mpcSearchOptions = mpcSearchOptions ?? new MpcFillSearchOptions();
             _frontArtLibrary = frontArtLibrary;
+            _frontThumbnails = frontArtLibrary != null ? new ThumbnailService(frontArtLibrary.LibraryDirectory) : null;
+            _backThumbnails = backLibrary != null ? new ThumbnailService(backLibrary.LibraryDirectory) : null;
 
             bool isFront = mode == ArtSelectorMode.Front;
             TitleLabel.Text = isFront ? "Select Front Artwork" : "Select Card Back";
@@ -100,6 +109,7 @@ namespace MTGProxyBuilder.UI.Dialogs
         private async Task LoadOptionsAsync()
         {
             OptionsPanel.Children.Clear();
+            _allTiles.Clear();
             var shown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             bool isFront = _mode == ArtSelectorMode.Front;
 
@@ -122,6 +132,8 @@ namespace MTGProxyBuilder.UI.Dialogs
 
             StatusLabel.Text = $"{shown.Count} option(s) found";
             SpinnerDot.Visibility = Visibility.Collapsed;
+            PopulateSourceFilter();
+            ApplyFilters();
         }
 
         private async Task LoadFrontOptions(HashSet<string> shown)
@@ -142,7 +154,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                     StatusLabel.Text = $"Found {libraryMatches.Count} in library, searching online...";
                     foreach (var m in libraryMatches)
                         libraryNames.Add(m.Name);
-                    var deferredImages = new List<(Image img, string path)>();
+                    var deferredImages = new List<(Image img, string entryId, string path)>();
                     foreach (var entry in libraryMatches)
                     {
                         if (shown.Contains(entry.FilePath)) continue;
@@ -165,7 +177,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                         };
                         var img = new Image { Stretch = Stretch.UniformToFill };
                         imgBorder.Child = img;
-                        deferredImages.Add((img, entry.FilePath));
+                        deferredImages.Add((img, entry.Id, entry.FilePath));
                         stack.Children.Add(imgBorder);
 
                         var lbl = new TextBlock
@@ -197,6 +209,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                         };
 
                         OptionsPanel.Children.Add(border);
+                        _allTiles.Add(new TileInfo(border, entry.Name, entry.Source, $"Library | {entry.Source}"));
                     }
 
                     // Load library thumbnails progressively
@@ -206,16 +219,18 @@ namespace MTGProxyBuilder.UI.Dialogs
                         for (int i = 0; i < deferredImages.Count; i += batchSize)
                         {
                             var batch = deferredImages.Skip(i).Take(batchSize).ToList();
+                            var thumbSvc = _frontThumbnails;
                             var bitmaps = await Task.Run(() =>
                             {
                                 var results = new List<BitmapImage?>();
-                                foreach (var (_, path) in batch)
+                                foreach (var (_, entryId, path) in batch)
                                 {
                                     try
                                     {
+                                        var loadPath = thumbSvc?.GetOrCreate(entryId, path) ?? path;
                                         var bmp = new BitmapImage();
                                         bmp.BeginInit();
-                                        bmp.UriSource = new Uri(path, UriKind.Absolute);
+                                        bmp.UriSource = new Uri(loadPath, UriKind.Absolute);
                                         bmp.CacheOption = BitmapCacheOption.OnLoad;
                                         bmp.DecodePixelWidth = 150;
                                         bmp.EndInit();
@@ -361,7 +376,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             }
 
             // Library entries — build tiles instantly with deferred image loading
-            var deferredImages = new List<(Image img, string path)>();
+            var deferredImages = new List<(Image img, string entryId, string path)>();
 
             if (_backLibrary != null)
             {
@@ -393,7 +408,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                     };
                     var img = new Image { Stretch = Stretch.UniformToFill };
                     imgBorder.Child = img;
-                    deferredImages.Add((img, entry.FilePath));
+                    deferredImages.Add((img, entry.Id, entry.FilePath));
                     stack.Children.Add(imgBorder);
 
                     var lbl = new TextBlock
@@ -442,6 +457,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                     };
 
                     OptionsPanel.Children.Add(border);
+                    _allTiles.Add(new TileInfo(border, entry.Name, entry.Source, "From library"));
                 }
             }
 
@@ -461,16 +477,18 @@ namespace MTGProxyBuilder.UI.Dialogs
                 for (int i = 0; i < deferredImages.Count; i += batchSize)
                 {
                     var batch = deferredImages.Skip(i).Take(batchSize).ToList();
+                    var thumbSvc = _backThumbnails;
                     var bitmaps = await Task.Run(() =>
                     {
                         var results = new List<BitmapImage?>();
-                        foreach (var (_, path) in batch)
+                        foreach (var (_, entryId, path) in batch)
                         {
                             try
                             {
+                                var loadPath = thumbSvc?.GetOrCreate(entryId, path) ?? path;
                                 var bmp = new BitmapImage();
                                 bmp.BeginInit();
-                                bmp.UriSource = new Uri(path, UriKind.Absolute);
+                                bmp.UriSource = new Uri(loadPath, UriKind.Absolute);
                                 bmp.CacheOption = BitmapCacheOption.OnLoad;
                                 bmp.DecodePixelWidth = 150;
                                 bmp.EndInit();
@@ -534,6 +552,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                 // Rebuild the dialog options to show the new library entries
                 var shown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 OptionsPanel.Children.Clear();
+                _allTiles.Clear();
 
                 string? currentPath = _card.BackArtworkPath;
                 if (!string.IsNullOrEmpty(currentPath) && File.Exists(currentPath))
@@ -542,6 +561,8 @@ namespace MTGProxyBuilder.UI.Dialogs
                     shown.Add(currentPath);
                 }
                 await LoadBackOptionsAsync(shown);
+                PopulateSourceFilter();
+                ApplyFilters();
             }
             catch (Exception ex)
             {
@@ -662,6 +683,17 @@ namespace MTGProxyBuilder.UI.Dialogs
             };
 
             OptionsPanel.Children.Add(border);
+
+            string trackSource;
+            if (!string.IsNullOrEmpty(mpcSource))
+                trackSource = mpcSource;
+            else if (detail.Contains("Scryfall", StringComparison.OrdinalIgnoreCase))
+                trackSource = "Scryfall";
+            else if (detail.Contains("Library", StringComparison.OrdinalIgnoreCase))
+                trackSource = "Library";
+            else
+                trackSource = "";
+            _allTiles.Add(new TileInfo(border, label, trackSource, detail));
         }
 
         private void AddActionTile(string label, Action action)
@@ -695,6 +727,7 @@ namespace MTGProxyBuilder.UI.Dialogs
             border.Child = stack;
             border.MouseLeftButtonUp += (_, _) => action();
             OptionsPanel.Children.Add(border);
+            _allTiles.Add(new TileInfo(border, label, "", "", IsAction: true));
         }
 
         // ================================================================
@@ -721,7 +754,7 @@ namespace MTGProxyBuilder.UI.Dialogs
         private void OnAddToFrontLibraryClick(object sender, RoutedEventArgs e) => OnAddToFrontLibrary();
         private void OnBrowseFileClick(object sender, RoutedEventArgs e) => OnBrowseFile();
 
-        private void OnImportCacheToLibrary()
+        private async void OnImportCacheToLibrary()
         {
             if (_frontArtLibrary == null) return;
 
@@ -733,6 +766,8 @@ namespace MTGProxyBuilder.UI.Dialogs
             }
 
             int added = 0, skipped = 0;
+            var newEntries = new List<(string Id, string FilePath)>();
+            var importedCacheKeys = new List<string>();
             _frontArtLibrary.BeginBatch();
             try
             {
@@ -741,11 +776,31 @@ namespace MTGProxyBuilder.UI.Dialogs
                     if (!File.Exists(path)) { skipped++; continue; }
                     string displayName = !string.IsNullOrEmpty(source)
                         ? $"{name} [{source}]" : name;
-                    if (_frontArtLibrary.AddFromFile(path, displayName, source) != null) added++;
+                    var entry = _frontArtLibrary.AddFromFile(path, displayName, source);
+                    if (entry != null)
+                    {
+                        added++;
+                        newEntries.Add((entry.Id, entry.FilePath));
+                        importedCacheKeys.Add(key);
+                    }
                     else skipped++;
                 }
             }
             finally { _frontArtLibrary.EndBatch(); }
+
+            // Generate thumbnails for newly added entries
+            if (newEntries.Count > 0 && _frontThumbnails != null)
+            {
+                StatusLabel.Text = $"Generating thumbnails for {newEntries.Count} new image(s)...";
+                var thumbSvc = _frontThumbnails;
+                await Task.Run(() => thumbSvc.RegenerateAll(newEntries,
+                    onProgress: (done, total) =>
+                        Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Generating thumbnails {done}/{total}...")));
+            }
+
+            // Remove imported items from cache
+            foreach (var key in importedCacheKeys)
+                _imageCache.Remove(key);
 
             StatusLabel.Text = $"Imported {added} image(s) to library ({skipped} already existed or skipped)";
             if (added > 0)
@@ -800,6 +855,92 @@ namespace MTGProxyBuilder.UI.Dialogs
 
         // ================================================================
         //  FILTER PANEL
+        // ================================================================
+
+        // ================================================================
+        //  SEARCH & SOURCE FILTER
+        // ================================================================
+
+        private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (SearchPlaceholder != null)
+                SearchPlaceholder.Visibility = string.IsNullOrEmpty(SearchBox.Text)
+                    ? Visibility.Visible : Visibility.Collapsed;
+            ApplyFilters();
+        }
+
+        private void OnSourceFilterChanged(object sender, SelectionChangedEventArgs e)
+        {
+            ApplyFilters();
+        }
+
+        private void ApplyFilters()
+        {
+            if (_allTiles.Count == 0) return;
+
+            string searchText = SearchBox?.Text?.Trim() ?? "";
+            string sourceFilter = (SourceFilterBox?.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
+
+            int visible = 0;
+            int total = 0;
+
+            foreach (var tile in _allTiles)
+            {
+                if (tile.IsAction)
+                {
+                    tile.Tile.Visibility = Visibility.Visible;
+                    continue;
+                }
+
+                total++;
+
+                bool matchesSearch = string.IsNullOrEmpty(searchText) ||
+                    tile.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    tile.Source.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    tile.Detail.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+
+                bool matchesSource = string.IsNullOrEmpty(sourceFilter) ||
+                    tile.Source.Equals(sourceFilter, StringComparison.OrdinalIgnoreCase);
+
+                bool show = matchesSearch && matchesSource;
+                tile.Tile.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+                if (show) visible++;
+            }
+
+            if (!string.IsNullOrEmpty(searchText) || !string.IsNullOrEmpty(sourceFilter))
+                StatusLabel.Text = $"Showing {visible} of {total} option(s)";
+        }
+
+        private void PopulateSourceFilter()
+        {
+            var currentSource = (SourceFilterBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
+            SourceFilterBox.SelectionChanged -= OnSourceFilterChanged;
+
+            SourceFilterBox.Items.Clear();
+            var allItem = new ComboBoxItem { Content = "All Sources", Tag = "" };
+            SourceFilterBox.Items.Add(allItem);
+            SourceFilterBox.SelectedItem = allItem;
+
+            var sources = _allTiles
+                .Where(t => !t.IsAction && !string.IsNullOrEmpty(t.Source))
+                .Select(t => t.Source)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(s => s)
+                .ToList();
+
+            foreach (var source in sources)
+            {
+                var item = new ComboBoxItem { Content = source, Tag = source };
+                SourceFilterBox.Items.Add(item);
+                if (source.Equals(currentSource, StringComparison.OrdinalIgnoreCase))
+                    SourceFilterBox.SelectedItem = item;
+            }
+
+            SourceFilterBox.SelectionChanged += OnSourceFilterChanged;
+        }
+
+        // ================================================================
+        //  MPCFILL FILTER PANEL
         // ================================================================
 
         private void LoadFilterControls(MpcFillSearchOptions opts)

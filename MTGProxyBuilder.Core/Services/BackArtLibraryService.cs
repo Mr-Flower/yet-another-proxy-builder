@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using MTGProxyBuilder.Core.Models;
 using Newtonsoft.Json;
 
@@ -14,20 +15,22 @@ namespace MTGProxyBuilder.Core.Services
 
     public class BackArtLibraryService
     {
-        private readonly string _libraryDirectory;
-        private readonly string _catalogPath;
+        private string _libraryDirectory;
+        private string _catalogPath;
         private List<BackArtEntry> _entries = new();
         private string? _defaultEntryId;
 
-        public BackArtLibraryService()
+        public BackArtLibraryService(string? customDirectory = null)
         {
-            _libraryDirectory = Path.Combine(
+            _libraryDirectory = customDirectory ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "MTGProxyBuilder", "BackArtLibrary");
             Directory.CreateDirectory(_libraryDirectory);
             _catalogPath = Path.Combine(_libraryDirectory, "catalog.json");
             Load();
         }
+
+        public string LibraryDirectory => _libraryDirectory;
 
         public IReadOnlyList<BackArtEntry> Entries => _entries.AsReadOnly();
 
@@ -137,6 +140,127 @@ namespace MTGProxyBuilder.Core.Services
         {
             return _entries.FirstOrDefault(e => e.Id == id);
         }
+
+        // ================================================================
+        //  LIBRARY MANAGEMENT
+        // ================================================================
+
+        /// <summary>Moves all library files to a new directory and updates all paths.</summary>
+        public void MoveToDirectory(string newDirectory, Action<int, int>? onProgress = null)
+        {
+            Directory.CreateDirectory(newDirectory);
+            string oldDirectory = _libraryDirectory;
+
+            for (int i = 0; i < _entries.Count; i++)
+            {
+                var entry = _entries[i];
+                if (File.Exists(entry.FilePath))
+                {
+                    string fileName = Path.GetFileName(entry.FilePath);
+                    string destPath = Path.Combine(newDirectory, fileName);
+                    File.Copy(entry.FilePath, destPath, overwrite: true);
+                    entry.FilePath = destPath;
+                }
+                onProgress?.Invoke(i + 1, _entries.Count);
+            }
+
+            // Move Thumbnails subdirectory if it exists
+            var oldThumbDir = Path.Combine(oldDirectory, "Thumbnails");
+            if (Directory.Exists(oldThumbDir))
+            {
+                var newThumbDir = Path.Combine(newDirectory, "Thumbnails");
+                Directory.CreateDirectory(newThumbDir);
+                foreach (var file in Directory.GetFiles(oldThumbDir))
+                    File.Copy(file, Path.Combine(newThumbDir, Path.GetFileName(file)), overwrite: true);
+            }
+
+            _libraryDirectory = newDirectory;
+            _catalogPath = Path.Combine(newDirectory, "catalog.json");
+            Save();
+
+            // Clean up old directory
+            try
+            {
+                if (Directory.Exists(oldDirectory) && !string.Equals(oldDirectory, newDirectory, StringComparison.OrdinalIgnoreCase))
+                    Directory.Delete(oldDirectory, recursive: true);
+            }
+            catch { }
+        }
+
+        /// <summary>Exports the library to a ZIP archive.</summary>
+        public void ExportToZip(string zipFilePath, Action<int, int>? onProgress = null)
+        {
+            if (File.Exists(zipFilePath)) File.Delete(zipFilePath);
+
+            using var zip = ZipFile.Open(zipFilePath, ZipArchiveMode.Create);
+
+            // Add catalog
+            if (File.Exists(_catalogPath))
+                zip.CreateEntryFromFile(_catalogPath, "catalog.json", CompressionLevel.Optimal);
+
+            // Add all image files
+            var imageFiles = _entries.Where(e => File.Exists(e.FilePath)).ToList();
+            for (int i = 0; i < imageFiles.Count; i++)
+            {
+                string fileName = Path.GetFileName(imageFiles[i].FilePath);
+                zip.CreateEntryFromFile(imageFiles[i].FilePath, fileName, CompressionLevel.Optimal);
+                onProgress?.Invoke(i + 1, imageFiles.Count);
+            }
+        }
+
+        /// <summary>Imports entries from a ZIP archive into the current library. Returns count of new entries added.</summary>
+        public int ImportFromZip(string zipFilePath, Action<int, int>? onProgress = null)
+        {
+            using var zip = ZipFile.OpenRead(zipFilePath);
+
+            // Read catalog from ZIP to get entry metadata
+            var catalogEntry = zip.GetEntry("catalog.json");
+            if (catalogEntry == null) return 0;
+
+            BackArtLibraryCatalog? importedCatalog;
+            using (var stream = catalogEntry.Open())
+            using (var reader = new StreamReader(stream))
+            {
+                var json = reader.ReadToEnd();
+                importedCatalog = JsonConvert.DeserializeObject<BackArtLibraryCatalog>(json);
+            }
+            if (importedCatalog?.Entries == null) return 0;
+
+            int added = 0;
+            var imageEntries = importedCatalog.Entries;
+            BeginBatch();
+            try
+            {
+                for (int i = 0; i < imageEntries.Count; i++)
+                {
+                    var importEntry = imageEntries[i];
+                    string fileName = Path.GetFileName(importEntry.FilePath);
+                    var zipImageEntry = zip.GetEntry(fileName);
+                    if (zipImageEntry == null) continue;
+
+                    // Extract to temp, then add via normal flow
+                    string tempPath = Path.Combine(Path.GetTempPath(), fileName);
+                    try
+                    {
+                        zipImageEntry.ExtractToFile(tempPath, overwrite: true);
+                        var result = AddFromFile(tempPath, importEntry.Name, importEntry.Source);
+                        if (result != null) added++;
+                    }
+                    finally
+                    {
+                        try { File.Delete(tempPath); } catch { }
+                    }
+                    onProgress?.Invoke(i + 1, imageEntries.Count);
+                }
+            }
+            finally { EndBatch(); }
+
+            return added;
+        }
+
+        // ================================================================
+        //  PERSISTENCE
+        // ================================================================
 
         private void Load()
         {

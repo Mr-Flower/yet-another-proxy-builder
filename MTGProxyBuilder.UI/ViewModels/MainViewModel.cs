@@ -145,8 +145,8 @@ namespace MTGProxyBuilder.UI.ViewModels
             _serializationService = new ProjectSerializationService();
             _pdfGeneratorService = new PdfGeneratorService();
             _scryfallService = new ScryfallService(_imageCacheService);
-            _backArtLibraryService = new BackArtLibraryService();
-            _frontArtLibraryService = new FrontArtLibraryService();
+            _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
+            _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
             _moxfieldService = new MoxfieldService();
             _archidektService = new ArchidektService();
             _deckImportService = new DeckImportService(_moxfieldService, _archidektService);
@@ -2179,7 +2179,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         private void ManageBackArtLibrary()
         {
-            var dialog = new Dialogs.BackArtLibraryDialog(_backArtLibraryService, _mpcFillService);
+            var dialog = new Dialogs.BackArtLibraryDialog(_backArtLibraryService, _mpcFillService, _appSettings);
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
             RefreshBackArtLibrary();
@@ -2188,7 +2188,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         private void ManageFrontArtLibrary()
         {
-            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService, _imageCacheService);
+            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService, _imageCacheService, _appSettings);
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
             StatusText = $"Front art library: {_frontArtLibraryService.Entries.Count} item(s)";
