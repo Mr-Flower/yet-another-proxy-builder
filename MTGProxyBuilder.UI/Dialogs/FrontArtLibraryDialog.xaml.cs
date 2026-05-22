@@ -253,7 +253,6 @@ namespace MTGProxyBuilder.UI.Dialogs
             {
                 if (_library.AddFromFile(file) != null) added++;
             }
-            StatusLabel.Text = $"Added {added} image(s)";
             PopulateSourceFilter();
             RefreshGrid();
         }
@@ -344,7 +343,6 @@ namespace MTGProxyBuilder.UI.Dialogs
             foreach (var key in importedCacheKeys)
                 _imageCache.Remove(key);
 
-            StatusLabel.Text = $"Imported {added} image(s) ({skipped} already in library or skipped)";
             if (added > 0)
             {
                 PopulateSourceFilter();
@@ -378,7 +376,6 @@ namespace MTGProxyBuilder.UI.Dialogs
                 if (_library.Remove(id)) removed++;
             }
             _selectedEntryIds.Clear();
-            StatusLabel.Text = $"Removed {removed} item(s)";
             PopulateSourceFilter();
             RefreshGrid();
         }
@@ -398,7 +395,6 @@ namespace MTGProxyBuilder.UI.Dialogs
                     onProgress: (done, total) =>
                         Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Regenerating thumbnails {done}/{total}...")));
 
-            StatusLabel.Text = $"Regenerated {generated} thumbnail(s)";
             RegenThumbBtn.IsEnabled = true;
             RefreshGrid();
         }
@@ -458,7 +454,6 @@ namespace MTGProxyBuilder.UI.Dialogs
                 _appSettings.Save();
             }
 
-            StatusLabel.Text = $"Library moved to {newDir}";
             RefreshGrid();
         }
 
@@ -478,7 +473,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                 onProgress: (done, total) =>
                     Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Compressing {done}/{total}...")));
 
-            StatusLabel.Text = $"Exported to {Path.GetFileName(dialog.FileName)}";
+            StatusLabel.Text = "";
         }
 
         private async void OnImportZip(object sender, RoutedEventArgs e)
@@ -496,7 +491,6 @@ namespace MTGProxyBuilder.UI.Dialogs
                 onProgress: (done, total) =>
                     Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Importing {done}/{total}...")));
 
-            StatusLabel.Text = $"Imported {added} new image(s) from ZIP";
             PopulateSourceFilter();
             RefreshGrid();
         }

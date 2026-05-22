@@ -274,7 +274,6 @@ namespace MTGProxyBuilder.UI.Dialogs
                 var entry = _library.AddFromFile(file);
                 if (entry != null) added++;
             }
-            StatusLabel.Text = $"Added {added} image(s)";
             RefreshGrid();
         }
 
@@ -283,14 +282,12 @@ namespace MTGProxyBuilder.UI.Dialogs
             if (_lastSelectedId == null) return;
             _library.SetDefault(_lastSelectedId);
             var entry = _library.GetById(_lastSelectedId);
-            StatusLabel.Text = $"Default set to \"{entry?.Name}\"";
             RefreshGrid();
         }
 
         private void OnClearDefault(object sender, RoutedEventArgs e)
         {
             _library.SetDefault(null);
-            StatusLabel.Text = "Default cleared";
             RefreshGrid();
         }
 
@@ -320,7 +317,6 @@ namespace MTGProxyBuilder.UI.Dialogs
             }
             _selectedEntryIds.Clear();
             _lastSelectedId = null;
-            StatusLabel.Text = $"Removed {removed} item(s)";
             PopulateSourceFilter();
             RefreshGrid();
         }
@@ -340,7 +336,6 @@ namespace MTGProxyBuilder.UI.Dialogs
                     onProgress: (done, total) =>
                         Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Regenerating thumbnails {done}/{total}...")));
 
-            StatusLabel.Text = $"Regenerated {generated} thumbnail(s)";
             RegenThumbBtn.IsEnabled = true;
             RefreshGrid();
         }
@@ -386,7 +381,6 @@ namespace MTGProxyBuilder.UI.Dialogs
                 }
                 finally { _library.EndBatch(); }
 
-                StatusLabel.Text = $"Added {added} card back(s) to library ({skipped} skipped)";
                 PopulateSourceFilter();
                 RefreshGrid();
             }
@@ -455,7 +449,6 @@ namespace MTGProxyBuilder.UI.Dialogs
                 _appSettings.Save();
             }
 
-            StatusLabel.Text = $"Library moved to {newDir}";
             RefreshGrid();
         }
 
@@ -475,7 +468,7 @@ namespace MTGProxyBuilder.UI.Dialogs
                 onProgress: (done, total) =>
                     Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Compressing {done}/{total}...")));
 
-            StatusLabel.Text = $"Exported to {Path.GetFileName(dialog.FileName)}";
+            StatusLabel.Text = "";
         }
 
         private async void OnImportZip(object sender, RoutedEventArgs e)
@@ -493,7 +486,6 @@ namespace MTGProxyBuilder.UI.Dialogs
                 onProgress: (done, total) =>
                     Dispatcher.BeginInvoke(() => StatusLabel.Text = $"Importing {done}/{total}...")));
 
-            StatusLabel.Text = $"Imported {added} new image(s) from ZIP";
             PopulateSourceFilter();
             RefreshGrid();
         }
