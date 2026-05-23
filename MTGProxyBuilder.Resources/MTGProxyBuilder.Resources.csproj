@@ -19,6 +19,7 @@
     <EmbeddedResource Include="Frames\Expedition\*.png" />
     <EmbeddedResource Include="Frames\ExpeditionNew\*.png" />
     <EmbeddedResource Include="Frames\Future\*.png" />
+    <EmbeddedResource Include="Frames\Ixalan\*.png" />
   </ItemGroup>
 
 </Project>
