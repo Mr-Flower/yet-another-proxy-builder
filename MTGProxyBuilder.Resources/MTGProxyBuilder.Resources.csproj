@@ -9,6 +9,7 @@
   <ItemGroup>
     <EmbeddedResource Include="SetSymbols\*.svg" />
     <EmbeddedResource Include="ManaSymbols\*.svg" />
+    <EmbeddedResource Include="Frames\Token\*.png" />
   </ItemGroup>
 
 </Project>
