@@ -33,6 +33,7 @@
     <EmbeddedResource Include="Frames\ModernNickname\*.png" />
     <EmbeddedResource Include="Frames\ModernNyx\*.png" />
     <EmbeddedResource Include="Frames\ModernZendikarRising\*.png" />
+    <EmbeddedResource Include="Frames\ModernPromo\*.png" />
   </ItemGroup>
 
 </Project>
