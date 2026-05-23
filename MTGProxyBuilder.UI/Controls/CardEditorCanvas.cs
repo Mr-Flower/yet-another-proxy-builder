@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -16,6 +17,9 @@ namespace MTGProxyBuilder.UI.Controls
         private readonly CardCompositor _compositor = new();
         private readonly DispatcherTimer _redrawTimer;
         private WriteableBitmap? _bitmap;
+
+        // Layer property change tracking
+        private readonly List<LayerBase> _subscribedLayers = new();
 
         // Drag state
         private bool _isDragging;
@@ -98,13 +102,42 @@ namespace MTGProxyBuilder.UI.Controls
         private static void OnProjectChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is CardEditorCanvas canvas)
+            {
+                canvas.SubscribeToLayers();
                 canvas.QueueRedraw();
+            }
         }
 
         private static void OnRenderPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is CardEditorCanvas canvas)
+            {
+                canvas.SubscribeToLayers();
                 canvas.QueueRedraw();
+            }
+        }
+
+        private void SubscribeToLayers()
+        {
+            // Unsubscribe from old layers
+            foreach (var layer in _subscribedLayers)
+                layer.PropertyChanged -= OnLayerPropertyChanged;
+            _subscribedLayers.Clear();
+
+            // Subscribe to current layers
+            var project = Project;
+            if (project == null) return;
+
+            foreach (var layer in project.Layers)
+            {
+                layer.PropertyChanged += OnLayerPropertyChanged;
+                _subscribedLayers.Add(layer);
+            }
+        }
+
+        private void OnLayerPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            QueueRedraw();
         }
 
         // --- Rendering ---
