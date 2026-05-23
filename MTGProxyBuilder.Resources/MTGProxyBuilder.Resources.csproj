@@ -20,6 +20,19 @@
     <EmbeddedResource Include="Frames\ExpeditionNew\*.png" />
     <EmbeddedResource Include="Frames\Future\*.png" />
     <EmbeddedResource Include="Frames\Ixalan\*.png" />
+    <EmbeddedResource Include="Frames\Modern\*.png" />
+    <EmbeddedResource Include="Frames\ModernBoxTopper\*.png" />
+    <EmbeddedResource Include="Frames\ModernCommanderLegends\*.png" />
+    <EmbeddedResource Include="Frames\ModernCustom\*.png" />
+    <EmbeddedResource Include="Frames\ModernDevoid\*.png" />
+    <EmbeddedResource Include="Frames\ModernGenericShowcase\*.png" />
+    <EmbeddedResource Include="Frames\ModernHoloStamps\*.png" />
+    <EmbeddedResource Include="Frames\ModernInvention\*.png" />
+    <EmbeddedResource Include="Frames\ModernInventionClassic\*.png" />
+    <EmbeddedResource Include="Frames\ModernM21\*.png" />
+    <EmbeddedResource Include="Frames\ModernNickname\*.png" />
+    <EmbeddedResource Include="Frames\ModernNyx\*.png" />
+    <EmbeddedResource Include="Frames\ModernZendikarRising\*.png" />
   </ItemGroup>
 
 </Project>
