@@ -36,6 +36,8 @@
     <EmbeddedResource Include="Frames\ModernPromo\*.png" />
     <EmbeddedResource Include="Frames\ModernTextlessGenericShowcase\*.png" />
     <EmbeddedResource Include="Frames\Saga\*.png" />
+    <EmbeddedResource Include="Fonts\*.ttf" />
+    <EmbeddedResource Include="Fonts\*.otf" />
   </ItemGroup>
 
 </Project>
