@@ -14,6 +14,8 @@
     <EmbeddedResource Include="Frames\Modal\*.png" />
     <EmbeddedResource Include="Frames\ShortModal\*.png" />
     <EmbeddedResource Include="Frames\Unstable\*.png" />
+    <EmbeddedResource Include="Frames\Planeswalker\*.png" />
+    <EmbeddedResource Include="Frames\PlaneswalkerNickname\*.png" />
   </ItemGroup>
 
 </Project>
