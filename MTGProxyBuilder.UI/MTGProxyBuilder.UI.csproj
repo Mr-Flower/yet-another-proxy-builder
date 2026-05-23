@@ -7,6 +7,7 @@
   <ItemGroup>
     <PackageReference Include="Dirkster.AvalonDock" Version="4.74.1" />
     <PackageReference Include="Dirkster.AvalonDock.Themes.VS2013" Version="4.74.1" />
+    <PackageReference Include="SkiaSharp" Version="3.119.0" />
     <PackageReference Include="VirtualizingWrapPanel" Version="2.5.1" />
   </ItemGroup>
 
@@ -16,6 +17,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>tcg-proxy-builder</AssemblyName>
     <Product>TCG Proxy Builder</Product>
     <Version>0.0.0-dev</Version>
