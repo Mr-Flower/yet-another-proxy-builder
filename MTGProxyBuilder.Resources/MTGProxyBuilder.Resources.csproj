@@ -12,6 +12,7 @@
     <EmbeddedResource Include="Frames\Token\*.png" />
     <EmbeddedResource Include="Frames\Storybook\*.png" />
     <EmbeddedResource Include="Frames\Modal\*.png" />
+    <EmbeddedResource Include="Frames\ShortModal\*.png" />
   </ItemGroup>
 
 </Project>
