@@ -34,6 +34,7 @@
     <EmbeddedResource Include="Frames\ModernNyx\*.png" />
     <EmbeddedResource Include="Frames\ModernZendikarRising\*.png" />
     <EmbeddedResource Include="Frames\ModernPromo\*.png" />
+    <EmbeddedResource Include="Frames\ModernTextlessGenericShowcase\*.png" />
   </ItemGroup>
 
 </Project>
