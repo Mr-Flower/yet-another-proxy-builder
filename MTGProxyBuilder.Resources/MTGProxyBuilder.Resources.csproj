@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="SetSymbols\*.svg" />
+    <EmbeddedResource Include="ManaSymbols\*.svg" />
   </ItemGroup>
 
 </Project>
