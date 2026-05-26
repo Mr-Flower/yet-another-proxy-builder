@@ -87,7 +87,14 @@ namespace MTGProxyBuilder.Core.Models
             {
                 if (_isLandscape == value) return;
                 _isLandscape = value;
-                (_pageWidthMm, _pageHeightMm) = (_pageHeightMm, _pageWidthMm);
+
+                // Only swap if the dimensions don't already match the orientation.
+                // During deserialization, width/height may already be set to landscape
+                // values, so swapping again would revert them to portrait.
+                bool isCurrentlyWide = _pageWidthMm > _pageHeightMm;
+                if (value != isCurrentlyWide)
+                    (_pageWidthMm, _pageHeightMm) = (_pageHeightMm, _pageWidthMm);
+
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(PageWidthMm));
                 OnPropertyChanged(nameof(PageHeightMm));
