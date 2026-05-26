@@ -48,9 +48,10 @@ namespace MTGProxyBuilder.Core.Models
         // Silhouette Cameo
         private bool _showRegistrationMarks;
         private bool _exportSvgCutLines;
-        private float _regMarkLengthIn = 0.35f;
-        private float _regMarkThicknessIn = 0.039f;
-        private float _regMarkInsetIn = 0.394f;
+        private float _regMarkSquareSizeIn = 0.197f;   // 5mm filled square
+        private float _regMarkLengthIn = 0.787f;       // 20mm L-shape arms
+        private float _regMarkThicknessIn = 0.012f;    // 0.3mm arm thickness
+        private float _regMarkInsetIn = 0.394f;        // 10mm from page edge
 
         public PrintMode PrintMode
         {
@@ -138,21 +139,28 @@ namespace MTGProxyBuilder.Core.Models
             set { _exportSvgCutLines = value; OnPropertyChanged(); }
         }
 
-        /// <summary>Length of each registration mark arm in inches (default 0.35").</summary>
+        /// <summary>Side length of the top-left filled square in inches (default 0.197" = 5mm).</summary>
+        public float RegMarkSquareSizeIn
+        {
+            get => _regMarkSquareSizeIn;
+            set { _regMarkSquareSizeIn = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>Length of each L-shape arm in inches (default 0.787" = 20mm).</summary>
         public float RegMarkLengthIn
         {
             get => _regMarkLengthIn;
             set { _regMarkLengthIn = value; OnPropertyChanged(); }
         }
 
-        /// <summary>Thickness of each registration mark arm in inches (default 0.039").</summary>
+        /// <summary>Thickness of each L-shape arm in inches (default 0.012" = 0.3mm).</summary>
         public float RegMarkThicknessIn
         {
             get => _regMarkThicknessIn;
             set { _regMarkThicknessIn = value; OnPropertyChanged(); }
         }
 
-        /// <summary>Distance from page edge to the registration mark corner in inches (default 0.394").</summary>
+        /// <summary>Distance from page edge to the registration mark corner in inches (default 0.394" = 10mm).</summary>
         public float RegMarkInsetIn
         {
             get => _regMarkInsetIn;

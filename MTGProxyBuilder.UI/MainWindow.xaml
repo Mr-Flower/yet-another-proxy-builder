@@ -693,7 +693,11 @@
                                 <CheckBox Content="Add registration marks to PDF" IsChecked="{Binding CurrentProject.PrintSettings.ShowRegistrationMarks}"
                                           Foreground="#CCC" Margin="0,0,0,4"/>
                                 <CheckBox Content="Export SVG cut lines with PDF" IsChecked="{Binding CurrentProject.PrintSettings.ExportSvgCutLines}"
-                                          Foreground="#CCC" Margin="0,0,0,6"/>
+                                          Foreground="#CCC" Margin="0,0,0,4"/>
+                                <Button Content="Export SVG Only" Command="{Binding ExportSvgCommand}"
+                                        Background="#3E3E42" Foreground="#CCC" BorderThickness="0"
+                                        Padding="8,4" FontSize="11" Cursor="Hand" HorizontalAlignment="Left"
+                                        Margin="0,0,0,6"/>
                                 <Grid Margin="0,0,0,4"
                                       Visibility="{Binding CurrentProject.PrintSettings.ShowRegistrationMarks, Converter={StaticResource BoolToVisibility}}">
                                     <Grid.ColumnDefinitions>
@@ -702,18 +706,25 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="8"/>
                                         <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
-                                        <TextBlock Text="Mark Length (in)" Foreground="#999" FontSize="9"/>
-                                        <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkLengthIn, UpdateSourceTrigger=LostFocus}" Padding="4,3" FontSize="11"
+                                        <TextBlock Text="Square (in)" Foreground="#999" FontSize="9"/>
+                                        <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkSquareSizeIn, UpdateSourceTrigger=LostFocus}" Padding="4,3" FontSize="11"
                                                  Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Arm Length (in)" Foreground="#999" FontSize="9"/>
+                                        <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkLengthIn, UpdateSourceTrigger=LostFocus}" Padding="4,3" FontSize="11"
+                                                 Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="4">
                                         <TextBlock Text="Thickness (in)" Foreground="#999" FontSize="9"/>
                                         <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkThicknessIn, UpdateSourceTrigger=LostFocus}" Padding="4,3" FontSize="11"
                                                  Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                     </StackPanel>
-                                    <StackPanel Grid.Column="4">
+                                    <StackPanel Grid.Column="6">
                                         <TextBlock Text="Inset (in)" Foreground="#999" FontSize="9"/>
                                         <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkInsetIn, UpdateSourceTrigger=LostFocus}" Padding="4,3" FontSize="11"
                                                  Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>

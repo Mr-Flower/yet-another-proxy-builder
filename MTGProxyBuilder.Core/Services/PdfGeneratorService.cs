@@ -359,25 +359,26 @@ namespace MTGProxyBuilder.Core.Services
         private void DrawRegistrationMarks(XGraphics gfx, float pageW, float pageH, PrintSettings ps)
         {
             float inset = ps.RegMarkInsetIn * InToPt;
-            float length = ps.RegMarkLengthIn * InToPt;
-            float thickness = ps.RegMarkThicknessIn * InToPt;
+            float squareSize = ps.RegMarkSquareSizeIn * InToPt;  // 5mm filled square
+            float armLength = ps.RegMarkLengthIn * InToPt;       // 20mm L-shape arms
+            float thickness = ps.RegMarkThicknessIn * InToPt;    // 0.3mm arm thickness
 
             var brush = XBrushes.Black;
 
-            // Top-left mark: filled square
-            gfx.DrawRectangle(brush, inset, inset, length, length);
+            // Top-left mark: filled square (5mm x 5mm)
+            gfx.DrawRectangle(brush, inset, inset, squareSize, squareSize);
 
             // Top-right mark: L-shape with corner at (pageW - inset, inset)
             // Horizontal bar going left
-            gfx.DrawRectangle(brush, pageW - inset - length, inset, length, thickness);
+            gfx.DrawRectangle(brush, pageW - inset - armLength, inset, armLength, thickness);
             // Vertical bar going down
-            gfx.DrawRectangle(brush, pageW - inset - thickness, inset + thickness, thickness, length - thickness);
+            gfx.DrawRectangle(brush, pageW - inset - thickness, inset + thickness, thickness, armLength - thickness);
 
             // Bottom-left mark: L-shape with corner at (inset, pageH - inset)
             // Vertical bar going up
-            gfx.DrawRectangle(brush, inset, pageH - inset - length, thickness, length - thickness);
+            gfx.DrawRectangle(brush, inset, pageH - inset - armLength, thickness, armLength - thickness);
             // Horizontal bar going right
-            gfx.DrawRectangle(brush, inset, pageH - inset - thickness, length, thickness);
+            gfx.DrawRectangle(brush, inset, pageH - inset - thickness, armLength, thickness);
         }
 
         private void DrawOverlayText(XGraphics gfx, string text, float x, float y, float w, float h)

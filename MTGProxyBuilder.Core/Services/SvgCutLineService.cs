@@ -31,16 +31,12 @@ namespace MTGProxyBuilder.Core.Services
                 int remainder = totalCards % perPage;
 
                 // Generate SVG for a full page (all slots filled)
-                if (fullPages > 0 || remainder == 0)
+                if (fullPages > 0)
                 {
-                    int cardCount = remainder == 0 && fullPages > 0 ? perPage : (fullPages > 0 ? perPage : remainder);
-                    if (fullPages > 0)
-                    {
-                        string fullPath = Path.Combine(outputDirectory, $"{baseName}_full.svg");
-                        string svg = BuildSvg(settings, printSettings, perPage);
-                        File.WriteAllText(fullPath, svg);
-                        generatedFiles.Add(fullPath);
-                    }
+                    string fullPath = Path.Combine(outputDirectory, $"{baseName}_full.svg");
+                    string svg = BuildSvg(settings, printSettings, perPage);
+                    File.WriteAllText(fullPath, svg);
+                    generatedFiles.Add(fullPath);
                 }
 
                 // Generate SVG for the partial last page (if different from full)
@@ -50,7 +46,6 @@ namespace MTGProxyBuilder.Core.Services
                         ? Path.Combine(outputDirectory, $"{baseName}_partial_{remainder}.svg")
                         : Path.Combine(outputDirectory, $"{baseName}_full.svg");
 
-                    // Only generate if we haven't already generated a file with this card count
                     if (fullPages > 0 || !generatedFiles.Any())
                     {
                         string svg = BuildSvg(settings, printSettings, remainder);
@@ -77,12 +72,14 @@ namespace MTGProxyBuilder.Core.Services
             int cols = settings.CardsPerRow;
             float radiusPt = printSettings.CornerRadiusMm * MmToPt;
 
+            // Page size in inches for width/height attributes
+            float pageWIn = settings.PageWidthMm / 25.4f;
+            float pageHIn = settings.PageHeightMm / 25.4f;
+
             var sb = new StringBuilder();
             sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-            sb.AppendLine(FormattableString.Invariant(
-                $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{pageW:F2}\" height=\"{pageH:F2}\" viewBox=\"0 0 {pageW:F2} {pageH:F2}\">"));
+            sb.AppendLine(I($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{pageWIn:F4}in\" height=\"{pageHIn:F4}in\" viewBox=\"0 0 {pageW:F2} {pageH:F2}\">"));
 
-            // Cut lines for each card position
             for (int i = 0; i < cardCount; i++)
             {
                 int row = i / cols;
@@ -91,24 +88,25 @@ namespace MTGProxyBuilder.Core.Services
                 float cellX = startX + col * cellW;
                 float cellY = startY + row * cellH;
 
-                // Card boundary (inside the bleed area)
                 float cardX = cellX + bleedPt;
                 float cardY = cellY + bleedPt;
 
-                if (radiusPt > 0)
-                {
-                    sb.AppendLine(FormattableString.Invariant(
-                        $"  <rect x=\"{cardX:F2}\" y=\"{cardY:F2}\" width=\"{cardWPt:F2}\" height=\"{cardHPt:F2}\" rx=\"{radiusPt:F2}\" ry=\"{radiusPt:F2}\" stroke=\"black\" stroke-width=\"1\" fill=\"none\"/>"));
-                }
-                else
-                {
-                    sb.AppendLine(FormattableString.Invariant(
-                        $"  <rect x=\"{cardX:F2}\" y=\"{cardY:F2}\" width=\"{cardWPt:F2}\" height=\"{cardHPt:F2}\" stroke=\"black\" stroke-width=\"1\" fill=\"none\"/>"));
-                }
+                sb.AppendLine(SvgRect(cardX, cardY, cardWPt, cardHPt, "none", "black", 0.5f, radiusPt));
             }
 
             sb.AppendLine("</svg>");
             return sb.ToString();
+        }
+
+        private static string I(FormattableString s) => s.ToString(CultureInfo.InvariantCulture);
+
+        private static string SvgRect(float x, float y, float w, float h, string fill, string stroke, float strokeWidth, float rx = 0)
+        {
+            var rxAttr = rx > 0
+                ? FormattableString.Invariant($"rx=\"{rx:F2}\" ry=\"{rx:F2}\" ")
+                : "";
+            return FormattableString.Invariant(
+                $"  <rect x=\"{x:F2}\" y=\"{y:F2}\" width=\"{w:F2}\" height=\"{h:F2}\" {rxAttr}fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{strokeWidth:F1}\"/>");
         }
     }
 }

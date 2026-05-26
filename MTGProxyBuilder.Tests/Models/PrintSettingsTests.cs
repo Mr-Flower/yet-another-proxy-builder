@@ -158,8 +158,9 @@ public class PrintSettingsTests
         var settings = new PrintSettings();
         Assert.False(settings.ShowRegistrationMarks);
         Assert.False(settings.ExportSvgCutLines);
-        Assert.Equal(0.35f, settings.RegMarkLengthIn);
-        Assert.Equal(0.039f, settings.RegMarkThicknessIn);
+        Assert.Equal(0.197f, settings.RegMarkSquareSizeIn);
+        Assert.Equal(0.787f, settings.RegMarkLengthIn);
+        Assert.Equal(0.012f, settings.RegMarkThicknessIn);
         Assert.Equal(0.394f, settings.RegMarkInsetIn);
     }
 

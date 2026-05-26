@@ -187,6 +187,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             AddScryfallCardCommand = new RelayCommand(_ => AddScryfallCard(), _ => SelectedScryfallCard != null);
 
             ExportPdfCommand = new RelayCommand(_ => ExportPdf());
+            ExportSvgCommand = new RelayCommand(_ => ExportSvgOnly());
 
             // Back art library commands
             AddBackArtToLibraryCommand = new RelayCommand(_ => AddBackArtToLibrary());
@@ -754,6 +755,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         public ICommand ScryfallSearchCommand { get; }
         public ICommand AddScryfallCardCommand { get; }
         public ICommand ExportPdfCommand { get; }
+        public ICommand ExportSvgCommand { get; }
         public ICommand AddBackArtToLibraryCommand { get; }
         public ICommand RemoveBackArtFromLibraryCommand { get; }
         public ICommand ApplyBackArtToSelectedCommand { get; }
@@ -1386,6 +1388,51 @@ namespace MTGProxyBuilder.UI.ViewModels
             {
                 StatusText = $"PDF export failed: {ex.Message}";
                 MessageBox.Show($"PDF generation error:\n{ex.Message}", "Export Failed",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                ClearBusy();
+            }
+        }
+
+        private async void ExportSvgOnly()
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Export SVG Cut Lines",
+                Filter = "SVG Files|*.svg",
+                FileName = $"{_currentProject.ProjectName}_cutlines"
+            };
+
+            if (dialog.ShowDialog() != true) return;
+
+            try
+            {
+                SetBusy("Generating SVG...");
+
+                var svgService = new SvgCutLineService();
+                string outputDir = Path.GetDirectoryName(dialog.FileName) ?? ".";
+                string baseName = Path.GetFileNameWithoutExtension(dialog.FileName);
+                var svgFiles = await svgService.GenerateSvgAsync(_currentProject, outputDir, baseName);
+
+                if (svgFiles.Count > 0)
+                {
+                    StatusText = $"SVG exported: {string.Join(", ", svgFiles.Select(Path.GetFileName))}";
+                    MessageBox.Show($"SVG cut lines exported!\n\n{string.Join("\n", svgFiles)}",
+                        "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    StatusText = "No SVG files generated";
+                    MessageBox.Show("No cards to generate cut lines for.",
+                        "Export", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"SVG export failed: {ex.Message}";
+                MessageBox.Show($"SVG generation error:\n{ex.Message}", "Export Failed",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
