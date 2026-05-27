@@ -142,10 +142,14 @@ jobs:
           #!/bin/bash
           HERE="$(dirname "$(readlink -f "${0}")")"
           export WINEPREFIX="${HOME}/.local/share/mtg-proxy-builder/wine"
+          export WINEARCH="win64"
           export PATH="${HERE}/wine/bin:${PATH}"
-          export LD_LIBRARY_PATH="${HERE}/wine/lib:${HERE}/wine/lib64:${LD_LIBRARY_PATH}"
+          export LD_LIBRARY_PATH="${HERE}/wine/lib:${HERE}/wine/lib64:${HERE}/wine/lib/wine/x86_64-unix:${LD_LIBRARY_PATH}"
           mkdir -p "${WINEPREFIX}"
-          exec "${HERE}/wine/bin/wine64" "${HERE}/tcg-proxy-builder.exe" "$@"
+          # Pure 64-bit Kron4ek builds expose "wine"; WoW64 builds also have "wine64"
+          WINE_BIN="${HERE}/wine/bin/wine64"
+          [ ! -x "$WINE_BIN" ] && WINE_BIN="${HERE}/wine/bin/wine"
+          exec "$WINE_BIN" "${HERE}/tcg-proxy-builder.exe" "$@"
           APPRUN
           chmod +x AppDir/AppRun
 
