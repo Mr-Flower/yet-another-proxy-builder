@@ -1,0 +1,91 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================================
+         BRUSHES
+         ============================================================ -->
+    <SolidColorBrush x:Key="WindowBgBrush"    Color="#1E1E1E"/>
+    <SolidColorBrush x:Key="PanelBgBrush"     Color="#252526"/>
+    <SolidColorBrush x:Key="TileBgBrush"      Color="#3E3E42"/>
+    <SolidColorBrush x:Key="InputBgBrush"     Color="#3E3E42"/>
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#CCCCCC"/>
+    <SolidColorBrush x:Key="TextMutedBrush"   Color="#888888"/>
+    <SolidColorBrush x:Key="TextDimBrush"     Color="#666666"/>
+    <SolidColorBrush x:Key="LabelBrush"       Color="#AAAAAA"/>
+    <SolidColorBrush x:Key="AccentBlueBrush"  Color="#0078D4"/>
+    <SolidColorBrush x:Key="AccentGreenBrush" Color="#4CAF50"/>
+    <SolidColorBrush x:Key="AccentRedBrush"   Color="#E06060"/>
+    <SolidColorBrush x:Key="BorderBrush"      Color="#555555"/>
+    <SolidColorBrush x:Key="BorderSubtleBrush" Color="#333333"/>
+
+    <!-- ============================================================
+         BUTTON CONTROL THEMES
+         ============================================================ -->
+
+    <!-- ToolBtn: transparent bg, grey text, darkens on hover/press -->
+    <ControlTheme x:Key="ToolBtn" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="#CCC"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}"
+                        CornerRadius="4"
+                        Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Content="{TemplateBinding Content}"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover">
+            <Setter Property="Background" Value="#3E3E42"/>
+        </Style>
+        <Style Selector="^:pressed">
+            <Setter Property="Background" Value="#4E4E52"/>
+        </Style>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.4"/>
+        </Style>
+    </ControlTheme>
+
+    <!-- AccentBtn: blue bg, white bold text -->
+    <ControlTheme x:Key="AccentBtn" TargetType="Button">
+        <Setter Property="Background" Value="#0078D4"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}"
+                        CornerRadius="4"
+                        Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Content="{TemplateBinding Content}"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover">
+            <Setter Property="Background" Value="#005A9E"/>
+        </Style>
+        <Style Selector="^:pressed">
+            <Setter Property="Background" Value="#004578"/>
+        </Style>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.4"/>
+        </Style>
+    </ControlTheme>
+
+</ResourceDictionary>

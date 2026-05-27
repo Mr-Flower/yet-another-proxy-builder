@@ -2,99 +2,91 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using System.Windows.Media.Imaging;
+using SkiaSharp;
 
-namespace MTGProxyBuilder.UI.Services
+namespace MTGProxyBuilder.UI.Services;
+
+public class ThumbnailService
 {
-    public class ThumbnailService
+    private readonly string _thumbnailDirectory;
+    private const int ThumbnailWidth = 200;
+    private const int JpegQuality = 85;
+
+    public ThumbnailService(string libraryDirectory)
     {
-        private readonly string _thumbnailDirectory;
-        private const int ThumbnailWidth = 200;
-        private const int JpegQuality = 85;
+        _thumbnailDirectory = Path.Combine(libraryDirectory, "Thumbnails");
+        Directory.CreateDirectory(_thumbnailDirectory);
+    }
 
-        public ThumbnailService(string libraryDirectory)
-        {
-            _thumbnailDirectory = Path.Combine(libraryDirectory, "Thumbnails");
-            Directory.CreateDirectory(_thumbnailDirectory);
-        }
+    public string GetThumbnailPath(string entryId)
+        => Path.Combine(_thumbnailDirectory, $"{entryId}.jpg");
 
-        public string GetThumbnailPath(string entryId)
-            => Path.Combine(_thumbnailDirectory, $"{entryId}.jpg");
+    public bool HasThumbnail(string entryId)
+        => File.Exists(GetThumbnailPath(entryId));
 
-        public bool HasThumbnail(string entryId)
-            => File.Exists(GetThumbnailPath(entryId));
+    public string? GetOrCreate(string entryId, string sourceFilePath)
+    {
+        var thumbPath = GetThumbnailPath(entryId);
+        if (File.Exists(thumbPath))
+            return thumbPath;
+        return Generate(entryId, sourceFilePath);
+    }
 
-        /// <summary>Returns existing thumbnail path or generates a new one. Safe for background threads.</summary>
-        public string? GetOrCreate(string entryId, string sourceFilePath)
+    public string? Generate(string entryId, string sourceFilePath)
+    {
+        if (!File.Exists(sourceFilePath))
+            return null;
+
+        try
         {
             var thumbPath = GetThumbnailPath(entryId);
-            if (File.Exists(thumbPath))
-                return thumbPath;
-            return Generate(entryId, sourceFilePath);
-        }
 
-        /// <summary>Generates a JPEG thumbnail from the source image. Safe for background threads.</summary>
-        public string? Generate(string entryId, string sourceFilePath)
+            using var original = SKBitmap.Decode(sourceFilePath);
+            if (original == null) return null;
+
+            int targetHeight = (int)Math.Round(original.Height * (double)ThumbnailWidth / original.Width);
+            using var scaled = original.Resize(new SKImageInfo(ThumbnailWidth, targetHeight), SKFilterQuality.Medium);
+            if (scaled == null) return null;
+
+            using var data = scaled.Encode(SKEncodedImageFormat.Jpeg, JpegQuality);
+            using var stream = File.Create(thumbPath);
+            data.SaveTo(stream);
+
+            return thumbPath;
+        }
+        catch
         {
-            if (!File.Exists(sourceFilePath))
-                return null;
-
-            try
-            {
-                var thumbPath = GetThumbnailPath(entryId);
-
-                var source = new BitmapImage();
-                source.BeginInit();
-                source.UriSource = new Uri(sourceFilePath, UriKind.Absolute);
-                source.CacheOption = BitmapCacheOption.OnLoad;
-                source.DecodePixelWidth = ThumbnailWidth;
-                source.EndInit();
-                source.Freeze();
-
-                var encoder = new JpegBitmapEncoder { QualityLevel = JpegQuality };
-                encoder.Frames.Add(BitmapFrame.Create(source));
-                using var stream = File.Create(thumbPath);
-                encoder.Save(stream);
-
-                return thumbPath;
-            }
-            catch
-            {
-                return null;
-            }
+            return null;
         }
+    }
 
-        /// <summary>Deletes the thumbnail for a specific entry.</summary>
-        public void Delete(string entryId)
+    public void Delete(string entryId)
+    {
+        var path = GetThumbnailPath(entryId);
+        if (File.Exists(path))
+            try { File.Delete(path); } catch { }
+    }
+
+    public void DeleteAll()
+    {
+        if (!Directory.Exists(_thumbnailDirectory)) return;
+        foreach (var file in Directory.GetFiles(_thumbnailDirectory, "*.jpg"))
+            try { File.Delete(file); } catch { }
+    }
+
+    public int RegenerateAll(IReadOnlyList<(string Id, string FilePath)> entries,
+        Action<int, int>? onProgress = null, CancellationToken ct = default)
+    {
+        DeleteAll();
+        int generated = 0;
+        for (int i = 0; i < entries.Count; i++)
         {
-            var path = GetThumbnailPath(entryId);
-            if (File.Exists(path))
-                try { File.Delete(path); } catch { }
+            ct.ThrowIfCancellationRequested();
+            var (id, path) = entries[i];
+            if (Generate(id, path) != null)
+                generated++;
+            onProgress?.Invoke(i + 1, entries.Count);
         }
-
-        /// <summary>Deletes all thumbnails in the directory.</summary>
-        public void DeleteAll()
-        {
-            if (!Directory.Exists(_thumbnailDirectory)) return;
-            foreach (var file in Directory.GetFiles(_thumbnailDirectory, "*.jpg"))
-                try { File.Delete(file); } catch { }
-        }
-
-        /// <summary>Regenerates thumbnails for all provided entries. Call from a background thread.</summary>
-        public int RegenerateAll(IReadOnlyList<(string Id, string FilePath)> entries,
-            Action<int, int>? onProgress = null, CancellationToken ct = default)
-        {
-            DeleteAll();
-            int generated = 0;
-            for (int i = 0; i < entries.Count; i++)
-            {
-                ct.ThrowIfCancellationRequested();
-                var (id, path) = entries[i];
-                if (Generate(id, path) != null)
-                    generated++;
-                onProgress?.Invoke(i + 1, entries.Count);
-            }
-            return generated;
-        }
+        return generated;
     }
 }

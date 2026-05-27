@@ -1,22 +1,17 @@
 using System;
 using System.Globalization;
-using System.Windows;
-using System.Windows.Data;
+using Avalonia.Data.Converters;
 
-namespace MTGProxyBuilder.UI.Converters
+namespace MTGProxyBuilder.UI.Converters;
+
+public class NullToCollapsedConverter : IValueConverter
 {
-    public class NullToCollapsedConverter : IValueConverter
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            return value == null || (value is string s && string.IsNullOrEmpty(s))
-                ? Visibility.Collapsed
-                : Visibility.Visible;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
+        bool result = value != null && !(value is string s && string.IsNullOrEmpty(s));
+        return parameter is string p && p == "inverse" ? !result : result;
     }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotImplementedException();
 }

@@ -1,26 +1,44 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>tcg-proxy-builder</AssemblyName>
+    <Product>TCG Proxy Builder</Product>
+    <Version>0.0.0-dev</Version>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MTGProxyBuilder.Core\MTGProxyBuilder.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Dirkster.AvalonDock" Version="4.74.1" />
-    <PackageReference Include="Dirkster.AvalonDock.Themes.VS2013" Version="4.74.1" />
-    <PackageReference Include="SkiaSharp" Version="3.119.0" />
-    <PackageReference Include="VirtualizingWrapPanel" Version="2.5.1" />
+    <PackageReference Include="Avalonia" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Skia" Version="11.2.*" />
+    <PackageReference Include="MsBox.Avalonia" Version="3.*" />
+    <PackageReference Include="SkiaSharp" Version="3.*" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <AssemblyName>tcg-proxy-builder</AssemblyName>
-    <Product>TCG Proxy Builder</Product>
-    <Version>0.0.0-dev</Version>
-  </PropertyGroup>
+  <!-- Exclude legacy WPF files not yet ported to Avalonia -->
+  <ItemGroup>
+    <Compile Remove="AssemblyInfo.cs" />
+    <Compile Remove="App.xaml.cs" />
+    <Compile Remove="MainWindow.xaml.cs" />
+    <Compile Remove="Controls\**\*.cs" />
+    <Compile Remove="Dialogs\**\*.cs" />
+  </ItemGroup>
+
+  <!-- Prevent old WPF XAML from being processed as resources -->
+  <ItemGroup>
+    <None Include="**\*.xaml" />
+    <EmbeddedResource Remove="**\*.xaml" />
+    <Page Remove="**\*.xaml" />
+  </ItemGroup>
 
 </Project>
