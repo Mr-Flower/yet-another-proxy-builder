@@ -1,3 +1,4 @@
+#if WINDOWS
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.UIA3;
@@ -213,3 +214,4 @@ public class UiSmokeTests : IDisposable
         Assert.Contains("1:1", buttonNames);
     }
 }
+#endif
