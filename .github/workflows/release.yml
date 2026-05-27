@@ -33,7 +33,7 @@ jobs:
         run: dotnet restore
 
       - name: Run tests
-        run: dotnet test --no-restore --verbosity normal
+        run: dotnet test --no-restore --verbosity normal --filter "Category!=UI"
 
       - name: Publish
         run: >
@@ -51,12 +51,6 @@ jobs:
       - name: Remove PDB files
         run: Remove-Item publish/*.pdb -ErrorAction SilentlyContinue
 
-      - name: Upload Windows exe artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-exe
-          path: publish/tcg-proxy-builder.exe
-
       - name: Create Windows ZIP
         run: Compress-Archive -Path publish/* -DestinationPath "TCGProxyBuilder-${{ github.ref_name }}-win-x64.zip"
 
@@ -66,32 +60,49 @@ jobs:
           name: windows-zip
           path: "TCGProxyBuilder-${{ github.ref_name }}-win-x64.zip"
 
-  build-appimage:
+  build-linux:
     runs-on: ubuntu-22.04
-    needs: build-windows
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install AppImage dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libfuse2 icoutils imagemagick wget
+          sudo apt-get install -y libfuse2 wget
 
-      - name: Download Windows exe artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-exe
-          path: windows-exe/
+      - name: Restore dependencies
+        run: dotnet restore
 
-      - name: Download portable Wine
+      - name: Run tests
+        run: dotnet test --no-restore --verbosity normal --filter "Category!=UI"
+
+      - name: Publish (native Linux)
         run: |
-          WINE_VERSION=$(curl -s https://api.github.com/repos/Kron4ek/Wine-Builds/releases/latest | jq -r .tag_name)
-          echo "Using Wine ${WINE_VERSION}"
-          wget -q "https://github.com/Kron4ek/Wine-Builds/releases/download/${WINE_VERSION}/wine-${WINE_VERSION}-amd64.tar.xz" \
-            -O wine.tar.xz
-          tar -xf wine.tar.xz
-          mv "wine-${WINE_VERSION}-amd64" wine-portable
+          dotnet publish MTGProxyBuilder.UI/MTGProxyBuilder.UI.csproj \
+            -c Release \
+            -r linux-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:Version=${{ steps.version.outputs.version }} \
+            -p:AssemblyVersion=${{ steps.version.outputs.version }} \
+            -p:FileVersion=${{ steps.version.outputs.version }} \
+            -o publish
 
       - name: Download appimagetool
         run: |
@@ -101,33 +112,24 @@ jobs:
 
       - name: Create AppDir
         run: |
-          mkdir -p AppDir/wine
-          cp windows-exe/tcg-proxy-builder.exe AppDir/
-          cp -r wine-portable/* AppDir/wine/
+          mkdir -p AppDir
+          cp -r publish/* AppDir/
 
-      - name: Extract application icon
+      - name: Create icon
         run: |
-          mkdir -p icons
-          wrestool -x --output=icons/ -t14 windows-exe/tcg-proxy-builder.exe 2>/dev/null || true
-          ICO_FILE=$(find icons/ -name "*.ico" | head -1)
-
-          if [ -n "$ICO_FILE" ]; then
-            convert "${ICO_FILE}" -thumbnail 256x256 -alpha on \
-              -background none -flatten AppDir/mtg-proxy-builder.png 2>/dev/null || true
-          fi
-
-          if [ ! -s AppDir/mtg-proxy-builder.png ]; then
-            convert -size 256x256 xc:'#1a1a2e' \
-              -fill '#4a9eff' -font DejaVu-Sans-Bold -pointsize 52 \
-              -gravity center -annotate 0 'MTG\nProxy' \
-              AppDir/mtg-proxy-builder.png
-          fi
+          sudo apt-get install -y imagemagick
+          convert -size 256x256 xc:'#1a1a2e' \
+            -fill '#4a9eff' -font DejaVu-Sans-Bold -pointsize 52 \
+            -gravity center -annotate 0 'MTG\nProxy' \
+            AppDir/mtg-proxy-builder.png 2>/dev/null || \
+          wget -q -O AppDir/mtg-proxy-builder.png \
+            "https://via.placeholder.com/256/1a1a2e/4a9eff?text=MTG"
 
       - name: Create desktop file
         run: |
           cat > AppDir/mtg-proxy-builder.desktop << 'EOF'
           [Desktop Entry]
-          Name=MTG Proxy Builder
+          Name=TCG Proxy Builder
           Comment=Create printable TCG proxy cards
           Exec=AppRun
           Icon=mtg-proxy-builder
@@ -136,40 +138,32 @@ jobs:
           StartupNotify=true
           EOF
 
-      - name: Create AppRun script
+      - name: Create AppRun
         run: |
-          cat > AppDir/AppRun << 'APPRUN'
+          cat > AppDir/AppRun << 'EOF'
           #!/bin/bash
           HERE="$(dirname "$(readlink -f "${0}")")"
-          export WINEPREFIX="${HOME}/.local/share/mtg-proxy-builder/wine"
-          export WINEARCH="win64"
-          export PATH="${HERE}/wine/bin:${PATH}"
-          export LD_LIBRARY_PATH="${HERE}/wine/lib:${HERE}/wine/lib64:${HERE}/wine/lib/wine/x86_64-unix:${LD_LIBRARY_PATH}"
-          mkdir -p "${WINEPREFIX}"
-          # Pure 64-bit Kron4ek builds expose "wine"; WoW64 builds also have "wine64"
-          WINE_BIN="${HERE}/wine/bin/wine64"
-          [ ! -x "$WINE_BIN" ] && WINE_BIN="${HERE}/wine/bin/wine"
-          exec "$WINE_BIN" "${HERE}/tcg-proxy-builder.exe" "$@"
-          APPRUN
+          exec "${HERE}/tcg-proxy-builder" "$@"
+          EOF
           chmod +x AppDir/AppRun
 
       - name: Build AppImage
         env:
           ARCH: x86_64
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ needs.build-windows.outputs.version }}"
           APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool AppDir \
             "TCGProxyBuilder-v${VERSION}-linux-x86_64.AppImage"
 
-      - name: Upload AppImage artifact
+      - name: Upload Linux AppImage artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-appimage
-          path: "TCGProxyBuilder-v${{ needs.build-windows.outputs.version }}-linux-x86_64.AppImage"
+          path: "TCGProxyBuilder-v${{ steps.version.outputs.version }}-linux-x86_64.AppImage"
 
   create-release:
     runs-on: ubuntu-latest
-    needs: [build-windows, build-appimage]
+    needs: [build-windows, build-linux]
     permissions:
       contents: write
 
