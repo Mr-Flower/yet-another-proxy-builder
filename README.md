@@ -6,12 +6,23 @@ A Windows desktop application for creating printable PDFs of trading card game p
 
 ## Download
 
+### Windows
+
 1. Go to the [Releases](../../releases) page
 2. Download the latest `TCGProxyBuilder-vX.X.X-win-x64.zip`
 3. Extract the ZIP to any folder
 4. Run `tcg-proxy-builder.exe` — no installation or .NET runtime required
 
 The release is a self-contained single-file executable that includes everything needed to run on Windows 10/11 (64-bit).
+
+### Linux (AppImage)
+
+1. Go to the [Releases](../../releases) page
+2. Download the latest `TCGProxyBuilder-vX.X.X-linux-x86_64.AppImage`
+3. Make it executable: `chmod +x TCGProxyBuilder-*.AppImage`
+4. Run it: `./TCGProxyBuilder-*.AppImage`
+
+The AppImage bundles a portable [Wine](https://www.winehq.org/) runtime (~400 MB) so the Windows application runs on Linux without any installation or Wine on the system. User data and settings are stored in `~/.local/share/mtg-proxy-builder/`. Requires a 64-bit Linux distribution with kernel ≥ 4.4.
 
 ## Features
 
