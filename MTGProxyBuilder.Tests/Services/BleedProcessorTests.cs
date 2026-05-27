@@ -1,4 +1,5 @@
 using MTGProxyBuilder.Core.Services;
+using SkiaSharp;
 
 namespace MTGProxyBuilder.Tests.Services;
 
@@ -58,9 +59,8 @@ public class BleedProcessorTests
 
         try
         {
-            // Create a minimal 2x2 pixel BMP (valid image for SkiaSharp)
-            string inputPath = Path.Combine(tmpDir, "test_card.bmp");
-            CreateMinimalBmp(inputPath, 10, 10);
+            string inputPath = Path.Combine(tmpDir, "test_card.png");
+            CreateTestImage(inputPath, 10, 10);
 
             var result = proc.GetBleedExtendedImage(inputPath, 2);
 
@@ -85,8 +85,8 @@ public class BleedProcessorTests
 
         try
         {
-            string inputPath = Path.Combine(tmpDir, "test_card2.bmp");
-            CreateMinimalBmp(inputPath, 10, 10);
+            string inputPath = Path.Combine(tmpDir, "test_card2.png");
+            CreateTestImage(inputPath, 10, 10);
 
             var result1 = proc.GetBleedExtendedImage(inputPath, 2);
             var result2 = proc.GetBleedExtendedImage(inputPath, 2);
@@ -100,47 +100,12 @@ public class BleedProcessorTests
         }
     }
 
-    /// <summary>Creates a minimal valid BMP file that SkiaSharp can decode.</summary>
-    private static void CreateMinimalBmp(string path, int width, int height)
+    private static void CreateTestImage(string path, int width, int height)
     {
-        int rowSize = ((width * 3 + 3) / 4) * 4; // BMP rows padded to 4 bytes
-        int pixelDataSize = rowSize * height;
-        int fileSize = 54 + pixelDataSize;
-
-        using var stream = File.Create(path);
-        using var bw = new BinaryWriter(stream);
-
-        // BMP header
-        bw.Write((byte)'B'); bw.Write((byte)'M');
-        bw.Write(fileSize);
-        bw.Write(0); // reserved
-        bw.Write(54); // pixel data offset
-
-        // DIB header (BITMAPINFOHEADER)
-        bw.Write(40); // header size
-        bw.Write(width);
-        bw.Write(height);
-        bw.Write((short)1); // color planes
-        bw.Write((short)24); // bits per pixel
-        bw.Write(0); // compression
-        bw.Write(pixelDataSize);
-        bw.Write(2835); // horizontal resolution
-        bw.Write(2835); // vertical resolution
-        bw.Write(0); // colors in palette
-        bw.Write(0); // important colors
-
-        // Pixel data (blue/red gradient)
-        for (int y = 0; y < height; y++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                bw.Write((byte)(x * 25)); // B
-                bw.Write((byte)(y * 25)); // G
-                bw.Write((byte)128);       // R
-            }
-            // Pad row to 4-byte boundary
-            for (int p = width * 3; p < rowSize; p++)
-                bw.Write((byte)0);
-        }
+        using var bitmap = new SKBitmap(width, height);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.CornflowerBlue);
+        using var stream = File.OpenWrite(path);
+        bitmap.Encode(stream, SKEncodedImageFormat.Png, 100);
     }
 }
