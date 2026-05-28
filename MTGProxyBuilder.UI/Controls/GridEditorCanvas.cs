@@ -67,6 +67,8 @@ namespace MTGProxyBuilder.UI.Controls
 
             _redrawTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
             _redrawTimer.Tick += (_, _) => { _redrawTimer.Stop(); _ = RedrawAsync(); };
+
+            ContextRequested += OnContextRequested;
         }
 
         // ================================================================
@@ -493,7 +495,7 @@ namespace MTGProxyBuilder.UI.Controls
         //  CONTEXT MENU — built dynamically on right-click
         // ================================================================
 
-        protected override void OnContextRequested(ContextRequestedEventArgs e)
+        private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
         {
             e.TryGetPosition(this, out var pos);
             int flatSlot    = HitTestSlot(pos);
@@ -546,7 +548,6 @@ namespace MTGProxyBuilder.UI.Controls
             }
 
             ContextMenu = menu;
-            base.OnContextRequested(e);
         }
 
         // ================================================================

@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:MTGProxyBuilder.UI.Dialogs"
         x:Class="MTGProxyBuilder.UI.Dialogs.MpcSourceManagerWindow"
         Title="Manage MPCFill Sources"
         Width="680" Height="540" MinWidth="500" MinHeight="400"
@@ -79,8 +80,7 @@
                                 Background="Transparent" BorderThickness="0" Padding="2"
                                 FontSize="14" Cursor="Hand"
                                 Tag="{Binding Pk}"
-                                Click="OnToggleFavorite"
-                                xmlns:local="clr-namespace:MTGProxyBuilder.UI.Dialogs"/>
+                                Click="OnToggleFavorite"/>
 
                         <!-- Name + description -->
                         <StackPanel Grid.Column="1" Margin="4,0">
