@@ -391,7 +391,7 @@ namespace MTGProxyBuilder.Core.Services
             gfx.DrawRectangle(bannerBrush, x, bannerY, w, bannerH);
 
             // White text centered in the banner
-            var font = new XFont("Helvetica", Math.Max(8, bannerH * 0.6), XFontStyleEx.Bold);
+            var font = CreatePortableFont(Math.Max(8, bannerH * 0.6), XFontStyleEx.Bold);
             var textBrush = XBrushes.White;
             var format = new XStringFormat
             {
@@ -442,6 +442,16 @@ namespace MTGProxyBuilder.Core.Services
             int perPage = settings.CardsPerPage;
             if (perPage <= 0) return 0;
             return (int)Math.Ceiling((double)cardCount / perPage);
+        }
+
+        private static XFont CreatePortableFont(double size, XFontStyleEx style)
+        {
+            foreach (var name in new[] { "Arial", "Liberation Sans", "DejaVu Sans", "Courier New" })
+            {
+                try { return new XFont(name, size, style); }
+                catch { }
+            }
+            return new XFont("Courier New", size, XFontStyleEx.Regular);
         }
     }
 }
