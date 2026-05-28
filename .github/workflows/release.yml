@@ -112,6 +112,23 @@ jobs:
         run: |
           mkdir -p AppDir
           cp -r publish/* AppDir/
+          echo "--- publish .so files ---"
+          find publish -name "*.so*" | sort || true
+          echo "--- libSkiaSharp check ---"
+          if [ ! -f AppDir/libSkiaSharp.so ]; then
+            echo "WARNING: libSkiaSharp.so missing from publish output, copying from NuGet cache"
+            SKIASO=$(find ~/.nuget/packages -name "libSkiaSharp.so" \
+              -path "*/linux-x64/native/*" -path "*/3.119*/*" 2>/dev/null | head -1)
+            if [ -n "$SKIASO" ]; then
+              cp "$SKIASO" AppDir/libSkiaSharp.so
+              echo "Copied from: $SKIASO"
+            else
+              echo "ERROR: libSkiaSharp.so not found in NuGet cache either!"
+              exit 1
+            fi
+          else
+            echo "OK: libSkiaSharp.so present in AppDir"
+          fi
 
       - name: Create icon
         run: |
@@ -138,12 +155,7 @@ jobs:
 
       - name: Create AppRun
         run: |
-          cat > AppDir/AppRun << 'EOF'
-          #!/bin/bash
-          HERE="$(dirname "$(readlink -f "${0}")")"
-          export LD_LIBRARY_PATH="${HERE}:${LD_LIBRARY_PATH}"
-          exec "${HERE}/tcg-proxy-builder" "$@"
-          EOF
+          printf '#!/bin/bash\nHERE="$(dirname "$(readlink -f "${0}")")"\nexport LD_LIBRARY_PATH="${HERE}:${LD_LIBRARY_PATH}"\nexport LD_PRELOAD="${HERE}/libSkiaSharp.so"\nexec "${HERE}/tcg-proxy-builder" "$@"\n' > AppDir/AppRun
           chmod +x AppDir/AppRun
 
       - name: Build AppImage
