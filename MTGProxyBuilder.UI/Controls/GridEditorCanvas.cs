@@ -124,21 +124,21 @@ namespace MTGProxyBuilder.UI.Controls
             base.OnPropertyChanged(change);
             if (change.Property == PageSettingsProperty)
             {
-                if (change.OldValue.GetValueOrDefault() is PageLayout old) old.PropertyChanged -= OnSettingsPropChanged;
-                if (change.NewValue.GetValueOrDefault() is PageLayout nw) nw.PropertyChanged += OnSettingsPropChanged;
+                if (change.OldValue is PageLayout old) old.PropertyChanged -= OnSettingsPropChanged;
+                if (change.NewValue is PageLayout nw) nw.PropertyChanged += OnSettingsPropChanged;
                 ScheduleRedraw();
             }
             else if (change.Property == CardsSourceProperty)
             {
-                if (change.OldValue.GetValueOrDefault() is ObservableCollection<CardModel> oldC) oldC.CollectionChanged -= OnCollectionChanged;
-                if (change.NewValue.GetValueOrDefault() is ObservableCollection<CardModel> newC) newC.CollectionChanged += OnCollectionChanged;
+                if (change.OldValue is ObservableCollection<CardModel> oldC) oldC.CollectionChanged -= OnCollectionChanged;
+                if (change.NewValue is ObservableCollection<CardModel> newC) newC.CollectionChanged += OnCollectionChanged;
                 _selectedSlots.Clear();
                 ScheduleRedraw();
             }
             else if (change.Property == PrintSettingsSourceProperty)
             {
-                if (change.OldValue.GetValueOrDefault() is PrintSettings oldPs) oldPs.PropertyChanged -= OnPrintSettingsPropChanged;
-                if (change.NewValue.GetValueOrDefault() is PrintSettings newPs) newPs.PropertyChanged += OnPrintSettingsPropChanged;
+                if (change.OldValue is PrintSettings oldPs) oldPs.PropertyChanged -= OnPrintSettingsPropChanged;
+                if (change.NewValue is PrintSettings newPs) newPs.PropertyChanged += OnPrintSettingsPropChanged;
                 ScheduleRedraw();
             }
             else if (change.Property == ShowCutGuidesProperty ||

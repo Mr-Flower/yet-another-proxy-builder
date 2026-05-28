@@ -6,6 +6,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using MTGProxyBuilder.Core.Models;
+using Path = Avalonia.Controls.Shapes.Path;
 
 namespace MTGProxyBuilder.UI.Controls
 {

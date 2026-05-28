@@ -596,7 +596,7 @@ public partial class ArtSelectorWindow : Window
         });
 
         if (files.Count == 0) return;
-        var path = files[0].TryGetLocalPath();
+        var path = files[0].Path.LocalPath;
         if (string.IsNullOrEmpty(path)) return;
 
         ResultPath = path;
@@ -622,7 +622,7 @@ public partial class ArtSelectorWindow : Window
         });
 
         if (files.Count == 0) return;
-        var path = files[0].TryGetLocalPath();
+        var path = files[0].Path.LocalPath;
         if (path != null) _backLibrary.AddFromFile(path);
         await LoadOptionsAsync();
     }
@@ -693,7 +693,7 @@ public partial class ArtSelectorWindow : Window
         int added = 0;
         foreach (var f in files)
         {
-            var path = f.TryGetLocalPath();
+            var path = f.Path.LocalPath;
             if (path != null && _frontArtLibrary.AddFromFile(path) != null) added++;
         }
         StatusLabel.Text = $"Added {added} image(s) to front art library";
@@ -754,7 +754,6 @@ public partial class ArtSelectorWindow : Window
     {
         _filterPanelVisible = !_filterPanelVisible;
         FilterPanel.IsVisible = _filterPanelVisible;
-        FilterPanelRow.Height = _filterPanelVisible ? new GridLength(220) : new GridLength(0);
         FilterToggleBtn.Content = _filterPanelVisible ? "Filters ▾" : "Filters ▸";
     }
 
