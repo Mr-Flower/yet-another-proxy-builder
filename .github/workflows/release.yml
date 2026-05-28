@@ -155,7 +155,7 @@ jobs:
 
       - name: Create AppRun
         run: |
-          printf '#!/bin/bash\nHERE="$(dirname "$(readlink -f "${0}")")"\nexport LD_LIBRARY_PATH="${HERE}:${LD_LIBRARY_PATH}"\nexport LD_PRELOAD="${HERE}/libSkiaSharp.so"\nexec "${HERE}/tcg-proxy-builder" "$@"\n' > AppDir/AppRun
+          printf '#!/bin/bash\nexport LD_LIBRARY_PATH="${APPDIR}:${LD_LIBRARY_PATH}"\nexport LD_PRELOAD="${APPDIR}/libSkiaSharp.so"\nexec "${APPDIR}/tcg-proxy-builder" "$@"\n' > AppDir/AppRun
           chmod +x AppDir/AppRun
 
       - name: Build AppImage
