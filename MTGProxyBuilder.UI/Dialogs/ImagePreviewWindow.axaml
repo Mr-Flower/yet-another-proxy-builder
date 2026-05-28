@@ -1,0 +1,12 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MTGProxyBuilder.UI.Controls"
+        x:Class="MTGProxyBuilder.UI.Dialogs.ImagePreviewWindow"
+        Title="Image Preview"
+        Width="800" Height="600" MinWidth="400" MinHeight="300"
+        Background="#1E1E1E"
+        WindowStartupLocation="CenterOwner">
+
+    <controls:ImagePreviewPanel x:Name="PreviewPanel"/>
+
+</Window>

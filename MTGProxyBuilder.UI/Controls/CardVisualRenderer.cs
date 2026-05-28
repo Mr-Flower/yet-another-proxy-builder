@@ -1,23 +1,19 @@
 using System;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
+using Avalonia;
+using Avalonia.Collections;
+using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using MTGProxyBuilder.Core.Models;
 
 namespace MTGProxyBuilder.UI.Controls
 {
-    /// <summary>
-    /// Renders individual card visuals on a Canvas: images, placeholders,
-    /// selection highlights, cut guides, overlay text, and card outlines.
-    /// Extracted from GridEditorCanvas to isolate rendering logic.
-    /// </summary>
     public static class CardVisualRenderer
     {
         private const float MmToPx = 96f / 25.4f;
 
-        public static void PlaceCard(Canvas canvas, CardModel card, BitmapImage? bmp,
+        public static void PlaceCard(Canvas canvas, CardModel card, Bitmap? bmp,
             float x, float y, float cellW, float cellH, float bleed, float cardW, float cardH,
             float pageTop, float pageW, float pageH, bool flipped, bool selected,
             bool showCutGuides, PrintSettings? printSettings)
@@ -39,11 +35,15 @@ namespace MTGProxyBuilder.UI.Controls
                 {
                     var overlay = new Path
                     {
-                        Fill = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)), IsHitTestVisible = false
+                        Fill = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
+                        IsHitTestVisible = false,
+                        Data = new CombinedGeometry
+                        {
+                            GeometryCombineMode = GeometryCombineMode.Exclude,
+                            Geometry1 = new RectangleGeometry(new Rect(0, 0, cellW, cellH)),
+                            Geometry2 = new RectangleGeometry(new Rect(bleed, bleed, cardW, cardH))
+                        }
                     };
-                    overlay.Data = new CombinedGeometry(GeometryCombineMode.Exclude,
-                        new RectangleGeometry(new Rect(0, 0, cellW, cellH)),
-                        new RectangleGeometry(new Rect(bleed, bleed, cardW, cardH)));
                     Canvas.SetLeft(overlay, x); Canvas.SetTop(overlay, y); canvas.Children.Add(overlay);
                 }
             }
@@ -90,9 +90,8 @@ namespace MTGProxyBuilder.UI.Controls
             {
                 Text = "No Back Art\nAssigned",
                 Foreground = Brushes.White, FontSize = Math.Max(11, w / 12),
-                FontWeight = FontWeights.SemiBold,
-                TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
-                Width = w - 10
+                FontWeight = FontWeight.SemiBold,
+                TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, Width = w - 10
             };
             Canvas.SetLeft(title, x + 5); Canvas.SetTop(title, y + h / 3 - 10); canvas.Children.Add(title);
 
@@ -100,8 +99,7 @@ namespace MTGProxyBuilder.UI.Controls
             {
                 Text = cardName, Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
                 FontSize = Math.Max(8, w / 18),
-                TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
-                Width = w - 10
+                TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, Width = w - 10
             };
             Canvas.SetLeft(name, x + 5); Canvas.SetTop(name, y + h / 3 + 30); canvas.Children.Add(name);
         }
@@ -111,7 +109,9 @@ namespace MTGProxyBuilder.UI.Controls
             var rect = new Rectangle
             {
                 Width = w, Height = h,
-                Fill = new SolidColorBrush(flipped ? Color.FromArgb(255, 80, 50, 50) : Color.FromArgb(255, 60, 60, 80)),
+                Fill = new SolidColorBrush(flipped
+                    ? Color.FromArgb(255, 80, 50, 50)
+                    : Color.FromArgb(255, 60, 60, 80)),
                 Stroke = Brushes.Gray, StrokeThickness = 1, RadiusX = 4, RadiusY = 4
             };
             Canvas.SetLeft(rect, x); Canvas.SetTop(rect, y); canvas.Children.Add(rect);
@@ -135,17 +135,17 @@ namespace MTGProxyBuilder.UI.Controls
             var pen = new SolidColorBrush(Color.FromArgb(120, 0, 0, 0));
             void Line(float x1, float y1, float x2, float y2)
             {
-                var l = new Line { X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, Stroke = pen, StrokeThickness = 0.5, IsHitTestVisible = false };
+                var l = new Line { StartPoint = new Point(x1, y1), EndPoint = new Point(x2, y2), Stroke = pen, StrokeThickness = 0.5, IsHitTestVisible = false };
                 canvas.Children.Add(l);
             }
-            Line(cardLeft, pageTop, cardLeft, cardTopY);
-            Line(cardRight, pageTop, cardRight, cardTopY);
-            Line(cardLeft, cardBottomY, cardLeft, pgBottom);
-            Line(cardRight, cardBottomY, cardRight, pgBottom);
-            Line(0, cardTopY, cardLeft, cardTopY);
-            Line(cardRight, cardTopY, pageW, cardTopY);
-            Line(0, cardBottomY, cardLeft, cardBottomY);
-            Line(cardRight, cardBottomY, pageW, cardBottomY);
+            Line(cardLeft,  pageTop,      cardLeft,  cardTopY);
+            Line(cardRight, pageTop,      cardRight, cardTopY);
+            Line(cardLeft,  cardBottomY,  cardLeft,  pgBottom);
+            Line(cardRight, cardBottomY,  cardRight, pgBottom);
+            Line(0,         cardTopY,     cardLeft,  cardTopY);
+            Line(cardRight, cardTopY,     pageW,     cardTopY);
+            Line(0,         cardBottomY,  cardLeft,  cardBottomY);
+            Line(cardRight, cardBottomY,  pageW,     cardBottomY);
         }
 
         private static void DrawOverlayText(Canvas canvas, string text, float x, float y, float cardW, float cardH)
@@ -153,27 +153,16 @@ namespace MTGProxyBuilder.UI.Controls
             float bannerH = cardH * 0.15f;
             float bannerY = y + cardH - bannerH - cardH * 0.08f;
 
-            var banner = new Rectangle
-            {
-                Width = cardW, Height = bannerH,
-                Fill = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0)),
-                IsHitTestVisible = false
-            };
+            var banner = new Rectangle { Width = cardW, Height = bannerH, Fill = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0)), IsHitTestVisible = false };
             Canvas.SetLeft(banner, x); Canvas.SetTop(banner, bannerY); canvas.Children.Add(banner);
 
-            var overlayTb = new TextBlock
+            var tb = new TextBlock
             {
-                Text = text,
-                Foreground = Brushes.White,
-                FontSize = Math.Max(8, bannerH * 0.55),
-                FontWeight = FontWeights.Bold,
-                TextAlignment = TextAlignment.Center,
-                Width = cardW,
-                IsHitTestVisible = false
+                Text = text, Foreground = Brushes.White, FontSize = Math.Max(8, bannerH * 0.55),
+                FontWeight = FontWeight.Bold, TextAlignment = TextAlignment.Center,
+                Width = cardW, IsHitTestVisible = false
             };
-            Canvas.SetLeft(overlayTb, x);
-            Canvas.SetTop(overlayTb, bannerY + (bannerH - overlayTb.FontSize) / 2);
-            canvas.Children.Add(overlayTb);
+            Canvas.SetLeft(tb, x); Canvas.SetTop(tb, bannerY + (bannerH - tb.FontSize) / 2); canvas.Children.Add(tb);
         }
 
         public static void DrawOutline(Canvas canvas, float cellX, float cellY,
@@ -189,62 +178,47 @@ namespace MTGProxyBuilder.UI.Controls
                 brush = new SolidColorBrush(Color.FromRgb(r, g, b));
             }
             catch { brush = new SolidColorBrush(Color.FromRgb(0x66, 0xFF, 0x00)); }
-            brush.Freeze();
 
-            float weight = ps.LineWeight * 0.5f;
-            float radiusPx = ps.CornerRadiusMm * MmToPx;
+            float weight      = ps.LineWeight * 0.5f;
+            float radiusPx    = ps.CornerRadiusMm * MmToPx;
             float cornerLenPx = ps.CornerLengthMm * MmToPx;
 
-            float cardLeft = cellX + bleed;
-            float cardTop = cellY + bleed;
+            float cardLeft = cellX + bleed, cardTop = cellY + bleed;
             float offset = weight / 2;
 
             float ox, oy, ow, oh;
             switch (ps.OutlineAlignment)
             {
                 case OutlineAlignment.Inside:
-                    ox = cardLeft + offset; oy = cardTop + offset;
-                    ow = cardW - 2 * offset; oh = cardH - 2 * offset;
-                    break;
+                    ox = cardLeft + offset; oy = cardTop + offset; ow = cardW - 2 * offset; oh = cardH - 2 * offset; break;
                 case OutlineAlignment.Outside:
-                    ox = cardLeft - offset; oy = cardTop - offset;
-                    ow = cardW + 2 * offset; oh = cardH + 2 * offset;
-                    break;
+                    ox = cardLeft - offset; oy = cardTop - offset; ow = cardW + 2 * offset; oh = cardH + 2 * offset; break;
                 default:
-                    ox = cardLeft; oy = cardTop; ow = cardW; oh = cardH;
-                    break;
+                    ox = cardLeft; oy = cardTop; ow = cardW; oh = cardH; break;
             }
+
+            AvaloniaList<double>? dashArray = ps.OutlineLineType == LineType.Dashed
+                ? new AvaloniaList<double> { 4, 2 } : null;
 
             if (ps.OutlineType == OutlineType.Full)
             {
                 var rect = new Rectangle
                 {
-                    Width = ow, Height = oh,
-                    Stroke = brush, StrokeThickness = weight,
-                    RadiusX = radiusPx, RadiusY = radiusPx,
-                    Fill = Brushes.Transparent, IsHitTestVisible = false
+                    Width = ow, Height = oh, Stroke = brush, StrokeThickness = weight,
+                    RadiusX = radiusPx, RadiusY = radiusPx, Fill = Brushes.Transparent, IsHitTestVisible = false
                 };
-                if (ps.OutlineLineType == LineType.Dashed)
-                    rect.StrokeDashArray = new DoubleCollection { 4, 2 };
-                Canvas.SetLeft(rect, ox); Canvas.SetTop(rect, oy);
-                canvas.Children.Add(rect);
+                if (dashArray != null) rect.StrokeDashArray = dashArray;
+                Canvas.SetLeft(rect, ox); Canvas.SetTop(rect, oy); canvas.Children.Add(rect);
             }
-            else // Corners
+            else
             {
                 float rr = Math.Min(radiusPx, Math.Min(ow / 2, oh / 2));
                 float len = Math.Min(cornerLenPx, Math.Min(ow / 2 - rr, oh / 2 - rr));
                 if (len <= 0) len = 5;
 
-                DoubleCollection? dashArray = ps.OutlineLineType == LineType.Dashed
-                    ? new DoubleCollection { 4, 2 } : null;
-
                 void AddLine(float x1, float y1, float x2, float y2)
                 {
-                    var l = new Line
-                    {
-                        X1 = x1, Y1 = y1, X2 = x2, Y2 = y2,
-                        Stroke = brush, StrokeThickness = weight, IsHitTestVisible = false
-                    };
+                    var l = new Line { StartPoint = new Point(x1, y1), EndPoint = new Point(x2, y2), Stroke = brush, StrokeThickness = weight, IsHitTestVisible = false };
                     if (dashArray != null) l.StrokeDashArray = dashArray;
                     canvas.Children.Add(l);
                 }
@@ -254,33 +228,27 @@ namespace MTGProxyBuilder.UI.Controls
                     void AddCornerPath(Point lineStart, Point arcStart, Point arcEnd, Point lineEnd, SweepDirection sweep)
                     {
                         var fig = new PathFigure { StartPoint = lineStart, IsClosed = false, IsFilled = false };
-                        fig.Segments.Add(new LineSegment(arcStart, true));
-                        fig.Segments.Add(new ArcSegment(arcEnd, new Size(rr, rr), 0, false, sweep, true));
-                        fig.Segments.Add(new LineSegment(lineEnd, true));
-                        var geom = new PathGeometry(new[] { fig });
-                        var path = new Path
-                        {
-                            Data = geom, Stroke = brush, StrokeThickness = weight, IsHitTestVisible = false
-                        };
+                        fig.Segments!.Add(new LineSegment { Point = arcStart, IsStroked = true });
+                        fig.Segments.Add(new ArcSegment  { Point = arcEnd, Size = new Size(rr, rr), RotationAngle = 0, IsLargeArc = false, SweepDirection = sweep, IsStroked = true });
+                        fig.Segments.Add(new LineSegment { Point = lineEnd, IsStroked = true });
+                        var geom = new PathGeometry();
+                        geom.Figures.Add(fig);
+                        var path = new Path { Data = geom, Stroke = brush, StrokeThickness = weight, IsHitTestVisible = false };
                         if (dashArray != null) path.StrokeDashArray = dashArray;
                         canvas.Children.Add(path);
                     }
 
-                    AddCornerPath(new Point(ox, oy + rr + len), new Point(ox, oy + rr),
-                        new Point(ox + rr, oy), new Point(ox + rr + len, oy), SweepDirection.Clockwise);
-                    AddCornerPath(new Point(ox + ow - rr - len, oy), new Point(ox + ow - rr, oy),
-                        new Point(ox + ow, oy + rr), new Point(ox + ow, oy + rr + len), SweepDirection.Clockwise);
-                    AddCornerPath(new Point(ox + ow, oy + oh - rr - len), new Point(ox + ow, oy + oh - rr),
-                        new Point(ox + ow - rr, oy + oh), new Point(ox + ow - rr - len, oy + oh), SweepDirection.Clockwise);
-                    AddCornerPath(new Point(ox + rr + len, oy + oh), new Point(ox + rr, oy + oh),
-                        new Point(ox, oy + oh - rr), new Point(ox, oy + oh - rr - len), SweepDirection.Clockwise);
+                    AddCornerPath(new Point(ox,          oy + rr + len), new Point(ox,          oy + rr),      new Point(ox + rr,          oy),          new Point(ox + rr + len,          oy),          SweepDirection.Clockwise);
+                    AddCornerPath(new Point(ox + ow - rr - len, oy),     new Point(ox + ow - rr,     oy),      new Point(ox + ow,          oy + rr),      new Point(ox + ow,          oy + rr + len),      SweepDirection.Clockwise);
+                    AddCornerPath(new Point(ox + ow,     oy + oh - rr - len), new Point(ox + ow,  oy + oh - rr), new Point(ox + ow - rr,  oy + oh),      new Point(ox + ow - rr - len,  oy + oh),      SweepDirection.Clockwise);
+                    AddCornerPath(new Point(ox + rr + len, oy + oh),      new Point(ox + rr,      oy + oh),    new Point(ox,              oy + oh - rr),  new Point(ox,              oy + oh - rr - len),  SweepDirection.Clockwise);
                 }
                 else
                 {
-                    AddLine(ox, oy + len, ox, oy); AddLine(ox, oy, ox + len, oy);
-                    AddLine(ox + ow - len, oy, ox + ow, oy); AddLine(ox + ow, oy, ox + ow, oy + len);
-                    AddLine(ox + ow, oy + oh - len, ox + ow, oy + oh); AddLine(ox + ow, oy + oh, ox + ow - len, oy + oh);
-                    AddLine(ox + len, oy + oh, ox, oy + oh); AddLine(ox, oy + oh, ox, oy + oh - len);
+                    AddLine(ox,        oy + len,  ox,        oy);          AddLine(ox,        oy,         ox + len,        oy);
+                    AddLine(ox + ow - len, oy,   ox + ow,  oy);           AddLine(ox + ow,  oy,          ox + ow,  oy + len);
+                    AddLine(ox + ow,  oy + oh - len, ox + ow,  oy + oh);  AddLine(ox + ow,  oy + oh,     ox + ow - len,    oy + oh);
+                    AddLine(ox + len, oy + oh,  ox,        oy + oh);       AddLine(ox,       oy + oh,     ox,       oy + oh - len);
                 }
             }
         }

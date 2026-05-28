@@ -1,0 +1,249 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="MTGProxyBuilder.UI.Dialogs.SettingsWindow"
+        Title="Settings"
+        Width="700" Height="560" MinWidth="600" MinHeight="480"
+        Background="#1E1E1E"
+        WindowStartupLocation="CenterOwner">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.SectionHeader">
+            <Setter Property="Foreground" Value="#0078D4"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,10,0,4"/>
+        </Style>
+        <Style Selector="TextBlock.Label">
+            <Setter Property="Foreground" Value="#999"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
+        </Style>
+        <Style Selector="TextBox.Field">
+            <Setter Property="Background" Value="#3E3E42"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#555"/>
+            <Setter Property="CaretBrush" Value="White"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style Selector="ComboBox.Field">
+            <Setter Property="Background" Value="#3E3E42"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#555"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Padding" Value="4,3"/>
+        </Style>
+        <Style Selector="CheckBox">
+            <Setter Property="Foreground" Value="#CCC"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,2,0,2"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="140"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Navigation sidebar -->
+        <Border Grid.Column="0" Grid.RowSpan="2" Background="#252526" BorderBrush="#333" BorderThickness="0,0,1,0">
+            <StackPanel Margin="8,12">
+                <RadioButton x:Name="NavGeneral" Content="General" GroupName="Nav"
+                             IsChecked="True" Foreground="#CCC" FontSize="12"
+                             IsCheckedChanged="OnNavChanged"/>
+                <RadioButton x:Name="NavLibraries" Content="Libraries" GroupName="Nav"
+                             Foreground="#CCC" FontSize="12" Margin="0,4,0,0"
+                             IsCheckedChanged="OnNavChanged"/>
+                <RadioButton x:Name="NavMpcFill" Content="MPCFill" GroupName="Nav"
+                             Foreground="#CCC" FontSize="12" Margin="0,4,0,0"
+                             IsCheckedChanged="OnNavChanged"/>
+                <RadioButton x:Name="NavLanguages" Content="Languages" GroupName="Nav"
+                             Foreground="#CCC" FontSize="12" Margin="0,4,0,0"
+                             IsCheckedChanged="OnNavChanged"/>
+                <RadioButton x:Name="NavFilters" Content="Filters" GroupName="Nav"
+                             Foreground="#CCC" FontSize="12" Margin="0,4,0,0"
+                             IsCheckedChanged="OnNavChanged"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Pages -->
+        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,0">
+            <StackPanel Margin="16,12">
+
+                <!-- PAGE: General -->
+                <StackPanel x:Name="PageGeneral">
+                    <TextBlock Text="GENERAL" Classes="SectionHeader"/>
+
+                    <TextBlock Text="Default token text" Classes="Label"/>
+                    <TextBox x:Name="TokenTextBox" Classes="Field" Margin="0,0,0,6"/>
+
+                    <TextBlock Text="Default bleed (mm)" Classes="Label"/>
+                    <TextBox x:Name="BleedBox" Classes="Field" Margin="0,0,0,6"/>
+
+                    <TextBlock Text="Default page preset" Classes="Label"/>
+                    <ComboBox x:Name="PagePresetBox" Classes="Field" Margin="0,0,0,6">
+                        <ComboBoxItem Content="A4"/>
+                        <ComboBoxItem Content="A3"/>
+                        <ComboBoxItem Content="Letter"/>
+                        <ComboBoxItem Content="Legal"/>
+                        <ComboBoxItem Content="Tabloid"/>
+                    </ComboBox>
+
+                    <CheckBox x:Name="UpdateCheckBox" Content="Check for updates on startup" Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <!-- PAGE: Libraries -->
+                <StackPanel x:Name="PageLibraries" IsVisible="False">
+                    <TextBlock Text="FRONT ART LIBRARY" Classes="SectionHeader"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="FrontLibPathBox" Classes="Field" IsReadOnly="True"/>
+                        <Button Grid.Column="1" Content="Browse" Padding="8,3" Margin="4,0,2,0" FontSize="11"
+                                Background="#3E3E42" Foreground="White" BorderThickness="0"
+                                Click="OnBrowseFrontLibPath"/>
+                        <Button Grid.Column="2" Content="Reset" Padding="8,3" FontSize="11"
+                                Background="#3E3E42" Foreground="White" BorderThickness="0"
+                                Click="OnResetFrontLibPath"/>
+                    </Grid>
+
+                    <TextBlock Text="BACK ART LIBRARY" Classes="SectionHeader"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="BackLibPathBox" Classes="Field" IsReadOnly="True"/>
+                        <Button Grid.Column="1" Content="Browse" Padding="8,3" Margin="4,0,2,0" FontSize="11"
+                                Background="#3E3E42" Foreground="White" BorderThickness="0"
+                                Click="OnBrowseBackLibPath"/>
+                        <Button Grid.Column="2" Content="Reset" Padding="8,3" FontSize="11"
+                                Background="#3E3E42" Foreground="White" BorderThickness="0"
+                                Click="OnResetBackLibPath"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- PAGE: MPCFill -->
+                <StackPanel x:Name="PageMpcFill" IsVisible="False">
+                    <TextBlock Text="MPCFILL DEFAULTS" Classes="SectionHeader"/>
+
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Sort by" Classes="Label"/>
+                            <ComboBox x:Name="SortByBox" Classes="Field">
+                                <ComboBoxItem Content="Name A→Z" Tag="nameAscending"/>
+                                <ComboBoxItem Content="Name Z→A" Tag="nameDescending"/>
+                                <ComboBoxItem Content="DPI ↓" Tag="dpiDescending"/>
+                                <ComboBoxItem Content="DPI ↑" Tag="dpiAscending"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Max results" Classes="Label"/>
+                            <TextBox x:Name="MaxSizeBox" Classes="Field"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Min DPI" Classes="Label"/>
+                            <ComboBox x:Name="DefaultMinDpiBox" Classes="Field">
+                                <ComboBoxItem Content="Any" Tag="0"/>
+                                <ComboBoxItem Content="100" Tag="100"/>
+                                <ComboBoxItem Content="200" Tag="200"/>
+                                <ComboBoxItem Content="300" Tag="300"/>
+                                <ComboBoxItem Content="400" Tag="400"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Max DPI" Classes="Label"/>
+                            <ComboBox x:Name="DefaultMaxDpiBox" Classes="Field">
+                                <ComboBoxItem Content="500" Tag="500"/>
+                                <ComboBoxItem Content="800" Tag="800"/>
+                                <ComboBoxItem Content="1200" Tag="1200"/>
+                                <ComboBoxItem Content="1500" Tag="1500"/>
+                                <ComboBoxItem Content="Any" Tag="0"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+
+                    <CheckBox x:Name="DefaultFuzzySearchBox" Content="Fuzzy search by default"/>
+                    <CheckBox x:Name="FilterCardbacksBox" Content="Filter cardbacks from results"/>
+                    <CheckBox x:Name="UseFavoritesCheckBox" Content="Use favorites only (when set)"/>
+
+                    <TextBlock Text="CARD TYPES" Classes="SectionHeader"/>
+                    <CheckBox x:Name="CardTypeCard" Content="CARD"/>
+                    <CheckBox x:Name="CardTypeToken" Content="TOKEN"/>
+                    <CheckBox x:Name="CardTypeCardback" Content="CARDBACK"/>
+
+                    <Border Margin="0,10,0,4" Padding="8,6" Background="#252526" CornerRadius="4">
+                        <StackPanel>
+                            <TextBlock x:Name="FavoritesInfoLabel" Foreground="#999" FontSize="10" TextWrapping="Wrap"/>
+                            <Button Content="Manage Sources..." Padding="8,4" Margin="0,6,0,0"
+                                    FontSize="11" Background="#3E3E42" Foreground="White" BorderThickness="0"
+                                    Click="OnManageSources"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- PAGE: Languages -->
+                <StackPanel x:Name="PageLanguages" IsVisible="False">
+                    <TextBlock Text="MPCFILL LANGUAGES" Classes="SectionHeader"/>
+                    <TextBlock Text="Leave empty to include all languages" Foreground="#666" FontSize="10" Margin="0,0,0,6"/>
+                    <WrapPanel>
+                        <CheckBox x:Name="LangEN" Content="EN (English)" Margin="0,2,12,2"/>
+                        <CheckBox x:Name="LangJA" Content="JA (Japanese)" Margin="0,2,12,2"/>
+                        <CheckBox x:Name="LangFR" Content="FR (French)" Margin="0,2,12,2"/>
+                        <CheckBox x:Name="LangDE" Content="DE (German)" Margin="0,2,12,2"/>
+                        <CheckBox x:Name="LangES" Content="ES (Spanish)" Margin="0,2,12,2"/>
+                        <CheckBox x:Name="LangIT" Content="IT (Italian)" Margin="0,2,12,2"/>
+                        <CheckBox x:Name="LangPT" Content="PT (Portuguese)" Margin="0,2,12,2"/>
+                        <CheckBox x:Name="LangZH" Content="ZH (Chinese)" Margin="0,2,12,2"/>
+                        <CheckBox x:Name="LangRU" Content="RU (Russian)" Margin="0,2,12,2"/>
+                        <CheckBox x:Name="LangAR" Content="AR (Arabic)" Margin="0,2,12,2"/>
+                        <CheckBox x:Name="LangSA" Content="SA" Margin="0,2,12,2"/>
+                    </WrapPanel>
+                </StackPanel>
+
+                <!-- PAGE: Filters -->
+                <StackPanel x:Name="PageFilters" IsVisible="False">
+                    <TextBlock Text="CONTENT FILTERS" Classes="SectionHeader"/>
+                    <CheckBox x:Name="ExcludeNsfwBox" Content="Exclude NSFW content"/>
+                    <CheckBox x:Name="ExcludeAiArtBox" Content="Exclude AI-generated art"/>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Bottom bar -->
+        <Border Grid.Column="1" Grid.Row="1" Background="#252526" Padding="12,8"
+                BorderBrush="#333" BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="Cancel" Padding="14,5"
+                        Background="#3E3E42" Foreground="White" BorderThickness="0"
+                        Click="OnCancel"/>
+                <Button Content="Save" Padding="14,5"
+                        Background="#0078D4" Foreground="White" BorderThickness="0"
+                        Click="OnSave"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

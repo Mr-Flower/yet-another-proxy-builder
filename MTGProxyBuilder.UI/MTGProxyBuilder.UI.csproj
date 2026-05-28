@@ -24,13 +24,66 @@
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
   </ItemGroup>
 
-  <!-- Exclude legacy WPF files not yet ported to Avalonia -->
+  <!-- Exclude all legacy WPF files (replaced by .axaml.cs counterparts) -->
   <ItemGroup>
     <Compile Remove="AssemblyInfo.cs" />
     <Compile Remove="App.xaml.cs" />
     <Compile Remove="MainWindow.xaml.cs" />
-    <Compile Remove="Controls\**\*.cs" />
-    <Compile Remove="Dialogs\**\*.cs" />
+    <Compile Remove="Controls\ImagePreviewPanel.xaml.cs" />
+    <Compile Remove="Controls\LayerListPanel.xaml.cs" />
+    <Compile Remove="Controls\PropertyPanel.xaml.cs" />
+    <Compile Remove="Controls\SearchBar.xaml.cs" />
+    <Compile Remove="Dialogs\ArtSelectorDialog.xaml.cs" />
+    <Compile Remove="Dialogs\BackArtLibraryDialog.xaml.cs" />
+    <Compile Remove="Dialogs\BackArtSelectorDialog.xaml.cs" />
+    <Compile Remove="Dialogs\ColorPickerDialog.xaml.cs" />
+    <Compile Remove="Dialogs\FrontArtLibraryDialog.xaml.cs" />
+    <Compile Remove="Dialogs\ImagePreviewDialog.xaml.cs" />
+    <Compile Remove="Dialogs\MpcSourceManagerDialog.xaml.cs" />
+    <Compile Remove="Dialogs\SettingsDialog.xaml.cs" />
+    <Compile Remove="Dialogs\CardEditorWindow.xaml.cs" />
+  </ItemGroup>
+
+  <!-- Avalonia XAML files -->
+  <ItemGroup>
+    <!-- Controls -->
+    <AvaloniaXaml Include="Controls\SearchBar.axaml">
+      <DependentUpon>SearchBar.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
+    <AvaloniaXaml Include="Controls\ImagePreviewPanel.axaml">
+      <DependentUpon>ImagePreviewPanel.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
+    <AvaloniaXaml Include="Controls\LayerListPanel.axaml">
+      <DependentUpon>LayerListPanel.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
+    <AvaloniaXaml Include="Controls\PropertyPanel.axaml">
+      <DependentUpon>PropertyPanel.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
+    <!-- Dialogs -->
+    <AvaloniaXaml Include="Dialogs\CardEditorWindow.axaml">
+      <DependentUpon>CardEditorWindow.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
+    <AvaloniaXaml Include="Dialogs\ImagePreviewWindow.axaml">
+      <DependentUpon>ImagePreviewWindow.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
+    <AvaloniaXaml Include="Dialogs\ColorPickerWindow.axaml">
+      <DependentUpon>ColorPickerWindow.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
+    <AvaloniaXaml Include="Dialogs\MpcSourceManagerWindow.axaml">
+      <DependentUpon>MpcSourceManagerWindow.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
+    <AvaloniaXaml Include="Dialogs\SettingsWindow.axaml">
+      <DependentUpon>SettingsWindow.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
+    <AvaloniaXaml Include="Dialogs\BackArtLibraryWindow.axaml">
+      <DependentUpon>BackArtLibraryWindow.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
+    <AvaloniaXaml Include="Dialogs\FrontArtLibraryWindow.axaml">
+      <DependentUpon>FrontArtLibraryWindow.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
+    <AvaloniaXaml Include="Dialogs\ArtSelectorWindow.axaml">
+      <DependentUpon>ArtSelectorWindow.axaml.cs</DependentUpon>
+    </AvaloniaXaml>
   </ItemGroup>
 
   <!-- Prevent old WPF XAML from being processed as resources -->

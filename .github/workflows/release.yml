@@ -199,7 +199,7 @@ jobs:
 
       - name: Create AppRun
         run: |
-          printf '#!/bin/bash\nexport LD_LIBRARY_PATH="${APPDIR}:${LD_LIBRARY_PATH}"\nexec "${APPDIR}/tcg-proxy-builder" "$@"\n' > AppDir/AppRun
+          printf '#!/bin/bash\nunset LD_PRELOAD\nexport LD_LIBRARY_PATH="${APPDIR}:${LD_LIBRARY_PATH}"\nexec "${APPDIR}/tcg-proxy-builder" "$@"\n' > AppDir/AppRun
           chmod +x AppDir/AppRun
 
       - name: Build AppImage

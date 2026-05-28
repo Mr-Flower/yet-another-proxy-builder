@@ -1,9 +1,9 @@
 using System;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 
 namespace MTGProxyBuilder.UI.Controls
 {
@@ -25,30 +25,25 @@ namespace MTGProxyBuilder.UI.Controls
         {
             var border = new Border
             {
-                Width = TileWidth, Height = TileHeight, Margin = new Thickness(4),
+                Width = TileWidth, Height = TileHeight, Margin = new Avalonia.Thickness(4),
                 Background = AppBrushes.TileBg,
-                CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
-                BorderThickness = new Thickness(2),
+                CornerRadius = new Avalonia.CornerRadius(4), Cursor = new Cursor(StandardCursorType.Hand),
+                BorderThickness = new Avalonia.Thickness(2),
                 BorderBrush = isCurrent ? Brushes.DodgerBlue : Brushes.Transparent,
-                ToolTip = $"{label}\n{detail}"
+                ClipToBounds = true
             };
+            ToolTip.SetTip(border, $"{label}\n{detail}");
 
             var stack = new StackPanel();
 
             var imgBorder = new Border
             {
                 Height = ImageHeight, Background = Brushes.Black,
-                CornerRadius = new CornerRadius(3, 3, 0, 0), ClipToBounds = true
+                CornerRadius = new Avalonia.CornerRadius(3, 3, 0, 0), ClipToBounds = true
             };
             try
             {
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.UriSource = new Uri(imagePath, UriKind.Absolute);
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.DecodePixelWidth = decodePixelWidth;
-                bmp.EndInit();
-                bmp.Freeze();
+                var bmp = new Bitmap(imagePath);
                 imgBorder.Child = new Image { Source = bmp, Stretch = Stretch.UniformToFill };
             }
             catch
@@ -66,18 +61,18 @@ namespace MTGProxyBuilder.UI.Controls
             {
                 Text = label + (isCurrent ? " *" : ""),
                 Foreground = AppBrushes.TextSecondary,
-                FontSize = LabelFontSize, TextTrimming = TextTrimming.CharacterEllipsis,
+                FontSize = LabelFontSize, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(3, 4, 3, 0)
+                Margin = new Avalonia.Thickness(3, 4, 3, 0)
             };
             stack.Children.Add(lbl);
 
             var detailLbl = new TextBlock
             {
                 Text = detail, Foreground = AppBrushes.TextMuted,
-                FontSize = DetailFontSize, TextTrimming = TextTrimming.CharacterEllipsis,
+                FontSize = DetailFontSize, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(3, 0, 3, 2)
+                Margin = new Avalonia.Thickness(3, 0, 3, 2)
             };
             stack.Children.Add(detailLbl);
 
@@ -87,24 +82,25 @@ namespace MTGProxyBuilder.UI.Controls
 
         /// <summary>Creates an option tile with deferred image loading (Image control returned for later assignment).</summary>
         public static (Border Border, Image ImageControl) CreateDeferredTile(string label, string detail,
-            Brush? labelForeground = null, Brush? borderBrush = null)
+            IBrush? labelForeground = null, IBrush? borderBrush = null)
         {
             var border = new Border
             {
-                Width = TileWidth, Height = TileHeight, Margin = new Thickness(4),
+                Width = TileWidth, Height = TileHeight, Margin = new Avalonia.Thickness(4),
                 Background = AppBrushes.TileBg,
-                CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
-                BorderThickness = new Thickness(2),
+                CornerRadius = new Avalonia.CornerRadius(4), Cursor = new Cursor(StandardCursorType.Hand),
+                BorderThickness = new Avalonia.Thickness(2),
                 BorderBrush = borderBrush ?? Brushes.Transparent,
-                ToolTip = $"{label}\n{detail}"
+                ClipToBounds = true
             };
+            ToolTip.SetTip(border, $"{label}\n{detail}");
 
             var stack = new StackPanel();
 
             var imgBorder = new Border
             {
                 Height = ImageHeight, Background = Brushes.Black,
-                CornerRadius = new CornerRadius(3, 3, 0, 0), ClipToBounds = true
+                CornerRadius = new Avalonia.CornerRadius(3, 3, 0, 0), ClipToBounds = true
             };
             var img = new Image { Stretch = Stretch.UniformToFill };
             imgBorder.Child = img;
@@ -114,9 +110,9 @@ namespace MTGProxyBuilder.UI.Controls
             {
                 Text = label,
                 Foreground = labelForeground ?? AppBrushes.TextSecondary,
-                FontSize = LabelFontSize, TextTrimming = TextTrimming.CharacterEllipsis,
+                FontSize = LabelFontSize, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(3, 4, 3, 0)
+                Margin = new Avalonia.Thickness(3, 4, 3, 0)
             };
             stack.Children.Add(lbl);
 
@@ -124,7 +120,7 @@ namespace MTGProxyBuilder.UI.Controls
             {
                 Text = detail, Foreground = AppBrushes.TextMuted,
                 FontSize = DetailFontSize, HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(3, 0, 3, 2)
+                Margin = new Avalonia.Thickness(3, 0, 3, 2)
             };
             stack.Children.Add(detailLbl);
 
@@ -137,10 +133,10 @@ namespace MTGProxyBuilder.UI.Controls
         {
             var border = new Border
             {
-                Width = TileWidth, Height = TileHeight, Margin = new Thickness(4),
+                Width = TileWidth, Height = TileHeight, Margin = new Avalonia.Thickness(4),
                 Background = AppBrushes.ActionTileBg,
-                CornerRadius = new CornerRadius(4), Cursor = Cursors.Hand,
-                BorderThickness = new Thickness(1),
+                CornerRadius = new Avalonia.CornerRadius(4), Cursor = new Cursor(StandardCursorType.Hand),
+                BorderThickness = new Avalonia.Thickness(1),
                 BorderBrush = AppBrushes.Border
             };
 
@@ -159,7 +155,7 @@ namespace MTGProxyBuilder.UI.Controls
                 Text = label, FontSize = 10,
                 Foreground = AppBrushes.Label,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                TextAlignment = TextAlignment.Center
+                TextAlignment = Avalonia.Media.TextAlignment.Center
             });
             border.Child = stack;
             return border;

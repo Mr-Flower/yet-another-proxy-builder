@@ -1,10 +1,15 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Threading;
+using System.Linq;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Data;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
 using SkiaSharp;
@@ -13,12 +18,11 @@ namespace MTGProxyBuilder.UI.Controls
 {
     public class CardEditorCanvas : Border
     {
-        private readonly System.Windows.Controls.Image _image;
+        private readonly Image _image;
         private readonly CardCompositor _compositor = new();
         private readonly DispatcherTimer _redrawTimer;
         private WriteableBitmap? _bitmap;
 
-        // Layer property change tracking
         private readonly List<LayerBase> _subscribedLayers = new();
 
         // Drag state
@@ -26,13 +30,14 @@ namespace MTGProxyBuilder.UI.Controls
         private Point _dragStart;
         private float _dragLayerStartX;
         private float _dragLayerStartY;
+        private IPointer? _capturedPointer;
 
         public CardEditorCanvas()
         {
             Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E));
             ClipToBounds = true;
 
-            _image = new System.Windows.Controls.Image
+            _image = new Image
             {
                 Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -40,94 +45,58 @@ namespace MTGProxyBuilder.UI.Controls
             };
             Child = _image;
 
-            _redrawTimer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(80)
-            };
-            _redrawTimer.Tick += (_, _) =>
-            {
-                _redrawTimer.Stop();
-                Render();
-            };
+            _redrawTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
+            _redrawTimer.Tick += (_, _) => { _redrawTimer.Stop(); Render(); };
+
+            SizeChanged += (_, _) => QueueRedraw();
         }
 
-        // --- Dependency Properties ---
+        // ================================================================
+        //  STYLED PROPERTIES
+        // ================================================================
 
-        public static readonly DependencyProperty ProjectProperty =
-            DependencyProperty.Register(nameof(Project), typeof(CustomCardProject), typeof(CardEditorCanvas),
-                new PropertyMetadata(null, OnProjectChanged));
+        public static readonly StyledProperty<CustomCardProject?> ProjectProperty =
+            AvaloniaProperty.Register<CardEditorCanvas, CustomCardProject?>(nameof(Project));
 
-        public CustomCardProject? Project
-        {
-            get => (CustomCardProject?)GetValue(ProjectProperty);
-            set => SetValue(ProjectProperty, value);
-        }
+        public static readonly StyledProperty<LayerBase?> SelectedLayerProperty =
+            AvaloniaProperty.Register<CardEditorCanvas, LayerBase?>(nameof(SelectedLayer),
+                defaultBindingMode: BindingMode.TwoWay);
 
-        public static readonly DependencyProperty SelectedLayerProperty =
-            DependencyProperty.Register(nameof(SelectedLayer), typeof(LayerBase), typeof(CardEditorCanvas),
-                new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnRenderPropertyChanged));
+        public static readonly StyledProperty<double> ZoomProperty =
+            AvaloniaProperty.Register<CardEditorCanvas, double>(nameof(Zoom), defaultValue: 1.0);
 
-        public LayerBase? SelectedLayer
-        {
-            get => (LayerBase?)GetValue(SelectedLayerProperty);
-            set => SetValue(SelectedLayerProperty, value);
-        }
+        public static readonly StyledProperty<int> RefreshTriggerProperty =
+            AvaloniaProperty.Register<CardEditorCanvas, int>(nameof(RefreshTrigger));
 
-        public static readonly DependencyProperty ZoomProperty =
-            DependencyProperty.Register(nameof(Zoom), typeof(double), typeof(CardEditorCanvas),
-                new PropertyMetadata(1.0, OnRenderPropertyChanged));
-
-        public double Zoom
-        {
-            get => (double)GetValue(ZoomProperty);
-            set => SetValue(ZoomProperty, value);
-        }
-
-        public static readonly DependencyProperty RefreshTriggerProperty =
-            DependencyProperty.Register(nameof(RefreshTrigger), typeof(int), typeof(CardEditorCanvas),
-                new PropertyMetadata(0, OnRenderPropertyChanged));
-
-        public int RefreshTrigger
-        {
-            get => (int)GetValue(RefreshTriggerProperty);
-            set => SetValue(RefreshTriggerProperty, value);
-        }
-
-        // --- Events ---
+        public CustomCardProject? Project       { get => GetValue(ProjectProperty);       set => SetValue(ProjectProperty, value); }
+        public LayerBase?         SelectedLayer { get => GetValue(SelectedLayerProperty); set => SetValue(SelectedLayerProperty, value); }
+        public double             Zoom          { get => GetValue(ZoomProperty);          set => SetValue(ZoomProperty, value); }
+        public int                RefreshTrigger{ get => GetValue(RefreshTriggerProperty);set => SetValue(RefreshTriggerProperty, value); }
 
         public event EventHandler<LayerBase?>? LayerSelected;
 
-        // --- Property Changed Handlers ---
-
-        private static void OnProjectChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
-            if (d is CardEditorCanvas canvas)
+            base.OnPropertyChanged(change);
+            if (change.Property == ProjectProperty ||
+                change.Property == SelectedLayerProperty ||
+                change.Property == ZoomProperty ||
+                change.Property == RefreshTriggerProperty)
             {
-                canvas.SubscribeToLayers();
-                canvas.QueueRedraw();
-            }
-        }
-
-        private static void OnRenderPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            if (d is CardEditorCanvas canvas)
-            {
-                canvas.SubscribeToLayers();
-                canvas.QueueRedraw();
+                if (change.Property == ProjectProperty)
+                    SubscribeToLayers();
+                QueueRedraw();
             }
         }
 
         private void SubscribeToLayers()
         {
-            // Unsubscribe from old layers
             foreach (var layer in _subscribedLayers)
                 layer.PropertyChanged -= OnLayerPropertyChanged;
             _subscribedLayers.Clear();
 
-            // Subscribe to current layers
             var project = Project;
             if (project == null) return;
-
             foreach (var layer in project.Layers)
             {
                 layer.PropertyChanged += OnLayerPropertyChanged;
@@ -135,12 +104,11 @@ namespace MTGProxyBuilder.UI.Controls
             }
         }
 
-        private void OnLayerPropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            QueueRedraw();
-        }
+        private void OnLayerPropertyChanged(object? sender, PropertyChangedEventArgs e) => QueueRedraw();
 
-        // --- Rendering ---
+        // ================================================================
+        //  RENDERING
+        // ================================================================
 
         public void QueueRedraw()
         {
@@ -153,128 +121,90 @@ namespace MTGProxyBuilder.UI.Controls
             var project = Project;
             if (project == null) return;
 
-            int viewWidth = (int)ActualWidth;
-            int viewHeight = (int)ActualHeight;
+            int viewWidth  = (int)Bounds.Width;
+            int viewHeight = (int)Bounds.Height;
             if (viewWidth < 1 || viewHeight < 1) return;
 
-            // Render the card preview
             using var skBitmap = _compositor.RenderPreview(project, viewWidth, viewHeight);
 
-            // Draw selection overlay onto the preview
             if (SelectedLayer != null && SelectedLayer.IsVisible)
             {
                 using var overlayCanvas = new SKCanvas(skBitmap);
-                float scaleX = (float)skBitmap.Width / project.CardWidthPx;
+                float scaleX = (float)skBitmap.Width  / project.CardWidthPx;
                 float scaleY = (float)skBitmap.Height / project.CardHeightPx;
-                float scale = Math.Min(scaleX, scaleY);
-
+                float scale  = Math.Min(scaleX, scaleY);
                 overlayCanvas.Save();
                 overlayCanvas.Scale(scale);
                 DrawSelectionHandle(overlayCanvas, SelectedLayer);
                 overlayCanvas.Restore();
             }
 
-            // Copy SkiaSharp bitmap to WriteableBitmap
             CopyToWriteableBitmap(skBitmap);
         }
 
-        private void DrawSelectionHandle(SKCanvas canvas, LayerBase layer)
+        private static void DrawSelectionHandle(SKCanvas canvas, LayerBase layer)
         {
             using var paint = new SKPaint
             {
                 Color = new SKColor(0x1E, 0x90, 0xFF, 0xCC),
-                Style = SKPaintStyle.Stroke,
-                StrokeWidth = 2,
-                IsAntialias = true,
+                Style = SKPaintStyle.Stroke, StrokeWidth = 2, IsAntialias = true,
                 PathEffect = SKPathEffect.CreateDash(new[] { 6f, 4f }, 0)
             };
-
             canvas.Save();
             canvas.Translate(layer.X, layer.Y);
-
             if (layer.Rotation != 0)
             {
                 canvas.Translate(layer.Width / 2, layer.Height / 2);
                 canvas.RotateDegrees(layer.Rotation);
                 canvas.Translate(-layer.Width / 2, -layer.Height / 2);
             }
-
             canvas.DrawRect(0, 0, layer.Width, layer.Height, paint);
 
-            // Draw corner handles
             float handleSize = 6;
-            using var handlePaint = new SKPaint
-            {
-                Color = SKColors.White,
-                Style = SKPaintStyle.Fill,
-                IsAntialias = true
-            };
-            using var handleBorder = new SKPaint
-            {
-                Color = new SKColor(0x1E, 0x90, 0xFF),
-                Style = SKPaintStyle.Stroke,
-                StrokeWidth = 1.5f,
-                IsAntialias = true
-            };
-
-            var corners = new SKPoint[]
-            {
-                new(0, 0),
-                new(layer.Width, 0),
-                new(0, layer.Height),
-                new(layer.Width, layer.Height)
-            };
-
-            foreach (var corner in corners)
+            using var handlePaint  = new SKPaint { Color = SKColors.White, Style = SKPaintStyle.Fill, IsAntialias = true };
+            using var handleBorder = new SKPaint { Color = new SKColor(0x1E, 0x90, 0xFF), Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f, IsAntialias = true };
+            foreach (var corner in new SKPoint[] { new(0, 0), new(layer.Width, 0), new(0, layer.Height), new(layer.Width, layer.Height) })
             {
                 canvas.DrawRect(corner.X - handleSize / 2, corner.Y - handleSize / 2, handleSize, handleSize, handlePaint);
                 canvas.DrawRect(corner.X - handleSize / 2, corner.Y - handleSize / 2, handleSize, handleSize, handleBorder);
             }
-
             canvas.Restore();
         }
 
         private void CopyToWriteableBitmap(SKBitmap skBitmap)
         {
-            int w = skBitmap.Width;
-            int h = skBitmap.Height;
+            int w = skBitmap.Width, h = skBitmap.Height;
 
-            if (_bitmap == null || _bitmap.PixelWidth != w || _bitmap.PixelHeight != h)
+            if (_bitmap == null || _bitmap.PixelSize.Width != w || _bitmap.PixelSize.Height != h)
             {
-                _bitmap = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null);
+                _bitmap = new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Premul);
                 _image.Source = _bitmap;
             }
 
-            _bitmap.Lock();
-            try
+            var srcPtr = skBitmap.GetPixels();
+            using var fb = _bitmap.Lock();
+            unsafe
             {
-                var srcPtr = skBitmap.GetPixels();
-                long size = (long)skBitmap.RowBytes * h;
-                unsafe
-                {
-                    Buffer.MemoryCopy(srcPtr.ToPointer(), _bitmap.BackBuffer.ToPointer(), size, size);
-                }
-                _bitmap.AddDirtyRect(new Int32Rect(0, 0, w, h));
-            }
-            finally
-            {
-                _bitmap.Unlock();
+                long size = (long)fb.RowBytes * h;
+                Buffer.MemoryCopy(srcPtr.ToPointer(), fb.Address.ToPointer(), size, size);
             }
         }
 
-        // --- Mouse Interaction ---
+        // ================================================================
+        //  POINTER EVENTS
+        // ================================================================
 
-        protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
+        protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
-            base.OnMouseLeftButtonDown(e);
+            base.OnPointerPressed(e);
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
 
             var project = Project;
             if (project == null) return;
 
-            var pos = e.GetPosition(_image);
+            var pos     = e.GetPosition(_image);
             var cardPos = ScreenToCard(pos);
 
-            // Hit test layers in reverse Z-order (top first)
             var hitLayer = project.Layers
                 .Where(l => l.IsVisible && !l.IsLocked)
                 .OrderByDescending(l => l.ZOrder)
@@ -289,54 +219,42 @@ namespace MTGProxyBuilder.UI.Controls
                 _dragStart = pos;
                 _dragLayerStartX = hitLayer.X;
                 _dragLayerStartY = hitLayer.Y;
-                CaptureMouse();
+                _capturedPointer = e.Pointer;
+                e.Pointer.Capture(this);
             }
-
             e.Handled = true;
         }
 
-        protected override void OnMouseMove(MouseEventArgs e)
+        protected override void OnPointerMoved(PointerEventArgs e)
         {
-            base.OnMouseMove(e);
+            base.OnPointerMoved(e);
+            if (!_isDragging || SelectedLayer == null || Project == null || _capturedPointer == null) return;
 
-            if (!_isDragging || SelectedLayer == null || Project == null) return;
-
-            var pos = e.GetPosition(_image);
+            var pos   = e.GetPosition(_image);
             var scale = GetCardScale();
-
-            float dx = (float)((pos.X - _dragStart.X) / scale);
-            float dy = (float)((pos.Y - _dragStart.Y) / scale);
+            float dx  = (float)((pos.X - _dragStart.X) / scale);
+            float dy  = (float)((pos.Y - _dragStart.Y) / scale);
 
             SelectedLayer.X = _dragLayerStartX + dx;
             SelectedLayer.Y = _dragLayerStartY + dy;
-
             QueueRedraw();
         }
 
-        protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+        protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
-            base.OnMouseLeftButtonUp(e);
-
-            if (_isDragging)
-            {
-                _isDragging = false;
-                ReleaseMouseCapture();
-            }
+            base.OnPointerReleased(e);
+            if (!_isDragging) return;
+            _isDragging = false;
+            _capturedPointer?.Capture(null);
+            _capturedPointer = null;
         }
 
-        protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
-        {
-            base.OnRenderSizeChanged(sizeInfo);
-            QueueRedraw();
-        }
-
-        // --- Helpers ---
+        // ================================================================
+        //  HELPERS
+        // ================================================================
 
         private Point ScreenToCard(Point screenPos)
         {
-            var project = Project;
-            if (project == null) return screenPos;
-
             var scale = GetCardScale();
             return new Point(screenPos.X / scale, screenPos.Y / scale);
         }
@@ -344,23 +262,16 @@ namespace MTGProxyBuilder.UI.Controls
         private double GetCardScale()
         {
             var project = Project;
-            if (project == null || _image.ActualWidth < 1) return 1;
-
-            double scaleX = _image.ActualWidth / project.CardWidthPx;
-            double scaleY = _image.ActualHeight / project.CardHeightPx;
+            if (project == null || _image.Bounds.Width < 1) return 1;
+            double scaleX = _image.Bounds.Width  / project.CardWidthPx;
+            double scaleY = _image.Bounds.Height / project.CardHeightPx;
             return Math.Min(scaleX, scaleY);
         }
 
-        private static bool HitTestLayer(LayerBase layer, Point cardPos)
-        {
-            // Simple AABB hit test (ignores rotation for now)
-            return cardPos.X >= layer.X && cardPos.X <= layer.X + layer.Width
-                && cardPos.Y >= layer.Y && cardPos.Y <= layer.Y + layer.Height;
-        }
+        private static bool HitTestLayer(LayerBase layer, Point cardPos) =>
+            cardPos.X >= layer.X && cardPos.X <= layer.X + layer.Width
+         && cardPos.Y >= layer.Y && cardPos.Y <= layer.Y + layer.Height;
 
-        /// <summary>
-        /// Access the compositor for image cache invalidation.
-        /// </summary>
         public CardCompositor Compositor => _compositor;
     }
 }

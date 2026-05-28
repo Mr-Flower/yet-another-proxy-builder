@@ -6,13 +6,16 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Collections;
+using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
+using Avalonia.Data;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
 
@@ -28,14 +31,17 @@ namespace MTGProxyBuilder.UI.Controls
         private int _dragSourceCardIndex = -1;
         private int _pendingSelectSlot = -1;
         private Point _dragStart;
-        private UIElement? _dragGhost;
+        private Control? _dragGhost;
         private Rectangle? _dropHighlight;
 
-        // Selection state — tracks selected CardModel indices in the Cards collection
-        private readonly HashSet<int> _selectedSlots = new();
-        private int _lastSelectedSlot = -1; // anchor for Shift+Click range selection
+        // Pointer capture
+        private IPointer? _capturedPointer;
 
-        // Flip state — tracks which cards show back artwork
+        // Selection state
+        private readonly HashSet<int> _selectedSlots = new();
+        private int _lastSelectedSlot = -1;
+
+        // Flip state
         private readonly HashSet<int> _flippedCardIndices = new();
         private bool _allFlipped;
 
@@ -45,7 +51,7 @@ namespace MTGProxyBuilder.UI.Controls
         private List<ExpandedSlot> _expandedSlots = new();
 
         // Image cache
-        private static readonly ConcurrentDictionary<string, BitmapImage?> _imageCache = new();
+        private static readonly ConcurrentDictionary<string, Bitmap?> _imageCache = new();
 
         // Debounce + async redraw
         private DispatcherTimer? _redrawTimer;
@@ -57,165 +63,100 @@ namespace MTGProxyBuilder.UI.Controls
         {
             Background = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
             ClipToBounds = true;
+            Focusable = true;
 
             _redrawTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
             _redrawTimer.Tick += (_, _) => { _redrawTimer.Stop(); _ = RedrawAsync(); };
-
-            MouseLeftButtonDown += OnMouseLeftButtonDown;
-            MouseMove += OnMouseMoveHandler;
-            MouseLeftButtonUp += OnMouseLeftButtonUp;
-            MouseRightButtonUp += OnMouseRightButtonUp;
-            KeyDown += OnKeyDown;
-            Focusable = true;
         }
 
-        private void OnKeyDown(object sender, KeyEventArgs e)
+        // ================================================================
+        //  STYLED PROPERTIES
+        // ================================================================
+
+        public static readonly StyledProperty<PageLayout?> PageSettingsProperty =
+            AvaloniaProperty.Register<GridEditorCanvas, PageLayout?>(nameof(PageSettings));
+
+        public static readonly StyledProperty<ObservableCollection<CardModel>?> CardsSourceProperty =
+            AvaloniaProperty.Register<GridEditorCanvas, ObservableCollection<CardModel>?>(nameof(CardsSource));
+
+        public static readonly StyledProperty<bool> ShowCutGuidesProperty =
+            AvaloniaProperty.Register<GridEditorCanvas, bool>(nameof(ShowCutGuides), defaultValue: true);
+
+        public static readonly StyledProperty<PrintSettings?> PrintSettingsSourceProperty =
+            AvaloniaProperty.Register<GridEditorCanvas, PrintSettings?>(nameof(PrintSettingsSource));
+
+        public static readonly StyledProperty<string?> RenderProgressProperty =
+            AvaloniaProperty.Register<GridEditorCanvas, string?>(nameof(RenderProgress));
+
+        public static readonly StyledProperty<bool> IsRenderingProperty =
+            AvaloniaProperty.Register<GridEditorCanvas, bool>(nameof(IsRendering));
+
+        public static readonly StyledProperty<CardModel?> SelectedCardProperty =
+            AvaloniaProperty.Register<GridEditorCanvas, CardModel?>(nameof(SelectedCard),
+                defaultBindingMode: BindingMode.TwoWay);
+
+        public static readonly StyledProperty<int> RefreshTriggerProperty =
+            AvaloniaProperty.Register<GridEditorCanvas, int>(nameof(RefreshTrigger));
+
+        public static readonly StyledProperty<UndoService?> UndoSvcProperty =
+            AvaloniaProperty.Register<GridEditorCanvas, UndoService?>(nameof(UndoSvc));
+
+        // ZoomLevel: multiplier applied to MmToPx so ScrollViewer sees the zoomed extent.
+        // Avalonia has no LayoutTransform; scaling the coordinate system is the portable workaround.
+        public static readonly StyledProperty<double> ZoomLevelProperty =
+            AvaloniaProperty.Register<GridEditorCanvas, double>(nameof(ZoomLevel), defaultValue: 1.0);
+
+        public PageLayout?  PageSettings      { get => GetValue(PageSettingsProperty);      set => SetValue(PageSettingsProperty, value); }
+        public ObservableCollection<CardModel>? CardsSource { get => GetValue(CardsSourceProperty); set => SetValue(CardsSourceProperty, value); }
+        public bool         ShowCutGuides     { get => GetValue(ShowCutGuidesProperty);     set => SetValue(ShowCutGuidesProperty, value); }
+        public PrintSettings? PrintSettingsSource { get => GetValue(PrintSettingsSourceProperty); set => SetValue(PrintSettingsSourceProperty, value); }
+        public string?      RenderProgress    { get => GetValue(RenderProgressProperty);    set => SetValue(RenderProgressProperty, value); }
+        public bool         IsRendering       { get => GetValue(IsRenderingProperty);       set => SetValue(IsRenderingProperty, value); }
+        public CardModel?   SelectedCard      { get => GetValue(SelectedCardProperty);      set => SetValue(SelectedCardProperty, value); }
+        public int          RefreshTrigger    { get => GetValue(RefreshTriggerProperty);    set => SetValue(RefreshTriggerProperty, value); }
+        public UndoService? UndoSvc           { get => GetValue(UndoSvcProperty);           set => SetValue(UndoSvcProperty, value); }
+        public double       ZoomLevel         { get => GetValue(ZoomLevelProperty);         set => SetValue(ZoomLevelProperty, value); }
+
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
-            if (e.Key == Key.Escape && _selectedSlots.Count > 0)
+            base.OnPropertyChanged(change);
+            if (change.Property == PageSettingsProperty)
             {
+                if (change.OldValue.GetValueOrDefault() is PageLayout old) old.PropertyChanged -= OnSettingsPropChanged;
+                if (change.NewValue.GetValueOrDefault() is PageLayout nw) nw.PropertyChanged += OnSettingsPropChanged;
+                ScheduleRedraw();
+            }
+            else if (change.Property == CardsSourceProperty)
+            {
+                if (change.OldValue.GetValueOrDefault() is ObservableCollection<CardModel> oldC) oldC.CollectionChanged -= OnCollectionChanged;
+                if (change.NewValue.GetValueOrDefault() is ObservableCollection<CardModel> newC) newC.CollectionChanged += OnCollectionChanged;
                 _selectedSlots.Clear();
-                SyncSelectedCard();
-                _ = RedrawAsync();
-                e.Handled = true;
+                ScheduleRedraw();
             }
-        }
-
-        // --- Dependency properties ---
-
-        public static readonly DependencyProperty PageSettingsProperty =
-            DependencyProperty.Register("PageSettings", typeof(PageLayout), typeof(GridEditorCanvas),
-                new PropertyMetadata(null, OnSettingsChanged));
-
-        public static readonly DependencyProperty CardsSourceProperty =
-            DependencyProperty.Register("CardsSource", typeof(ObservableCollection<CardModel>), typeof(GridEditorCanvas),
-                new PropertyMetadata(null, OnCardsSourceChanged));
-
-        public static readonly DependencyProperty ShowCutGuidesProperty =
-            DependencyProperty.Register("ShowCutGuides", typeof(bool), typeof(GridEditorCanvas),
-                new PropertyMetadata(true, (d, _) => ((GridEditorCanvas)d).ScheduleRedraw()));
-
-        public static readonly DependencyProperty PrintSettingsSourceProperty =
-            DependencyProperty.Register("PrintSettingsSource", typeof(PrintSettings), typeof(GridEditorCanvas),
-                new PropertyMetadata(null, OnPrintSettingsChanged));
-
-        public static readonly DependencyProperty RenderProgressProperty =
-            DependencyProperty.Register("RenderProgress", typeof(string), typeof(GridEditorCanvas),
-                new PropertyMetadata(null));
-
-        public static readonly DependencyProperty IsRenderingProperty =
-            DependencyProperty.Register("IsRendering", typeof(bool), typeof(GridEditorCanvas),
-                new PropertyMetadata(false));
-
-        public string? RenderProgress
-        {
-            get => (string?)GetValue(RenderProgressProperty);
-            set => SetValue(RenderProgressProperty, value);
-        }
-
-        public bool IsRendering
-        {
-            get => (bool)GetValue(IsRenderingProperty);
-            set => SetValue(IsRenderingProperty, value);
-        }
-
-        public PrintSettings? PrintSettingsSource
-        {
-            get => (PrintSettings?)GetValue(PrintSettingsSourceProperty);
-            set => SetValue(PrintSettingsSourceProperty, value);
-        }
-
-        private static void OnPrintSettingsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            if (d is GridEditorCanvas canvas)
+            else if (change.Property == PrintSettingsSourceProperty)
             {
-                if (e.OldValue is PrintSettings old) old.PropertyChanged -= canvas.OnPrintSettingsPropChanged;
-                if (e.NewValue is PrintSettings nw) nw.PropertyChanged += canvas.OnPrintSettingsPropChanged;
-                canvas.ScheduleRedraw();
+                if (change.OldValue.GetValueOrDefault() is PrintSettings oldPs) oldPs.PropertyChanged -= OnPrintSettingsPropChanged;
+                if (change.NewValue.GetValueOrDefault() is PrintSettings newPs) newPs.PropertyChanged += OnPrintSettingsPropChanged;
+                ScheduleRedraw();
             }
-        }
-
-        private void OnPrintSettingsPropChanged(object? s, System.ComponentModel.PropertyChangedEventArgs e) => ScheduleRedraw();
-
-        public static readonly DependencyProperty SelectedCardProperty =
-            DependencyProperty.Register("SelectedCard", typeof(CardModel), typeof(GridEditorCanvas),
-                new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
-
-        public static readonly DependencyProperty RefreshTriggerProperty =
-            DependencyProperty.Register("RefreshTrigger", typeof(int), typeof(GridEditorCanvas),
-                new PropertyMetadata(0, (d, _) => ((GridEditorCanvas)d).ScheduleRedraw()));
-
-        public int RefreshTrigger
-        {
-            get => (int)GetValue(RefreshTriggerProperty);
-            set => SetValue(RefreshTriggerProperty, value);
-        }
-
-        public static readonly DependencyProperty UndoServiceProperty =
-            DependencyProperty.Register("UndoSvc", typeof(UndoService), typeof(GridEditorCanvas));
-
-        public UndoService? UndoSvc
-        {
-            get => (UndoService?)GetValue(UndoServiceProperty);
-            set => SetValue(UndoServiceProperty, value);
-        }
-
-        /// <summary>Fired when the user double-clicks a card on the canvas.</summary>
-        public event Action<CardModel, bool>? CardDoubleClicked; // (card, isShowingBack)
-        public event Action<CardModel>? CreateTokenRequested; // (sourceCard)
-        public event Action<List<CardModel>>? CreateTokensFromCardsRequested; // (sourceCards)
-        public event Action<List<int>>? ApplyMajorityBackRequested; // (cardIndices)
-        public event Action<List<int>>? SelectFrontArtRequested; // (cardIndices)
-        public event Action<List<int>>? SelectBackArtRequested; // (cardIndices)
-
-        public PageLayout? PageSettings
-        {
-            get => (PageLayout?)GetValue(PageSettingsProperty);
-            set => SetValue(PageSettingsProperty, value);
-        }
-
-        public ObservableCollection<CardModel>? CardsSource
-        {
-            get => (ObservableCollection<CardModel>?)GetValue(CardsSourceProperty);
-            set => SetValue(CardsSourceProperty, value);
-        }
-
-        public bool ShowCutGuides
-        {
-            get => (bool)GetValue(ShowCutGuidesProperty);
-            set => SetValue(ShowCutGuidesProperty, value);
-        }
-
-        public CardModel? SelectedCard
-        {
-            get => (CardModel?)GetValue(SelectedCardProperty);
-            set => SetValue(SelectedCardProperty, value);
-        }
-
-        private static void OnSettingsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            if (d is GridEditorCanvas canvas)
+            else if (change.Property == ShowCutGuidesProperty ||
+                     change.Property == RefreshTriggerProperty ||
+                     change.Property == ZoomLevelProperty)
             {
-                if (e.OldValue is PageLayout old) old.PropertyChanged -= canvas.OnSettingsPropChanged;
-                if (e.NewValue is PageLayout nw) nw.PropertyChanged += canvas.OnSettingsPropChanged;
-                canvas.ScheduleRedraw();
+                ScheduleRedraw();
             }
         }
 
         private void OnSettingsPropChanged(object? s, System.ComponentModel.PropertyChangedEventArgs e) => ScheduleRedraw();
+        private void OnPrintSettingsPropChanged(object? s, System.ComponentModel.PropertyChangedEventArgs e) => ScheduleRedraw();
+        private void OnCollectionChanged(object? s, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => ScheduleRedraw();
 
-        private static void OnCardsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            if (d is GridEditorCanvas canvas)
-            {
-                if (e.OldValue is ObservableCollection<CardModel> oldC) oldC.CollectionChanged -= canvas.OnCollectionChanged;
-                if (e.NewValue is ObservableCollection<CardModel> newC) newC.CollectionChanged += canvas.OnCollectionChanged;
-                canvas._selectedSlots.Clear();
-                canvas.ScheduleRedraw();
-            }
-        }
-
-        private void OnCollectionChanged(object? s,
-            System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => ScheduleRedraw();
+        public event Action<CardModel, bool>? CardDoubleClicked;
+        public event Action<CardModel>? CreateTokenRequested;
+        public event Action<List<CardModel>>? CreateTokensFromCardsRequested;
+        public event Action<List<int>>? ApplyMajorityBackRequested;
+        public event Action<List<int>>? SelectFrontArtRequested;
+        public event Action<List<int>>? SelectBackArtRequested;
 
         private void ScheduleRedraw()
         {
@@ -237,20 +178,23 @@ namespace MTGProxyBuilder.UI.Controls
             var settings = PageSettings;
             if (settings == null) { Children.Clear(); return; }
 
-            float pageW = settings.PageWidthMm * MmToPx;
-            float pageH = settings.PageHeightMm * MmToPx;
-            float marginL = settings.MarginLeftMm * MmToPx;
-            float marginT = settings.MarginTopMm * MmToPx;
-            float marginR = settings.MarginRightMm * MmToPx;
-            float marginB = settings.MarginBottomMm * MmToPx;
-            float cellW = (settings.CardWidthMm + 2 * settings.BleedWidthMm) * MmToPx;
-            float cellH = (settings.CardHeightMm + 2 * settings.BleedWidthMm) * MmToPx;
-            float bleed = settings.BleedWidthMm * MmToPx;
-            float cardW = settings.CardWidthMm * MmToPx;
-            float cardH = settings.CardHeightMm * MmToPx;
+            // Apply zoom by scaling the pixel-per-mm conversion factor.
+            float mmPx = MmToPx * (float)ZoomLevel;
+
+            float pageW  = settings.PageWidthMm  * mmPx;
+            float pageH  = settings.PageHeightMm * mmPx;
+            float marginL = settings.MarginLeftMm  * mmPx;
+            float marginT = settings.MarginTopMm   * mmPx;
+            float marginR = settings.MarginRightMm * mmPx;
+            float marginB = settings.MarginBottomMm* mmPx;
+            float cellW   = (settings.CardWidthMm  + 2 * settings.BleedWidthMm) * mmPx;
+            float cellH   = (settings.CardHeightMm + 2 * settings.BleedWidthMm) * mmPx;
+            float bleed   = settings.BleedWidthMm  * mmPx;
+            float cardW   = settings.CardWidthMm   * mmPx;
+            float cardH   = settings.CardHeightMm  * mmPx;
             int cols = settings.CardsPerRow;
             int rows = settings.CardsPerColumn;
-            int perPage = settings.CardsPerPage;
+            int perPage  = settings.CardsPerPage;
 
             if (cols <= 0 || rows <= 0 || perPage <= 0) { Children.Clear(); return; }
 
@@ -261,7 +205,6 @@ namespace MTGProxyBuilder.UI.Controls
                     for (int q = 0; q < cards[i].Quantity; q++)
                         slots.Add(new ExpandedSlot(cards[i], i));
 
-            // Collect image paths to preload (include back images for flipped cards)
             var pathsToLoad = new HashSet<string>();
             foreach (var s in slots)
             {
@@ -274,15 +217,14 @@ namespace MTGProxyBuilder.UI.Controls
             if (pathsToLoad.Count > 0)
             {
                 IsRendering = true;
-                int loaded = 0;
-                int total = pathsToLoad.Count;
+                int loaded = 0, total = pathsToLoad.Count;
                 foreach (var path in pathsToLoad)
                 {
                     if (token.IsCancellationRequested) { IsRendering = false; return; }
                     await Task.Run(() => LoadImageToCache(path, (int)cellW * 2), token);
                     loaded++;
                     RenderProgress = $"Loading images ({loaded}/{total})...";
-                    await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+                    await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
                 }
             }
 
@@ -300,7 +242,7 @@ namespace MTGProxyBuilder.UI.Controls
             Children.Clear();
             _isDragging = false; _dragGhost = null; _dropHighlight = null;
 
-            Width = pageW;
+            Width  = pageW;
             Height = _totalPages * pageH + (_totalPages - 1) * PageGapPx;
 
             IsRendering = true;
@@ -314,7 +256,11 @@ namespace MTGProxyBuilder.UI.Controls
 
                 if (page > 0)
                 {
-                    var lbl = new TextBlock { Text = $"Page {page + 1} of {_totalPages}", FontSize = 12, Foreground = Brushes.Gray, FontWeight = FontWeights.SemiBold };
+                    var lbl = new TextBlock
+                    {
+                        Text = $"Page {page + 1} of {_totalPages}",
+                        FontSize = 12, Foreground = Brushes.Gray, FontWeight = FontWeight.SemiBold
+                    };
                     SetLeft(lbl, 4); SetTop(lbl, pageTop - 18); Children.Add(lbl);
                 }
 
@@ -324,7 +270,8 @@ namespace MTGProxyBuilder.UI.Controls
                 var mr = new Rectangle
                 {
                     Width = pageW - marginL - marginR, Height = pageH - marginT - marginB,
-                    Stroke = Brushes.LightBlue, StrokeThickness = 0.5, StrokeDashArray = new DoubleCollection { 4, 4 }
+                    Stroke = Brushes.LightBlue, StrokeThickness = 0.5,
+                    StrokeDashArray = new AvaloniaList<double> { 4, 4 }
                 };
                 SetLeft(mr, marginL); SetTop(mr, pageTop + marginT); Children.Add(mr);
 
@@ -342,64 +289,60 @@ namespace MTGProxyBuilder.UI.Controls
                             Width = cellW, Height = cellH,
                             Fill = new SolidColorBrush(Color.FromArgb(15, 0, 0, 0)),
                             Stroke = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
-                            StrokeThickness = 0.5, StrokeDashArray = new DoubleCollection { 2, 2 }
+                            StrokeThickness = 0.5, StrokeDashArray = new AvaloniaList<double> { 2, 2 }
                         };
                         SetLeft(slot, x); SetTop(slot, y); Children.Add(slot);
 
                         if (flat < slots.Count)
                         {
                             var es = slots[flat];
-                            bool flipped = IsCardFlipped(es.CardIndex);
+                            bool flipped  = IsCardFlipped(es.CardIndex);
                             bool selected = _selectedSlots.Contains(flat);
                             PlaceCardVisual(es.Card, x, y, cellW, cellH, bleed, cardW, cardH, pageTop, pageW, pageH, flipped, selected);
                         }
                     }
                 }
 
-                var pn = new TextBlock { Text = $"{page + 1}", FontSize = 14, Foreground = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)), FontWeight = FontWeights.Bold };
+                var pn = new TextBlock
+                {
+                    Text = $"{page + 1}", FontSize = 14,
+                    Foreground = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)),
+                    FontWeight = FontWeight.Bold
+                };
                 SetLeft(pn, pageW - 30); SetTop(pn, pageTop + pageH - 25); Children.Add(pn);
 
-                // Registration marks
                 var regPs = PrintSettingsSource;
-                if (regPs != null && regPs.ShowRegistrationMarks)
-                {
+                if (regPs?.ShowRegistrationMarks == true)
                     DrawRegistrationMarksPreview(pageTop, pageW, pageH, regPs);
-                }
 
-                // Yield to UI thread between pages so the progress overlay updates
                 if (_totalPages > 1)
-                    await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+                    await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
             }
 
             IsRendering = false;
             RenderProgress = null;
         }
 
-        private const float InToPx = 96f; // 1 inch = 96 WPF pixels
+        private const float InToPx = 96f;
 
         private void DrawRegistrationMarksPreview(float pageTop, float pageW, float pageH, PrintSettings ps)
         {
-            float inset = ps.RegMarkInsetIn * InToPx;
-            float length = ps.RegMarkLengthIn * InToPx;
-            float thickness = ps.RegMarkThicknessIn * InToPx;
-            var brush = Brushes.Black;
+            float zoom   = (float)ZoomLevel;
+            float inset  = ps.RegMarkInsetIn    * InToPx * zoom;
+            float length = ps.RegMarkLengthIn   * InToPx * zoom;
+            float thick  = ps.RegMarkThicknessIn* InToPx * zoom;
 
             void AddMark(float rx, float ry, float rw, float rh)
             {
-                var r = new Rectangle { Width = rw, Height = rh, Fill = brush, IsHitTestVisible = false };
+                var r = new Rectangle { Width = rw, Height = rh, Fill = Brushes.Black, IsHitTestVisible = false };
                 SetLeft(r, rx); SetTop(r, ry); Children.Add(r);
             }
 
-            // Top-left: filled square
-            AddMark(inset, pageTop + inset, length, length);
-
-            // Top-right L: horizontal bar left + vertical bar down
-            AddMark(pageW - inset - length, pageTop + inset, length, thickness);
-            AddMark(pageW - inset - thickness, pageTop + inset + thickness, thickness, length - thickness);
-
-            // Bottom-left L: vertical bar up + horizontal bar right
-            AddMark(inset, pageTop + pageH - inset - length, thickness, length - thickness);
-            AddMark(inset, pageTop + pageH - inset - thickness, length, thickness);
+            AddMark(inset,                  pageTop + inset,             length, length);
+            AddMark(pageW - inset - length, pageTop + inset,             length, thick);
+            AddMark(pageW - inset - thick,  pageTop + inset + thick,     thick,  length - thick);
+            AddMark(inset,                  pageTop + pageH - inset - length, thick, length - thick);
+            AddMark(inset,                  pageTop + pageH - inset - thick,  length, thick);
         }
 
         private bool IsCardFlipped(int cardIndex) => _allFlipped ^ _flippedCardIndices.Contains(cardIndex);
@@ -414,30 +357,27 @@ namespace MTGProxyBuilder.UI.Controls
             try
             {
                 if (!File.Exists(path)) { _imageCache[path] = null; return; }
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.UriSource = new Uri(path, UriKind.Absolute);
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.DecodePixelWidth = decodeWidth;
-                bmp.EndInit();
-                bmp.Freeze();
-                _imageCache[path] = bmp;
+                using var stream = File.OpenRead(path);
+                _imageCache[path] = Bitmap.DecodeToWidth(stream, decodeWidth);
             }
             catch { _imageCache[path] = null; }
         }
 
-        private static BitmapImage? GetCachedImage(string? path)
+        private static Bitmap? GetCachedImage(string? path)
         {
             if (string.IsNullOrEmpty(path)) return null;
             return _imageCache.TryGetValue(path, out var bmp) ? bmp : null;
         }
 
         // ================================================================
-        //  MOUSE — left click = select/drag, right click = context menu
+        //  POINTER EVENTS
         // ================================================================
 
-        private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
+            base.OnPointerPressed(e);
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+
             Focus();
             var pos = e.GetPosition(this);
             int flatSlot = HitTestSlot(pos);
@@ -446,23 +386,17 @@ namespace MTGProxyBuilder.UI.Controls
             {
                 int cardIdx = _expandedSlots[flatSlot].CardIndex;
 
-                // Double-click: open art selector
                 if (e.ClickCount == 2)
                 {
-                    var card = _expandedSlots[flatSlot].Card;
-                    bool showingBack = IsCardFlipped(cardIdx);
-                    CardDoubleClicked?.Invoke(card, showingBack);
+                    CardDoubleClicked?.Invoke(_expandedSlots[flatSlot].Card, IsCardFlipped(cardIdx));
                     e.Handled = true;
                     return;
                 }
 
-                // Ctrl+Click: toggle individual slot in selection
-                if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
                 {
-                    if (_selectedSlots.Contains(flatSlot))
-                        _selectedSlots.Remove(flatSlot);
-                    else
-                        _selectedSlots.Add(flatSlot);
+                    if (_selectedSlots.Contains(flatSlot)) _selectedSlots.Remove(flatSlot);
+                    else _selectedSlots.Add(flatSlot);
                     _lastSelectedSlot = flatSlot;
                     SyncSelectedCard();
                     _ = RedrawAsync();
@@ -470,32 +404,27 @@ namespace MTGProxyBuilder.UI.Controls
                     return;
                 }
 
-                // Shift+Click: range select from last selected to current
-                if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) && _lastSelectedSlot >= 0)
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && _lastSelectedSlot >= 0)
                 {
                     int from = Math.Min(_lastSelectedSlot, flatSlot);
-                    int to = Math.Max(_lastSelectedSlot, flatSlot);
+                    int to   = Math.Max(_lastSelectedSlot, flatSlot);
                     for (int s = from; s <= to; s++)
-                    {
-                        if (s < _expandedSlots.Count)
-                            _selectedSlots.Add(s);
-                    }
+                        if (s < _expandedSlots.Count) _selectedSlots.Add(s);
                     SyncSelectedCard();
                     _ = RedrawAsync();
                     e.Handled = true;
                     return;
                 }
 
-                // Start potential drag (plain click selects on mouse-up)
                 _dragSourceCardIndex = cardIdx;
                 _dragStart = pos;
                 _isDragging = false;
                 _pendingSelectSlot = flatSlot;
-                CaptureMouse();
+                _capturedPointer = e.Pointer;
+                e.Pointer.Capture(this);
             }
             else
             {
-                // Click empty area: clear selection
                 if (_selectedSlots.Count > 0)
                 {
                     _selectedSlots.Clear();
@@ -507,10 +436,11 @@ namespace MTGProxyBuilder.UI.Controls
             e.Handled = true;
         }
 
-        private void OnMouseMoveHandler(object sender, MouseEventArgs e)
+        protected override void OnPointerMoved(PointerEventArgs e)
         {
-            if (_dragSourceCardIndex < 0 || !IsMouseCaptured) return;
-            var pos = e.GetPosition(this);
+            base.OnPointerMoved(e);
+            if (_dragSourceCardIndex < 0 || _capturedPointer == null) return;
+            var pos   = e.GetPosition(this);
             var delta = pos - _dragStart;
             if (!_isDragging)
             {
@@ -522,18 +452,18 @@ namespace MTGProxyBuilder.UI.Controls
             UpdateDropHighlight(pos);
         }
 
-        private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
-            if (!IsMouseCaptured) { ReleaseMouseCapture(); return; }
-            ReleaseMouseCapture();
+            base.OnPointerReleased(e);
+            if (e.InitialPressMouseButton != MouseButton.Left || _capturedPointer == null) return;
+
+            _capturedPointer.Capture(null);
+            _capturedPointer = null;
 
             if (_isDragging && _dragSourceCardIndex >= 0)
-            {
                 PerformDrop(HitTestSlot(e.GetPosition(this)));
-            }
-            else if (_pendingSelectSlot >= 0 && !Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            else if (_pendingSelectSlot >= 0 && !e.KeyModifiers.HasFlag(KeyModifiers.Control))
             {
-                // Simple click without drag — single select this slot
                 _selectedSlots.Clear();
                 _selectedSlots.Add(_pendingSelectSlot);
                 _lastSelectedSlot = _pendingSelectSlot;
@@ -541,137 +471,110 @@ namespace MTGProxyBuilder.UI.Controls
                 _ = RedrawAsync();
             }
 
-            if (_dragGhost != null) Children.Remove(_dragGhost);
+            if (_dragGhost    != null) Children.Remove(_dragGhost);
             if (_dropHighlight != null) Children.Remove(_dropHighlight);
             _dragGhost = null; _dropHighlight = null;
             _isDragging = false; _dragSourceCardIndex = -1; _pendingSelectSlot = -1;
         }
 
-        // ================================================================
-        //  RIGHT-CLICK CONTEXT MENU
-        // ================================================================
-
-        /// <summary>Convert selected flat slots to unique card indices.</summary>
-        private List<int> SelectedCardIndices()
+        protected override void OnKeyDown(KeyEventArgs e)
         {
-            return _selectedSlots
-                .Where(s => s >= 0 && s < _expandedSlots.Count)
-                .Select(s => _expandedSlots[s].CardIndex)
-                .Distinct()
-                .ToList();
+            base.OnKeyDown(e);
+            if (e.Key == Key.Escape && _selectedSlots.Count > 0)
+            {
+                _selectedSlots.Clear();
+                SyncSelectedCard();
+                _ = RedrawAsync();
+                e.Handled = true;
+            }
         }
 
-        private void OnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+        // ================================================================
+        //  CONTEXT MENU — built dynamically on right-click
+        // ================================================================
+
+        protected override void OnContextRequested(ContextRequestedEventArgs e)
         {
-            var pos = e.GetPosition(this);
-            int flatSlot = HitTestSlot(pos);
+            e.TryGetPosition(this, out var pos);
+            int flatSlot    = HitTestSlot(pos);
             int hoverCardIdx = (flatSlot >= 0 && flatSlot < _expandedSlots.Count) ? _expandedSlots[flatSlot].CardIndex : -1;
 
-            var menu = new ContextMenu();
-
+            var menu         = new ContextMenu();
             bool hasSelection = _selectedSlots.Count > 0;
-            bool hasHover = hoverCardIdx >= 0;
-            string target = hasSelection ? $" ({_selectedSlots.Count} selected)" : "";
+            bool hasHover     = hoverCardIdx >= 0;
+            string target     = hasSelection ? $" ({_selectedSlots.Count} selected)" : "";
 
             if (hasHover || hasSelection)
             {
                 var cardIndices = hasSelection ? SelectedCardIndices() : new List<int> { hoverCardIdx };
 
-                var dupItem = new MenuItem { Header = hasSelection ? $"Duplicate Selected{target}" : "Duplicate Card" };
-                dupItem.Click += (_, _) => DuplicateCards(cardIndices);
-                menu.Items.Add(dupItem);
+                void Add(string header, Action action)
+                {
+                    var item = new MenuItem { Header = header };
+                    item.Click += (_, _) => action();
+                    menu.Items.Add(item);
+                }
 
-                var delItem = new MenuItem { Header = hasSelection ? $"Delete Selected{target}" : "Delete Card" };
-                delItem.Click += (_, _) => DeleteCards(cardIndices);
-                menu.Items.Add(delItem);
-
+                Add(hasSelection ? $"Duplicate Selected{target}" : "Duplicate Card", () => DuplicateCards(cardIndices));
+                Add(hasSelection ? $"Delete Selected{target}"   : "Delete Card",     () => DeleteCards(cardIndices));
+                menu.Items.Add(new Separator());
+                Add(hasSelection ? $"Flip Selected{target}"     : "Flip Card",       () => FlipCards(cardIndices));
+                Add(hasSelection ? $"Match Back Art{target}"    : "Match Back Art",  () => ApplyMajorityBackRequested?.Invoke(cardIndices));
+                menu.Items.Add(new Separator());
+                Add(hasSelection ? $"Select Front Art{target}"  : "Select Front Art...", () => SelectFrontArtRequested?.Invoke(cardIndices));
+                Add(hasSelection ? $"Select Card Back{target}"  : "Select Card Back...", () => SelectBackArtRequested?.Invoke(cardIndices));
                 menu.Items.Add(new Separator());
 
-                var flipItem = new MenuItem { Header = hasSelection ? $"Flip Selected{target}" : "Flip Card" };
-                flipItem.Click += (_, _) => FlipCards(cardIndices);
-                menu.Items.Add(flipItem);
-
-                // "Match Back Art" — apply the most common back art to selected/hovered cards
-                var matchBackItem = new MenuItem { Header = hasSelection ? $"Match Back Art{target}" : "Match Back Art" };
-                matchBackItem.Click += (_, _) => ApplyMajorityBackRequested?.Invoke(cardIndices);
-                menu.Items.Add(matchBackItem);
-
-                menu.Items.Add(new Separator());
-
-                // Art selection
-                var selectFrontItem = new MenuItem { Header = hasSelection ? $"Select Front Art{target}" : "Select Front Art..." };
-                selectFrontItem.Click += (_, _) => SelectFrontArtRequested?.Invoke(cardIndices);
-                menu.Items.Add(selectFrontItem);
-
-                var selectBackItem = new MenuItem { Header = hasSelection ? $"Select Card Back{target}" : "Select Card Back..." };
-                selectBackItem.Click += (_, _) => SelectBackArtRequested?.Invoke(cardIndices);
-                menu.Items.Add(selectBackItem);
-
-                // "Create Token" — for cards with unique (non-common) back art
-                menu.Items.Add(new Separator());
                 if (hasSelection)
-                {
-                    var tokenItem = new MenuItem { Header = $"Create Token(s) from Selected{target}" };
-                    tokenItem.Click += (_, _) => CreateTokensFromCardsRequested?.Invoke(
-                        cardIndices.Where(i => i >= 0 && i < CardsSource!.Count).Select(i => CardsSource![i]).ToList());
-                    menu.Items.Add(tokenItem);
-                }
+                    Add($"Create Token(s) from Selected{target}", () => CreateTokensFromCardsRequested?.Invoke(
+                        cardIndices.Where(i => i >= 0 && i < CardsSource!.Count)
+                                   .Select(i => CardsSource![i]).ToList()));
                 else if (hasHover)
-                {
-                    var hoverCard = CardsSource![hoverCardIdx];
-                    var tokenItem = new MenuItem { Header = "Create Token Card" };
-                    tokenItem.Click += (_, _) => CreateTokenRequested?.Invoke(hoverCard);
-                    menu.Items.Add(tokenItem);
-                }
+                    Add("Create Token Card", () => CreateTokenRequested?.Invoke(CardsSource![hoverCardIdx]));
             }
 
-            var flipAllItem = new MenuItem { Header = _allFlipped ? "Unflip All Cards" : "Flip All Cards" };
-            flipAllItem.Click += (_, _) => FlipAll();
-            menu.Items.Add(flipAllItem);
+            var flipAll = new MenuItem { Header = _allFlipped ? "Unflip All Cards" : "Flip All Cards" };
+            flipAll.Click += (_, _) => FlipAll();
+            menu.Items.Add(flipAll);
 
             if (hasSelection)
             {
                 menu.Items.Add(new Separator());
-                var clearSel = new MenuItem { Header = "Clear Selection" };
-                clearSel.Click += (_, _) => { _selectedSlots.Clear(); SyncSelectedCard(); _ = RedrawAsync(); };
-                menu.Items.Add(clearSel);
+                var clear = new MenuItem { Header = "Clear Selection" };
+                clear.Click += (_, _) => { _selectedSlots.Clear(); SyncSelectedCard(); _ = RedrawAsync(); };
+                menu.Items.Add(clear);
             }
 
-            menu.IsOpen = true;
-            e.Handled = true;
+            ContextMenu = menu;
+            base.OnContextRequested(e);
         }
 
         // ================================================================
-        //  CARD OPERATIONS — duplicate, delete, flip
+        //  CARD OPERATIONS
         // ================================================================
+
+        private List<int> SelectedCardIndices() =>
+            _selectedSlots
+                .Where(s => s >= 0 && s < _expandedSlots.Count)
+                .Select(s => _expandedSlots[s].CardIndex)
+                .Distinct().ToList();
 
         private void DuplicateCards(List<int> cardIndices)
         {
             if (CardsSource == null) return;
             CanvasOperations.DuplicateCards(CardsSource, cardIndices, UndoSvc);
-            _selectedSlots.Clear();
-            SyncSelectedCard();
+            _selectedSlots.Clear(); SyncSelectedCard();
         }
 
         private void DeleteCards(List<int> cardIndices)
         {
             if (CardsSource == null) return;
             CanvasOperations.DeleteCards(CardsSource, cardIndices, UndoSvc);
-            _selectedSlots.Clear();
-            SyncSelectedCard();
+            _selectedSlots.Clear(); SyncSelectedCard();
         }
 
-        private void FlipCards(List<int> cardIndices)
-        {
-            CanvasOperations.FlipCards(_flippedCardIndices, cardIndices);
-            _ = RedrawAsync();
-        }
-
-        private void FlipAll()
-        {
-            CanvasOperations.FlipAll(ref _allFlipped, _flippedCardIndices);
-            _ = RedrawAsync();
-        }
+        private void FlipCards(List<int> idx) { CanvasOperations.FlipCards(_flippedCardIndices, idx); _ = RedrawAsync(); }
+        private void FlipAll()                 { CanvasOperations.FlipAll(ref _allFlipped, _flippedCardIndices); _ = RedrawAsync(); }
 
         // ================================================================
         //  DRAG AND DROP
@@ -689,17 +592,13 @@ namespace MTGProxyBuilder.UI.Controls
                 CornerRadius = new CornerRadius(4), IsHitTestVisible = false
             };
             var bmp = GetCachedImage(card.ArtworkPath);
-            if (bmp != null) ghost.Background = new ImageBrush(bmp) { Stretch = Stretch.Fill, Opacity = 0.8 };
+            if (bmp != null) ghost.Background = new ImageBrush { Source = bmp, Stretch = Stretch.Fill };
             _dragGhost = ghost; Children.Add(_dragGhost);
         }
 
         private void SyncSelectedCard()
         {
-            if (_selectedSlots.Count == 0 || _expandedSlots.Count == 0)
-            {
-                SelectedCard = null;
-                return;
-            }
+            if (_selectedSlots.Count == 0 || _expandedSlots.Count == 0) { SelectedCard = null; return; }
             int slot = _selectedSlots.First();
             SelectedCard = (slot >= 0 && slot < _expandedSlots.Count) ? _expandedSlots[slot].Card : null;
         }
@@ -725,11 +624,9 @@ namespace MTGProxyBuilder.UI.Controls
             var cards = CardsSource;
             if (cards == null || _dragSourceCardIndex < 0) return;
             UndoSvc?.SaveState(cards);
-            int targetCardIndex;
-            if (targetFlatSlot >= 0 && targetFlatSlot < _expandedSlots.Count)
-                targetCardIndex = _expandedSlots[targetFlatSlot].CardIndex;
-            else
-                targetCardIndex = cards.Count - 1;
+            int targetCardIndex = (targetFlatSlot >= 0 && targetFlatSlot < _expandedSlots.Count)
+                ? _expandedSlots[targetFlatSlot].CardIndex
+                : cards.Count - 1;
             if (targetCardIndex == _dragSourceCardIndex) return;
             cards.Move(_dragSourceCardIndex, targetCardIndex);
         }
@@ -756,14 +653,14 @@ namespace MTGProxyBuilder.UI.Controls
 
         private (float x, float y) SlotToPosition(int flatSlot)
         {
-            int page = flatSlot / _perPage;
+            int page      = flatSlot / _perPage;
             int slotOnPage = flatSlot % _perPage;
             float pageTop = page * (_pageH + PageGapPx);
             return (_marginL + (slotOnPage % _cols) * _cellW, pageTop + _marginT + (slotOnPage / _cols) * _cellH);
         }
 
         // ================================================================
-        //  CARD VISUAL RENDERING
+        //  CARD VISUAL
         // ================================================================
 
         private void PlaceCardVisual(CardModel card, float x, float y,
@@ -771,9 +668,8 @@ namespace MTGProxyBuilder.UI.Controls
             float pageTop, float pageW, float pageH, bool flipped, bool selected)
         {
             bool hasBackArt = !string.IsNullOrEmpty(card.BackArtworkPath);
-            bool showNoBackPlaceholder = flipped && !hasBackArt;
             string? imagePath = flipped ? (hasBackArt ? card.BackArtworkPath : null) : card.ArtworkPath;
-            var bmp = showNoBackPlaceholder ? null : GetCachedImage(imagePath);
+            var bmp = (flipped && !hasBackArt) ? null : GetCachedImage(imagePath);
 
             CardVisualRenderer.PlaceCard(this, card, bmp,
                 x, y, cellW, cellH, bleed, cardW, cardH,

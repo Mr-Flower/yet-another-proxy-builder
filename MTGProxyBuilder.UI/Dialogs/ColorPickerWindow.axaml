@@ -1,0 +1,86 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="MTGProxyBuilder.UI.Dialogs.ColorPickerWindow"
+        Title="Pick Color"
+        Width="420" Height="380" MinWidth="380"
+        Background="#2D2D30"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False">
+
+    <Window.Styles>
+        <Style Selector="Slider">
+            <Setter Property="Minimum" Value="0"/>
+            <Setter Property="Maximum" Value="255"/>
+            <Setter Property="LargeChange" Value="10"/>
+            <Setter Property="SmallChange" Value="1"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Preview swatch + Hex input -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="60"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Border x:Name="PreviewSwatch" Width="52" Height="52" CornerRadius="6"
+                    Background="#66FF00" HorizontalAlignment="Left"/>
+            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="Hex" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                <TextBox x:Name="HexBox" Text="#66FF00" Padding="6,4" FontSize="12"
+                         Background="#3E3E42" Foreground="White" BorderBrush="#555"
+                         CaretBrush="White" TextChanged="OnHexChanged"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- RGB Sliders -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="36"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="R" Foreground="#E06060" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+            <Slider Grid.Row="0" Grid.Column="1" x:Name="SliderR" Margin="4,2" ValueChanged="OnSliderChanged"/>
+            <TextBlock Grid.Row="0" Grid.Column="2" x:Name="LabelR" Text="102" Foreground="#CCC" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="G" Foreground="#60E060" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+            <Slider Grid.Row="1" Grid.Column="1" x:Name="SliderG" Margin="4,2" ValueChanged="OnSliderChanged"/>
+            <TextBlock Grid.Row="1" Grid.Column="2" x:Name="LabelG" Text="255" Foreground="#CCC" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="B" Foreground="#6060E0" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+            <Slider Grid.Row="2" Grid.Column="1" x:Name="SliderB" Margin="4,2" ValueChanged="OnSliderChanged"/>
+            <TextBlock Grid.Row="2" Grid.Column="2" x:Name="LabelB" Text="0" Foreground="#CCC" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
+        </Grid>
+
+        <!-- Color swatches -->
+        <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <WrapPanel x:Name="SwatchPanel" Margin="0,0,0,4"/>
+        </ScrollViewer>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,12,0,0">
+            <Button x:Name="CancelBtn" Content="Cancel" Padding="14,6"
+                    Background="#3E3E42" Foreground="White" BorderThickness="0"
+                    Click="OnCancel"/>
+            <Button x:Name="OkBtn" Content="Apply" Padding="14,6"
+                    Background="#0078D4" Foreground="White" BorderThickness="0"
+                    Click="OnApply"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:converters="clr-namespace:MTGProxyBuilder.UI.Converters"
+        xmlns:controls="clr-namespace:MTGProxyBuilder.UI.Controls"
         x:Class="MTGProxyBuilder.UI.MainWindow"
         x:Name="Root"
         Title="TCG Proxy Builder"
@@ -170,14 +171,16 @@
                               Background="#1E1E1E">
                     <Border Padding="30" HorizontalAlignment="Center">
                         <Border BoxShadow="0 4 20 0 #59000000">
-                            <!-- GridEditorCanvas replaced with placeholder in Phase 4 -->
-                            <Border x:Name="GridCanvasPlaceholder"
-                                    Background="#2D2D30" Width="744" Height="1039"
-                                    HorizontalAlignment="Center">
-                                <TextBlock Text="Canvas (Phase 4)" Foreground="#555"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                           FontSize="14"/>
-                            </Border>
+                            <controls:GridEditorCanvas
+                                x:Name="GridCanvas"
+                                HorizontalAlignment="Left"
+                                PageSettings="{Binding CurrentProject.PageSettings}"
+                                CardsSource="{Binding Cards}"
+                                ShowCutGuides="{Binding CurrentProject.PrintSettings.ShowCutGuides}"
+                                PrintSettingsSource="{Binding CurrentProject.PrintSettings}"
+                                SelectedCard="{Binding SelectedCard, Mode=TwoWay}"
+                                RefreshTrigger="{Binding RefreshTrigger}"
+                                UndoSvc="{Binding UndoServiceInstance}"/>
                         </Border>
                     </Border>
                 </ScrollViewer>

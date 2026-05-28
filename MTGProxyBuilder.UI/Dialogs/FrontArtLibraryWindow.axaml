@@ -1,0 +1,132 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MTGProxyBuilder.UI.Controls"
+        x:Class="MTGProxyBuilder.UI.Dialogs.FrontArtLibraryWindow"
+        Title="Front Art Library"
+        Width="900" Height="640" MinWidth="700" MinHeight="500"
+        Background="#1E1E1E"
+        WindowStartupLocation="CenterOwner">
+
+    <Window.Styles>
+        <Style Selector="ListBoxItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#CCC"/>
+            <Setter Property="Padding" Value="3"/>
+        </Style>
+        <Style Selector="ListBoxItem:selected">
+            <Setter Property="Background" Value="#0078D4"/>
+        </Style>
+        <Style Selector="ListBoxItem:pointerover">
+            <Setter Property="Background" Value="#3E3E42"/>
+        </Style>
+        <Style Selector="ListBoxItem:selected:pointerover">
+            <Setter Property="Background" Value="#0078D4"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="0" Background="#252526" Padding="8,6" BorderBrush="#333" BorderThickness="0,0,0,1">
+            <WrapPanel>
+                <Button Content="+ Add Files" Padding="10,4" Margin="0,0,4,0"
+                        Background="#0078D4" Foreground="White" BorderThickness="0"
+                        Click="OnAddFromFile"/>
+                <Button x:Name="ImportCacheBtn" Content="Import from Cache" Padding="10,4" Margin="0,0,4,0"
+                        Background="#3E3E42" Foreground="White" BorderThickness="0"
+                        Click="OnImportFromCache"/>
+                <Button Content="Import ZIP" Padding="10,4" Margin="0,0,4,0"
+                        Background="#3E3E42" Foreground="White" BorderThickness="0"
+                        Click="OnImportZip"/>
+                <Button Content="Export ZIP" Padding="10,4" Margin="0,0,4,0"
+                        Background="#3E3E42" Foreground="White" BorderThickness="0"
+                        Click="OnExportZip"/>
+                <Button x:Name="RegenThumbBtn" Content="Regen Thumbnails" Padding="10,4" Margin="0,0,4,0"
+                        Background="#3E3E42" Foreground="White" BorderThickness="0"
+                        Click="OnRegenerateThumbnails"/>
+                <Button Content="Move Library..." Padding="10,4"
+                        Background="#3E3E42" Foreground="White" BorderThickness="0"
+                        Click="OnMoveLibrary"/>
+            </WrapPanel>
+        </Border>
+
+        <!-- Search + action bar -->
+        <Grid Grid.Row="1" Margin="8,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <controls:SearchBar x:Name="SearchBar" Grid.Column="0"
+                                SearchRequested="OnSearchRequested"
+                                SourceChanged="OnSourceChanged"/>
+            <Button x:Name="RemoveBtn" Grid.Column="1" Content="Remove Selected" Padding="8,4" Margin="6,0,0,0"
+                    Background="#C42B1C" Foreground="White" BorderThickness="0"
+                    IsEnabled="False" Click="OnRemoveSelected"/>
+        </Grid>
+
+        <!-- Main content: list + preview -->
+        <Grid Grid.Row="2" Margin="8,0,8,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="240"/>
+            </Grid.ColumnDefinitions>
+
+            <ListBox Grid.Column="0" x:Name="LibraryListBox"
+                     Background="#1E1E1E" BorderThickness="1" BorderBrush="#333"
+                     SelectionMode="Multiple"
+                     SelectionChanged="OnListBoxSelectionChanged"
+                     DoubleTapped="OnListBoxDoubleClick">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Height="32">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="40"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="80"/>
+                            </Grid.ColumnDefinitions>
+                            <Image Grid.Column="0" Width="36" Height="28" Stretch="UniformToFill"
+                                   Source="{Binding FilePath}"/>
+                            <StackPanel Grid.Column="1" Margin="6,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Name}" FontSize="11" Foreground="#DDD"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Source}" FontSize="9.5" Foreground="#888"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="2" Text="{Binding Source}" FontSize="9.5"
+                                       Foreground="#666" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <GridSplitter Grid.Column="1" Background="#3E3E42" ResizeDirection="Columns"/>
+
+            <controls:ImagePreviewPanel Grid.Column="2" x:Name="PreviewPanel"/>
+        </Grid>
+
+        <!-- Status bar -->
+        <Border Grid.Row="3" Background="#252526" Padding="8,5"
+                BorderBrush="#333" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="CountLabel" Text="" Foreground="#999" FontSize="10" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <TextBlock x:Name="StatusLabel" Text="" Foreground="#888" FontSize="10" VerticalAlignment="Center"/>
+                    <Button Content="Close" Padding="14,4"
+                            Background="#3E3E42" Foreground="White" BorderThickness="0"
+                            Click="OnClose"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

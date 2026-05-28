@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MTGProxyBuilder.UI.Controls.ImagePreviewPanel"
+             Background="#252526">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Zoomable image area -->
+        <ScrollViewer Grid.Row="0" x:Name="ScrollArea"
+                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                      Background="#111">
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center" Padding="6">
+                <Image x:Name="PreviewImage" Stretch="Uniform"/>
+            </Border>
+        </ScrollViewer>
+
+        <!-- Info bar -->
+        <Border Grid.Row="1" Background="#1E1E1E" Padding="8,6" CornerRadius="0,0,4,4">
+            <StackPanel>
+                <TextBlock x:Name="TitleLabel" Text="Select an image" Foreground="#CCC" FontSize="12"
+                           FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="DetailLabel" Foreground="#888" FontSize="10" Margin="0,2,0,0"
+                           TextWrapping="Wrap"/>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <Button Content="-" Padding="6,1" FontSize="12" FontWeight="Bold"
+                            Background="Transparent" Foreground="#CCC" BorderThickness="0" Cursor="Hand"
+                            Click="OnZoomOut"/>
+                    <TextBlock x:Name="ZoomLabel" Text="Fit" Foreground="#888" FontSize="10"
+                               VerticalAlignment="Center" Margin="6,0" MinWidth="32" TextAlignment="Center"/>
+                    <Button Content="+" Padding="6,1" FontSize="12" FontWeight="Bold"
+                            Background="Transparent" Foreground="#CCC" BorderThickness="0" Cursor="Hand"
+                            Click="OnZoomIn"/>
+                    <Border Width="1" Background="#444" Margin="6,2"/>
+                    <Button Content="Fit" Padding="5,1" FontSize="10"
+                            Background="Transparent" Foreground="#AAA" BorderThickness="0" Cursor="Hand"
+                            Click="OnZoomFit"/>
+                    <Button Content="1:1" Padding="5,1" FontSize="10"
+                            Background="Transparent" Foreground="#AAA" BorderThickness="0" Cursor="Hand"
+                            Click="OnZoomReset"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

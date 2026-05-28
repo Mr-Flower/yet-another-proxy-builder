@@ -1,0 +1,91 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:MTGProxyBuilder.Core.Models;assembly=MTGProxyBuilder.Core"
+             xmlns:local="clr-namespace:MTGProxyBuilder.UI.Controls"
+             x:Class="MTGProxyBuilder.UI.Controls.LayerListPanel">
+
+    <UserControl.Resources>
+        <local:LayerTypeConverter x:Key="LayerTypeConv"/>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- Base ListBoxItem style -->
+        <Style Selector="ListBoxItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="Padding" Value="4,3"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="ListBoxItem:selected">
+            <Setter Property="Background" Value="#0078D4"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="ListBoxItem:pointerover">
+            <Setter Property="Background" Value="#3E3E42"/>
+        </Style>
+        <Style Selector="ListBoxItem:selected:pointerover">
+            <Setter Property="Background" Value="#0078D4"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="0" Background="#252526" BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="4">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="+ Image" Theme="{StaticResource ToolBtn}" Click="AddImageLayer_Click"
+                        ToolTip.Tip="Add image layer" Padding="6,3" Margin="0,0,2,0" FontSize="11"/>
+                <Button Content="+ Text" Theme="{StaticResource ToolBtn}" Click="AddTextLayer_Click"
+                        ToolTip.Tip="Add text layer" Padding="6,3" Margin="0,0,2,0" FontSize="11"/>
+                <Rectangle Width="1" Fill="#555555" Margin="4,2"/>
+                <Button Content="Del" Theme="{StaticResource ToolBtn}" Click="DeleteLayer_Click"
+                        ToolTip.Tip="Delete selected layer" Padding="6,3" Margin="2,0" FontSize="11"/>
+                <Rectangle Width="1" Fill="#555555" Margin="4,2"/>
+                <Button Content="Up" Theme="{StaticResource ToolBtn}" Click="MoveUp_Click"
+                        ToolTip.Tip="Move layer up" Padding="6,3" Margin="2,0,0,0" FontSize="11"/>
+                <Button Content="Dn" Theme="{StaticResource ToolBtn}" Click="MoveDown_Click"
+                        ToolTip.Tip="Move layer down" Padding="6,3" Margin="2,0,0,0" FontSize="11"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Layer List -->
+        <ListBox Grid.Row="1"
+                 x:Name="LayerList"
+                 Background="#1E1E1E"
+                 BorderThickness="0"
+                 ItemsSource="{Binding Layers}"
+                 SelectedItem="{Binding SelectedLayer, Mode=TwoWay}"
+                 HorizontalContentAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid Height="24">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="24"/>
+                            <ColumnDefinition Width="20"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Visibility toggle -->
+                        <CheckBox Grid.Column="0" IsChecked="{Binding IsVisible, Mode=TwoWay}"
+                                  VerticalAlignment="Center" HorizontalAlignment="Center"
+                                  ToolTip.Tip="Toggle visibility"/>
+
+                        <!-- Layer type icon -->
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="11"
+                                   HorizontalAlignment="Center" Foreground="#888888"
+                                   Text="{Binding Converter={StaticResource LayerTypeConv}}"/>
+
+                        <!-- Layer name -->
+                        <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center"
+                                   FontSize="11" TextTrimming="CharacterEllipsis" Margin="4,0,0,0"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>

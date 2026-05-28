@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using MTGProxyBuilder.Core.Models;
+using MTGProxyBuilder.UI.Controls;
 using MTGProxyBuilder.UI.Services;
 using MTGProxyBuilder.UI.ViewModels;
 
@@ -11,8 +14,8 @@ namespace MTGProxyBuilder.UI;
 public partial class MainWindow : Window
 {
     private double _zoom = 1.0;
-    private const double ZoomMin = 0.15;
-    private const double ZoomMax = 3.0;
+    private const double ZoomMin  = 0.15;
+    private const double ZoomMax  = 3.0;
     private const double ZoomStep = 0.1;
 
     private bool _closing;
@@ -43,11 +46,60 @@ public partial class MainWindow : Window
                     vm.ImportDeckCommand.Execute(null);
             };
 
-            // GridCanvas events wired in Phase 4
+            WireCanvasEvents();
         };
     }
 
-    // --- Tab bar ---
+    // ================================================================
+    //  CANVAS EVENTS
+    // ================================================================
+
+    private void WireCanvasEvents()
+    {
+        GridCanvas.CardDoubleClicked += (card, isBack) =>
+        {
+            if (Shell.ActiveProject?.Inner is not MainViewModel vm) return;
+            var idx = vm.Cards.IndexOf(card);
+            if (idx < 0) return;
+            var indices = new List<int> { idx };
+            if (isBack) vm.SelectBackArtForCards(indices);
+            else        vm.SelectFrontArtForCards(indices);
+        };
+
+        GridCanvas.SelectFrontArtRequested += cardIndices =>
+        {
+            if (Shell.ActiveProject?.Inner is not MainViewModel vm) return;
+            vm.SelectFrontArtForCards(cardIndices);
+        };
+
+        GridCanvas.SelectBackArtRequested += cardIndices =>
+        {
+            if (Shell.ActiveProject?.Inner is not MainViewModel vm) return;
+            vm.SelectBackArtForCards(cardIndices);
+        };
+
+        GridCanvas.ApplyMajorityBackRequested += cardIndices =>
+        {
+            if (Shell.ActiveProject?.Inner is not MainViewModel vm) return;
+            vm.ApplyMajorityBackToCards(cardIndices);
+        };
+
+        GridCanvas.CreateTokenRequested += card =>
+        {
+            if (Shell.ActiveProject?.Inner is not MainViewModel vm) return;
+            vm.CreateTokenFromCard(card);
+        };
+
+        GridCanvas.CreateTokensFromCardsRequested += cards =>
+        {
+            if (Shell.ActiveProject?.Inner is not MainViewModel vm) return;
+            vm.CreateTokensFromCards(cards);
+        };
+    }
+
+    // ================================================================
+    //  TAB BAR
+    // ================================================================
 
     private void OnTabPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
@@ -61,7 +113,9 @@ public partial class MainWindow : Window
             _ = Shell.CloseProjectAsync(tab);
     }
 
-    // --- Scryfall double-tap ---
+    // ================================================================
+    //  SCRYFALL DOUBLE-TAP
+    // ================================================================
 
     private void OnScryfallDoubleTapped(object? sender, TappedEventArgs e)
     {
@@ -69,7 +123,9 @@ public partial class MainWindow : Window
             vm.AddScryfallCardCommand.Execute(null);
     }
 
-    // --- Keyboard shortcuts ---
+    // ================================================================
+    //  KEYBOARD SHORTCUTS
+    // ================================================================
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
@@ -77,53 +133,50 @@ public partial class MainWindow : Window
         {
             switch (e.Key)
             {
-                case Key.N:
-                    Shell.NewProject(); e.Handled = true; return;
-                case Key.O:
-                    _ = Shell.OpenProjectAsync(); e.Handled = true; return;
-                case Key.W:
-                    _ = Shell.CloseActiveProjectAsync(); e.Handled = true; return;
+                case Key.N: Shell.NewProject();             e.Handled = true; return;
+                case Key.O: _ = Shell.OpenProjectAsync();   e.Handled = true; return;
+                case Key.W: _ = Shell.CloseActiveProjectAsync(); e.Handled = true; return;
             }
 
             if (Shell.ActiveProject?.Inner is not MainViewModel vm) return;
             switch (e.Key)
             {
-                case Key.Z:
-                    if (vm.UndoCommand.CanExecute(null)) vm.UndoCommand.Execute(null);
-                    e.Handled = true; break;
-                case Key.Y:
-                    if (vm.RedoCommand.CanExecute(null)) vm.RedoCommand.Execute(null);
-                    e.Handled = true; break;
-                case Key.S:
-                    if (vm.SaveProjectCommand.CanExecute(null)) vm.SaveProjectCommand.Execute(null);
-                    e.Handled = true; break;
-                case Key.E:
-                    if (vm.ExportPdfCommand.CanExecute(null)) vm.ExportPdfCommand.Execute(null);
-                    e.Handled = true; break;
+                case Key.Z: if (vm.UndoCommand.CanExecute(null))          vm.UndoCommand.Execute(null);          e.Handled = true; break;
+                case Key.Y: if (vm.RedoCommand.CanExecute(null))          vm.RedoCommand.Execute(null);          e.Handled = true; break;
+                case Key.S: if (vm.SaveProjectCommand.CanExecute(null))   vm.SaveProjectCommand.Execute(null);   e.Handled = true; break;
+                case Key.E: if (vm.ExportPdfCommand.CanExecute(null))     vm.ExportPdfCommand.Execute(null);     e.Handled = true; break;
             }
         }
     }
 
-    // --- Zoom ---
+    // ================================================================
+    //  ZOOM
+    // ================================================================
 
-    private void ZoomIn(object? sender, RoutedEventArgs e) => SetZoom(_zoom + ZoomStep);
+    private void ZoomIn(object? sender, RoutedEventArgs e)  => SetZoom(_zoom + ZoomStep);
     private void ZoomOut(object? sender, RoutedEventArgs e) => SetZoom(_zoom - ZoomStep);
     private void ZoomReset(object? sender, RoutedEventArgs e) => SetZoom(1.0);
 
     private void ZoomFit(object? sender, RoutedEventArgs e)
     {
-        // Canvas fit zoom wired to GridCanvas in Phase 4
-        SetZoom(1.0);
+        // Natural page width at zoom=1 is GridCanvas.Width / current_zoom.
+        // Compute zoom so the page fills the scroll-viewer width (minus padding).
+        double naturalW = GridCanvas.Width / _zoom;
+        double available = CanvasScrollViewer.Bounds.Width - 70; // subtract padding
+        if (naturalW > 0 && available > 0)
+            SetZoom(available / naturalW);
     }
 
     private void SetZoom(double zoom)
     {
         _zoom = Math.Clamp(zoom, ZoomMin, ZoomMax);
         ZoomLabel.Text = $"{(int)(_zoom * 100)}%";
-        // GridCanvas RenderTransform scale applied in Phase 4
+        GridCanvas.ZoomLevel = _zoom;
     }
 
-    // --- Window close (async to allow unsaved-changes dialog) ---
+    // ================================================================
+    //  WINDOW CLOSE
+    // ================================================================
 
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
