@@ -97,8 +97,6 @@ jobs:
             -c Release \
             -r linux-x64 \
             --self-contained true \
-            -p:PublishSingleFile=true \
-            -p:IncludeNativeLibrariesForSelfExtract=true \
             -p:Version=${{ steps.version.outputs.version }} \
             -p:AssemblyVersion=${{ steps.version.outputs.version }} \
             -p:FileVersion=${{ steps.version.outputs.version }} \
@@ -143,6 +141,7 @@ jobs:
           cat > AppDir/AppRun << 'EOF'
           #!/bin/bash
           HERE="$(dirname "$(readlink -f "${0}")")"
+          export LD_LIBRARY_PATH="${HERE}:${LD_LIBRARY_PATH}"
           exec "${HERE}/tcg-proxy-builder" "$@"
           EOF
           chmod +x AppDir/AppRun
