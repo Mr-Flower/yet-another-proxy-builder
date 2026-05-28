@@ -112,16 +112,57 @@ jobs:
         run: |
           mkdir -p AppDir
           cp -r publish/* AppDir/
-          # Ensure libSkiaSharp.so is present (SkiaSharp 3.x NativeAssets should provide it)
           if [ ! -f AppDir/libSkiaSharp.so ]; then
             SKIASO=$(find ~/.nuget/packages -name "libSkiaSharp.so" \
               -path "*/linux-x64/native/*" -path "*/3.119*/*" 2>/dev/null | head -1)
             [ -n "$SKIASO" ] && cp "$SKIASO" AppDir/libSkiaSharp.so || { echo "ERROR: libSkiaSharp.so not found"; exit 1; }
           fi
-          echo "libSkiaSharp.so deps:"
-          ldd AppDir/libSkiaSharp.so || true
-          echo "libSkiaSharp.so NEEDED:"
-          readelf -d AppDir/libSkiaSharp.so | grep NEEDED || true
+
+      - name: Bundle native dependencies and fix RPATH
+        run: |
+          sudo apt-get install -y patchelf
+
+          # SkiaSharp.NativeAssets.Linux.NoDependencies (despite its name) dynamically
+          # links against libfontconfig, libfreetype, libbrotli, libpng, etc.
+          # On Arch/CachyOS these may be at different versions, causing libSkiaSharp.so
+          # to fail to load silently and fall back to the system's old v88.
+          #
+          # Fix: bundle every non-glibc transitive dependency into AppDir, then patch
+          # RPATH on libSkiaSharp.so (and key CLR binaries) to $ORIGIN so the bundled
+          # versions are always found first, on any distro.
+
+          bundle_deps() {
+            local lib="$1"
+            ldd "$lib" 2>/dev/null | grep -oP '/[^ ]+\.so[^ ]*' | while read dep; do
+              local name
+              name=$(basename "$dep")
+              # Skip glibc/kernel components that must come from the target system
+              case "$name" in
+                linux-vdso*|ld-linux*|libc.so*|libm.so*|libpthread.so*|libdl.so*|librt.so*|libresolv.so*) continue ;;
+              esac
+              if [ -f "$dep" ] && [ ! -f "AppDir/$name" ]; then
+                cp "$dep" "AppDir/$name"
+                echo "  bundled: $name (dep of $(basename $lib))"
+                # Recurse one level for transitive deps of fontconfig etc.
+                bundle_deps "$dep"
+              fi
+            done
+          }
+
+          echo "Bundling dependencies of libSkiaSharp.so:"
+          bundle_deps AppDir/libSkiaSharp.so
+          echo "Bundling dependencies of libHarfBuzzSharp.so:"
+          bundle_deps AppDir/libHarfBuzzSharp.so
+
+          # Patch RPATH on libSkiaSharp.so so it resolves ITS OWN deps from AppDir.
+          # Also patch the app host and CLR so bare dlopen("libSkiaSharp") finds AppDir first.
+          for f in AppDir/libSkiaSharp.so AppDir/libHarfBuzzSharp.so \
+                    AppDir/tcg-proxy-builder AppDir/libcoreclr.so; do
+            [ -f "$f" ] && patchelf --force-rpath --set-rpath '$ORIGIN' "$f" && \
+              echo "Patched RPATH: $(basename $f)"
+          done
+
+          echo "AppDir .so count: $(ls AppDir/*.so 2>/dev/null | wc -l)"
 
       - name: Create icon
         run: |
@@ -158,7 +199,7 @@ jobs:
 
       - name: Create AppRun
         run: |
-          printf '#!/bin/bash\n# Diagnostic output goes to stderr (visible in terminal)\necho "[tcg] APPDIR=${APPDIR}" >&2\nls -la "${APPDIR}/libSkiaSharp.so" >&2 2>&1 || echo "[tcg] WARNING: libSkiaSharp.so not found in APPDIR" >&2\necho "[tcg] ldd:" >&2\nldd "${APPDIR}/libSkiaSharp.so" 2>&1 | head -20 >&2 || true\nexport LD_LIBRARY_PATH="${APPDIR}:${LD_LIBRARY_PATH}"\nexport LD_PRELOAD="${APPDIR}/libSkiaSharp.so"\nexec "${APPDIR}/tcg-proxy-builder" "$@"\n' > AppDir/AppRun
+          printf '#!/bin/bash\nexport LD_LIBRARY_PATH="${APPDIR}:${LD_LIBRARY_PATH}"\nexec "${APPDIR}/tcg-proxy-builder" "$@"\n' > AppDir/AppRun
           chmod +x AppDir/AppRun
 
       - name: Build AppImage
