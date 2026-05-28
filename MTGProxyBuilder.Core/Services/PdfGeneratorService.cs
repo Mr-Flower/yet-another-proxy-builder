@@ -391,7 +391,7 @@ namespace MTGProxyBuilder.Core.Services
             gfx.DrawRectangle(bannerBrush, x, bannerY, w, bannerH);
 
             // White text centered in the banner
-            var font = new XFont("Arial", Math.Max(8, bannerH * 0.6), XFontStyleEx.Bold);
+            var font = new XFont("Helvetica", Math.Max(8, bannerH * 0.6), XFontStyleEx.Bold);
             var textBrush = XBrushes.White;
             var format = new XStringFormat
             {
