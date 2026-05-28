@@ -112,23 +112,16 @@ jobs:
         run: |
           mkdir -p AppDir
           cp -r publish/* AppDir/
-          echo "--- publish .so files ---"
-          find publish -name "*.so*" | sort || true
-          echo "--- libSkiaSharp check ---"
+          # Ensure libSkiaSharp.so is present (SkiaSharp 3.x NativeAssets should provide it)
           if [ ! -f AppDir/libSkiaSharp.so ]; then
-            echo "WARNING: libSkiaSharp.so missing from publish output, copying from NuGet cache"
             SKIASO=$(find ~/.nuget/packages -name "libSkiaSharp.so" \
               -path "*/linux-x64/native/*" -path "*/3.119*/*" 2>/dev/null | head -1)
-            if [ -n "$SKIASO" ]; then
-              cp "$SKIASO" AppDir/libSkiaSharp.so
-              echo "Copied from: $SKIASO"
-            else
-              echo "ERROR: libSkiaSharp.so not found in NuGet cache either!"
-              exit 1
-            fi
-          else
-            echo "OK: libSkiaSharp.so present in AppDir"
+            [ -n "$SKIASO" ] && cp "$SKIASO" AppDir/libSkiaSharp.so || { echo "ERROR: libSkiaSharp.so not found"; exit 1; }
           fi
+          echo "libSkiaSharp.so deps:"
+          ldd AppDir/libSkiaSharp.so || true
+          echo "libSkiaSharp.so NEEDED:"
+          readelf -d AppDir/libSkiaSharp.so | grep NEEDED || true
 
       - name: Create icon
         run: |
@@ -153,9 +146,19 @@ jobs:
           StartupNotify=true
           EOF
 
+      - name: Patch RPATH into ELF binaries
+        run: |
+          sudo apt-get install -y patchelf
+          # Bake $ORIGIN (= AppDir at runtime) into RPATH so the dynamic linker
+          # searches AppDir for native libs before hitting the system ldconfig.
+          # This works even when LD_PRELOAD / LD_LIBRARY_PATH are ignored.
+          for f in AppDir/tcg-proxy-builder AppDir/libcoreclr.so; do
+            [ -f "$f" ] && patchelf --force-rpath --set-rpath '$ORIGIN' "$f" && echo "Patched RPATH on $f" || true
+          done
+
       - name: Create AppRun
         run: |
-          printf '#!/bin/bash\nexport LD_LIBRARY_PATH="${APPDIR}:${LD_LIBRARY_PATH}"\nexport LD_PRELOAD="${APPDIR}/libSkiaSharp.so"\nexec "${APPDIR}/tcg-proxy-builder" "$@"\n' > AppDir/AppRun
+          printf '#!/bin/bash\n# Diagnostic output goes to stderr (visible in terminal)\necho "[tcg] APPDIR=${APPDIR}" >&2\nls -la "${APPDIR}/libSkiaSharp.so" >&2 2>&1 || echo "[tcg] WARNING: libSkiaSharp.so not found in APPDIR" >&2\necho "[tcg] ldd:" >&2\nldd "${APPDIR}/libSkiaSharp.so" 2>&1 | head -20 >&2 || true\nexport LD_LIBRARY_PATH="${APPDIR}:${LD_LIBRARY_PATH}"\nexport LD_PRELOAD="${APPDIR}/libSkiaSharp.so"\nexec "${APPDIR}/tcg-proxy-builder" "$@"\n' > AppDir/AppRun
           chmod +x AppDir/AppRun
 
       - name: Build AppImage
