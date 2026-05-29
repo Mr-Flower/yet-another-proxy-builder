@@ -141,6 +141,7 @@ jobs:
           fi
 
           echo "Tagging HEAD as $UPSTREAM_TAG → triggers Release workflow (AppImage build)"
-          git push origin ":refs/tags/$UPSTREAM_TAG" 2>/dev/null || true
+          git tag -d "$UPSTREAM_TAG" 2>/dev/null || true          # rimuove tag locale importato da upstream
+          git push origin ":refs/tags/$UPSTREAM_TAG" 2>/dev/null || true   # rimuove tag remoto stale
           git tag "$UPSTREAM_TAG"
           git push origin "$UPSTREAM_TAG"
