@@ -199,7 +199,17 @@ jobs:
 
       - name: Create AppRun
         run: |
-          printf '#!/bin/bash\nunset LD_PRELOAD\nexport LD_LIBRARY_PATH="${APPDIR}:${LD_LIBRARY_PATH}"\nexec "${APPDIR}/tcg-proxy-builder" "$@"\n' > AppDir/AppRun
+          cat > AppDir/AppRun << 'APPRUN'
+          #!/bin/bash
+          SELF="$(readlink -f "$0")"
+          HERE="$(dirname "$SELF")"
+          export APPDIR="${APPDIR:-$HERE}"
+          export LD_LIBRARY_PATH="${APPDIR}:${LD_LIBRARY_PATH}"
+          # Force-preload bundled libSkiaSharp.so so the system version
+          # (e.g. Arch/CachyOS libSkiaSharp.so.88) is never picked up.
+          export LD_PRELOAD="${APPDIR}/libSkiaSharp.so${LD_PRELOAD:+:$LD_PRELOAD}"
+          exec "${APPDIR}/tcg-proxy-builder" "$@"
+          APPRUN
           chmod +x AppDir/AppRun
 
       - name: Build AppImage
