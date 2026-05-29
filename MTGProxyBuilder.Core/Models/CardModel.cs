@@ -13,6 +13,7 @@ namespace MTGProxyBuilder.Core.Models
         private string? _scryfallId;
         private int _quantity = 1;
         private bool _includeBack;
+        private bool _isDoubleFaced;
 
         // Scryfall metadata
         private string _manaCost = string.Empty;
@@ -80,6 +81,13 @@ namespace MTGProxyBuilder.Core.Models
         {
             get => _includeBack;
             set { _includeBack = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>True for modal dual-faced, transform, or other double-faced cards.</summary>
+        public bool IsDoubleFaced
+        {
+            get => _isDoubleFaced;
+            set { _isDoubleFaced = value; OnPropertyChanged(); }
         }
 
         // --- Scryfall metadata ---

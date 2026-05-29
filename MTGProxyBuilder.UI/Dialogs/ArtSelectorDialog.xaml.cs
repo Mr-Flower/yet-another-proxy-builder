@@ -465,6 +465,32 @@ namespace MTGProxyBuilder.UI.Dialogs
                 shown.Add(_card.OriginalBackArtworkPath);
             }
 
+            // Search Scryfall for back face (MDFCs, transform cards, etc.)
+            if (_scryfall != null && !string.IsNullOrEmpty(_card.Name)
+                && (_card.IsDoubleFaced || !string.IsNullOrEmpty(_card.OriginalBackArtworkPath)))
+            {
+                StatusLabel.Text = "Searching Scryfall for back face...";
+                try
+                {
+                    var sc = await _scryfall.GetCardByNameAsync(_card.Name);
+                    if (sc?.GetBackImageUrl() != null)
+                    {
+                        var cachedBack = await _scryfall.DownloadAndCacheImageAsync(sc, back: true, size: "normal");
+                        if (cachedBack != null && !shown.Contains(cachedBack))
+                        {
+                            string label = sc.CardFaces?.Count > 1
+                                ? $"{sc.CardFaces[1].Name} (Scryfall)"
+                                : "Back Face (Scryfall)";
+                            AddOption(tab, label, cachedBack, false,
+                                $"Scryfall | {sc.SetName} #{sc.CollectorNumber}");
+                            shown.Add(cachedBack);
+                            tab.ScryfallCardsByPath[cachedBack] = sc;
+                        }
+                    }
+                }
+                catch { /* Scryfall unavailable — continue with library options */ }
+            }
+
             // Library entries — build tiles instantly with deferred image loading
             var deferredImages = new List<(Image img, string entryId, string path)>();
 
@@ -1041,6 +1067,18 @@ namespace MTGProxyBuilder.UI.Dialogs
                 OkBtn.IsEnabled = false;
                 StatusLabel.Text = "Downloading full resolution...";
                 var fullPath = await _scryfall.DownloadAndCacheImageAsync(sc, size: "large");
+                if (fullPath != null)
+                    ResultPath = fullPath;
+                OkBtn.IsEnabled = true;
+            }
+
+            // Back tab: upgrade Scryfall back face to full-size
+            if (ResultMode == ArtSelectorMode.Back && ResultPath != null
+                && _backTab.ScryfallCardsByPath.TryGetValue(ResultPath, out var backSc))
+            {
+                OkBtn.IsEnabled = false;
+                StatusLabel.Text = "Downloading full resolution...";
+                var fullPath = await _scryfall.DownloadAndCacheImageAsync(backSc, back: true, size: "large");
                 if (fullPath != null)
                     ResultPath = fullPath;
                 OkBtn.IsEnabled = true;

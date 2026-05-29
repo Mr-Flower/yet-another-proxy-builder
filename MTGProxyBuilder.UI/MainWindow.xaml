@@ -15,6 +15,7 @@
         <DropShadowEffect x:Key="PageShadow" BlurRadius="20" ShadowDepth="4" Opacity="0.35"/>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
+        <converters:FilePathToImageConverter x:Key="FilePathToImage"/>
         <converters:NullToCollapsedConverter x:Key="NullToCollapsed"/>
 
         <!-- Tab style -->
@@ -723,7 +724,7 @@
 
                                     <TextBlock Text="Front Artwork" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
                                     <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4">
-                                        <Image Source="{Binding ArtworkPath}" Stretch="Uniform" Margin="4"/>
+                                        <Image Source="{Binding ArtworkPath, Converter={StaticResource FilePathToImage}}" Stretch="Uniform" Margin="4"/>
                                     </Border>
                                     <TextBlock Text="{Binding ArtworkPath}" Foreground="#555" FontSize="9"
                                                TextTrimming="CharacterEllipsis" Margin="0,0,0,10"/>
@@ -733,10 +734,11 @@
                                     <TextBox Text="{Binding OverlayText, UpdateSourceTrigger=PropertyChanged}" Padding="6,4" FontSize="12"
                                              Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="0,0,0,8"/>
 
+                                    <CheckBox Content="Double-Faced Card" IsChecked="{Binding IsDoubleFaced}" Foreground="#CCC" Margin="0,0,0,4"/>
                                     <CheckBox Content="Include Back Artwork" IsChecked="{Binding IncludeBack}" Foreground="#CCC" Margin="0,0,0,6"/>
                                     <TextBlock Text="Back Artwork" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
                                     <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4">
-                                        <Image Source="{Binding BackArtworkPath}" Stretch="Uniform" Margin="4"/>
+                                        <Image Source="{Binding BackArtworkPath, Converter={StaticResource FilePathToImage}}" Stretch="Uniform" Margin="4"/>
                                     </Border>
                                     <TextBlock Text="{Binding BackArtworkPath}" Foreground="#555" FontSize="9"
                                                TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>

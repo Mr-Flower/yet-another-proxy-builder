@@ -1020,6 +1020,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             card.Toughness = sc.Toughness ?? sc.CardFaces?.FirstOrDefault()?.Toughness ?? string.Empty;
             card.Loyalty = sc.Loyalty ?? sc.CardFaces?.FirstOrDefault()?.Loyalty ?? string.Empty;
             card.Keywords = sc.Keywords != null ? string.Join(",", sc.Keywords) : string.Empty;
+            card.IsDoubleFaced = sc.GetBackImageUrl() != null;
 
             ScryfallLookupStatus = $"Found: {sc.Name} ({sc.SetName})";
             StatusText = $"Scryfall data loaded for {sc.Name}";
