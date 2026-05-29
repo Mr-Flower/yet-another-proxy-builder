@@ -2101,21 +2101,20 @@ namespace MTGProxyBuilder.UI.ViewModels
             }
         }
 
-        private void ManageBackArtLibrary()
+        private void ManageBackArtLibrary() => ManageArtLibrary(1);
+
+        private void ManageFrontArtLibrary() => ManageArtLibrary(0);
+
+        private void ManageArtLibrary(int initialTab = 0)
         {
-            var dialog = new Dialogs.BackArtLibraryDialog(_backArtLibraryService, _mpcFillService, _appSettings);
+            var dialog = new Dialogs.ArtLibraryDialog(
+                _frontArtLibraryService, _backArtLibraryService,
+                _mpcFillService, _imageCacheService, _appSettings, _scryfallService,
+                initialTab);
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
             RefreshBackArtLibrary();
-            StatusText = $"Back art library: {_backArtLibraryService.Entries.Count} item(s)";
-        }
-
-        private void ManageFrontArtLibrary()
-        {
-            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService, _imageCacheService, _appSettings, _scryfallService);
-            dialog.Owner = Application.Current.MainWindow;
-            dialog.ShowDialog();
-            StatusText = $"Front art library: {_frontArtLibraryService.Entries.Count} item(s)";
+            StatusText = $"Front: {_frontArtLibraryService.Entries.Count}, Back: {_backArtLibraryService.Entries.Count} item(s)";
         }
 
         private void ClearCache()
