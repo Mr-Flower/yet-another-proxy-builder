@@ -59,6 +59,10 @@ namespace MTGProxyBuilder.UI.ViewModels
         private string _statusText = "Ready";
         private string? _currentFilePath;
 
+        // Scryfall lookup (card panel)
+        private string _scryfallLookupText = string.Empty;
+        private string _scryfallLookupStatus = string.Empty;
+
         // Scryfall search
         private string _scryfallSearchQuery = string.Empty;
         private ObservableCollection<ScryfallCard> _scryfallResults = new();
@@ -181,6 +185,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             RemoveCardCommand = new RelayCommand(_ => RemoveCard(), _ => SelectedCard != null);
             BrowseFrontArtworkCommand = new RelayCommand(_ => BrowseFrontArtwork(), _ => SelectedCard != null);
             BrowseBackArtworkCommand = new RelayCommand(_ => BrowseBackArtwork(), _ => SelectedCard != null);
+            FetchScryfallDataCommand = new RelayCommand(async _ => await FetchScryfallData(), _ => SelectedCard != null);
             SelectBackArtForAllCommand = new RelayCommand(_ => SelectBackArtForAll(), _ => Cards.Count > 0);
 
             ScryfallSearchCommand = new RelayCommand(_ => ScryfallSearch(), _ => !string.IsNullOrWhiteSpace(ScryfallSearchQuery));
@@ -363,7 +368,26 @@ namespace MTGProxyBuilder.UI.ViewModels
         public CardModel? SelectedCard
         {
             get => _selectedCard;
-            set => SetProperty(ref _selectedCard, value);
+            set
+            {
+                if (SetProperty(ref _selectedCard, value))
+                {
+                    ScryfallLookupText = value?.Name ?? string.Empty;
+                    ScryfallLookupStatus = string.Empty;
+                }
+            }
+        }
+
+        public string ScryfallLookupText
+        {
+            get => _scryfallLookupText;
+            set => SetProperty(ref _scryfallLookupText, value);
+        }
+
+        public string ScryfallLookupStatus
+        {
+            get => _scryfallLookupStatus;
+            set => SetProperty(ref _scryfallLookupStatus, value);
         }
 
         public string ProjectName
@@ -751,6 +775,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         public ICommand RemoveCardCommand { get; }
         public ICommand BrowseFrontArtworkCommand { get; }
         public ICommand BrowseBackArtworkCommand { get; }
+        public ICommand FetchScryfallDataCommand { get; }
         public ICommand SelectBackArtForAllCommand { get; }
         public ICommand ScryfallSearchCommand { get; }
         public ICommand AddScryfallCardCommand { get; }
@@ -959,6 +984,48 @@ namespace MTGProxyBuilder.UI.ViewModels
             StatusText = "Card removed";
         }
 
+        private async Task FetchScryfallData()
+        {
+            if (SelectedCard == null) return;
+            var searchName = string.IsNullOrWhiteSpace(ScryfallLookupText) ? SelectedCard.Name : ScryfallLookupText.Trim();
+            if (string.IsNullOrWhiteSpace(searchName))
+            {
+                ScryfallLookupStatus = "Enter a card name to search.";
+                return;
+            }
+
+            ScryfallLookupStatus = "Searching Scryfall...";
+            var sc = await _scryfallService.GetCardByNameAsync(searchName);
+            if (sc == null)
+            {
+                ScryfallLookupStatus = $"No card found for \"{searchName}\".";
+                return;
+            }
+
+            var card = SelectedCard;
+            card.ScryfallId = sc.Id;
+            card.Name = sc.Name;
+            card.ManaCost = sc.ManaCost ?? sc.CardFaces?.FirstOrDefault()?.ManaCost ?? string.Empty;
+            card.CMC = sc.CMC;
+            card.TypeLine = sc.TypeLine ?? sc.CardFaces?.FirstOrDefault()?.TypeLine ?? string.Empty;
+            card.OracleText = sc.OracleText ?? sc.CardFaces?.FirstOrDefault()?.OracleText ?? string.Empty;
+            card.Rarity = sc.Rarity ?? string.Empty;
+            card.Colors = sc.Colors != null ? string.Join(",", sc.Colors) : string.Empty;
+            card.ColorIdentity = sc.ColorIdentity != null ? string.Join(",", sc.ColorIdentity) : string.Empty;
+            card.SetCode = sc.SetCode;
+            card.SetName = sc.SetName;
+            card.CollectorNumber = sc.CollectorNumber;
+            card.Artist = sc.Artist ?? string.Empty;
+            card.Power = sc.Power ?? sc.CardFaces?.FirstOrDefault()?.Power ?? string.Empty;
+            card.Toughness = sc.Toughness ?? sc.CardFaces?.FirstOrDefault()?.Toughness ?? string.Empty;
+            card.Loyalty = sc.Loyalty ?? sc.CardFaces?.FirstOrDefault()?.Loyalty ?? string.Empty;
+            card.Keywords = sc.Keywords != null ? string.Join(",", sc.Keywords) : string.Empty;
+            card.IsDoubleFaced = sc.GetBackImageUrl() != null;
+
+            ScryfallLookupStatus = $"Found: {sc.Name} ({sc.SetName})";
+            StatusText = $"Scryfall data loaded for {sc.Name}";
+        }
+
         private void BrowseFrontArtwork()
         {
             if (SelectedCard == null) return;
@@ -997,9 +1064,22 @@ namespace MTGProxyBuilder.UI.ViewModels
             if (dialog.ShowDialog() == true && dialog.ResultPath != null)
             {
                 PushUndo();
-                foreach (var c in targets)
-                    c.ArtworkPath = dialog.ResultPath;
-                StatusText = $"Front art updated for {targets.Count} card(s)";
+                if (dialog.ResultMode == Dialogs.ArtSelectorMode.Front)
+                {
+                    foreach (var c in targets)
+                        c.ArtworkPath = dialog.ResultPath;
+                    StatusText = $"Front art updated for {targets.Count} card(s)";
+                }
+                else
+                {
+                    foreach (var c in targets)
+                    {
+                        c.BackArtworkPath = dialog.ResultPath;
+                        c.IncludeBack = true;
+                    }
+                    StatusText = $"Back art applied to {targets.Count} card(s)";
+                    RefreshBackArtLibrary();
+                }
                 RefreshCanvas();
             }
         }
@@ -1023,13 +1103,22 @@ namespace MTGProxyBuilder.UI.ViewModels
             if (dialog.ShowDialog() == true && dialog.ResultPath != null)
             {
                 PushUndo();
-                foreach (var c in targets)
+                if (dialog.ResultMode == Dialogs.ArtSelectorMode.Back)
                 {
-                    c.BackArtworkPath = dialog.ResultPath;
-                    c.IncludeBack = true;
+                    foreach (var c in targets)
+                    {
+                        c.BackArtworkPath = dialog.ResultPath;
+                        c.IncludeBack = true;
+                    }
+                    StatusText = $"Back art applied to {targets.Count} card(s)";
+                    RefreshBackArtLibrary();
                 }
-                StatusText = $"Back art applied to {targets.Count} card(s)";
-                RefreshBackArtLibrary();
+                else
+                {
+                    foreach (var c in targets)
+                        c.ArtworkPath = dialog.ResultPath;
+                    StatusText = $"Front art updated for {targets.Count} card(s)";
+                }
                 RefreshCanvas();
             }
         }
@@ -1143,10 +1232,10 @@ namespace MTGProxyBuilder.UI.ViewModels
             return backPaths?.Key;
         }
 
-        private void ShowArtSelector(CardModel card, Dialogs.ArtSelectorMode mode)
+        private void ShowArtSelector(CardModel card, Dialogs.ArtSelectorMode initialMode)
         {
             var dialog = new Dialogs.ArtSelectorDialog(
-                card, mode, _scryfallService, _mpcFillService, _imageCacheService,
+                card, initialMode, _scryfallService, _mpcFillService, _imageCacheService,
                 _backArtLibraryService, Cards, GetMpcFillSources(), BuildMpcFillSearchOptions(),
                 _frontArtLibraryService);
             dialog.Owner = Application.Current.MainWindow;
@@ -1154,7 +1243,7 @@ namespace MTGProxyBuilder.UI.ViewModels
             if (dialog.ShowDialog() == true && dialog.ResultPath != null)
             {
                 PushUndo();
-                if (mode == Dialogs.ArtSelectorMode.Front)
+                if (dialog.ResultMode == Dialogs.ArtSelectorMode.Front)
                 {
                     if (dialog.ApplyToSameName)
                     {
@@ -1215,17 +1304,26 @@ namespace MTGProxyBuilder.UI.ViewModels
             if (dialog.ShowDialog() == true && dialog.ResultPath != null)
             {
                 PushUndo();
-                var targets = dialog.ApplyToNoBack
-                    ? Cards.Where(c => string.IsNullOrEmpty(c.BackArtworkPath)).ToList()
-                    : targetCards;
-
-                foreach (var c in targets)
+                if (dialog.ResultMode == Dialogs.ArtSelectorMode.Back)
                 {
-                    c.BackArtworkPath = dialog.ResultPath;
-                    c.IncludeBack = true;
+                    var targets = dialog.ApplyToNoBack
+                        ? Cards.Where(c => string.IsNullOrEmpty(c.BackArtworkPath)).ToList()
+                        : targetCards;
+
+                    foreach (var c in targets)
+                    {
+                        c.BackArtworkPath = dialog.ResultPath;
+                        c.IncludeBack = true;
+                    }
+                    StatusText = $"Back art applied to {targets.Count} card(s)";
+                    RefreshBackArtLibrary();
                 }
-                StatusText = $"Back art applied to {targets.Count} card(s)";
-                RefreshBackArtLibrary();
+                else
+                {
+                    foreach (var c in targetCards)
+                        c.ArtworkPath = dialog.ResultPath;
+                    StatusText = $"Front art updated for {targetCards.Count} card(s)";
+                }
                 RefreshCanvas();
             }
         }
@@ -2004,21 +2102,20 @@ namespace MTGProxyBuilder.UI.ViewModels
             }
         }
 
-        private void ManageBackArtLibrary()
+        private void ManageBackArtLibrary() => ManageArtLibrary(1);
+
+        private void ManageFrontArtLibrary() => ManageArtLibrary(0);
+
+        private void ManageArtLibrary(int initialTab = 0)
         {
-            var dialog = new Dialogs.BackArtLibraryDialog(_backArtLibraryService, _mpcFillService, _appSettings);
+            var dialog = new Dialogs.ArtLibraryDialog(
+                _frontArtLibraryService, _backArtLibraryService,
+                _mpcFillService, _imageCacheService, _appSettings, _scryfallService,
+                initialTab);
             dialog.Owner = Application.Current.MainWindow;
             dialog.ShowDialog();
             RefreshBackArtLibrary();
-            StatusText = $"Back art library: {_backArtLibraryService.Entries.Count} item(s)";
-        }
-
-        private void ManageFrontArtLibrary()
-        {
-            var dialog = new Dialogs.FrontArtLibraryDialog(_frontArtLibraryService, _imageCacheService, _appSettings, _scryfallService);
-            dialog.Owner = Application.Current.MainWindow;
-            dialog.ShowDialog();
-            StatusText = $"Front art library: {_frontArtLibraryService.Entries.Count} item(s)";
+            StatusText = $"Front: {_frontArtLibraryService.Entries.Count}, Back: {_backArtLibraryService.Entries.Count} item(s)";
         }
 
         private void ClearCache()
