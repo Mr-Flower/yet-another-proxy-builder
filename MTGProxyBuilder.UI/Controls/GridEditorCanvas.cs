@@ -351,7 +351,7 @@ namespace MTGProxyBuilder.UI.Controls
                             var es = slots[flat];
                             bool flipped = IsCardFlipped(es.CardIndex);
                             bool selected = _selectedSlots.Contains(flat);
-                            PlaceCardVisual(es.Card, x, y, cellW, cellH, bleed, cardW, cardH, pageTop, pageW, pageH, flipped, selected);
+                            PlaceCardVisual(es.Card, es.CardIndex, x, y, cellW, cellH, bleed, cardW, cardH, pageTop, pageW, pageH, flipped, selected);
                         }
                     }
                 }
@@ -661,6 +661,15 @@ namespace MTGProxyBuilder.UI.Controls
             SyncSelectedCard();
         }
 
+        private void FlipButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is int cardIndex)
+            {
+                FlipCards(new List<int> { cardIndex });
+                e.Handled = true;
+            }
+        }
+
         private void FlipCards(List<int> cardIndices)
         {
             CanvasOperations.FlipCards(_flippedCardIndices, cardIndices);
@@ -766,7 +775,7 @@ namespace MTGProxyBuilder.UI.Controls
         //  CARD VISUAL RENDERING
         // ================================================================
 
-        private void PlaceCardVisual(CardModel card, float x, float y,
+        private void PlaceCardVisual(CardModel card, int cardIndex, float x, float y,
             float cellW, float cellH, float bleed, float cardW, float cardH,
             float pageTop, float pageW, float pageH, bool flipped, bool selected)
         {
@@ -779,6 +788,28 @@ namespace MTGProxyBuilder.UI.Controls
                 x, y, cellW, cellH, bleed, cardW, cardH,
                 pageTop, pageW, pageH, flipped, selected,
                 ShowCutGuides, PrintSettingsSource);
+
+            // Flip button overlay
+            float btnSize = Math.Max(27, cardW * 0.135f);
+            float btnMargin = 4f;
+            var flipBtn = new Button
+            {
+                Width = btnSize, Height = btnSize,
+                Content = "\u21BB", // ↻
+                FontSize = btnSize * 0.6,
+                Padding = new Thickness(0),
+                Background = new SolidColorBrush(Color.FromArgb(200, 80, 80, 80)),
+                Foreground = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                ToolTip = flipped ? "Show Front" : "Show Back",
+                Tag = cardIndex
+            };
+            flipBtn.Click += FlipButton_Click;
+            SetLeft(flipBtn, x + bleed + cardW - btnSize - btnMargin);
+            SetTop(flipBtn, y + bleed + btnMargin);
+            Children.Add(flipBtn);
         }
     }
 }
