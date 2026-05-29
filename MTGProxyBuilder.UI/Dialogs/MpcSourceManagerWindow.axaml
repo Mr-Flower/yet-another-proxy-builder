@@ -40,8 +40,7 @@
                 <Button x:Name="RefreshBtn" Content="Refresh from MPCFill" Padding="10,4"
                         Background="#0078D4" Foreground="White" BorderThickness="0"
                         Click="OnRefresh"/>
-                <CheckBox x:Name="ShowFavs" Content="Show favorites only" Foreground="#CCC"
-                          IsCheckedChanged="OnFilterChanged"/>
+                <CheckBox x:Name="ShowFavs" Content="Show favorites only" Foreground="#CCC"/>
             </StackPanel>
         </Border>
 
@@ -53,8 +52,7 @@
             </Grid.ColumnDefinitions>
             <TextBox x:Name="FilterBox" Padding="6,4" FontSize="11"
                      Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"
-                     Watermark="Filter sources..."
-                     TextChanged="OnFilterChanged"/>
+                     Watermark="Filter sources..."/>
             <TextBlock Grid.Column="1" x:Name="CountLabel" Text="Loading..."
                        Foreground="#999" FontSize="10" VerticalAlignment="Center" Margin="10,0,0,0"/>
         </Grid>

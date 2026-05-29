@@ -59,7 +59,6 @@
                  BorderThickness="0"
                  ItemsSource="{Binding Layers}"
                  SelectedItem="{Binding SelectedLayer, Mode=TwoWay}"
-                 HorizontalContentAlignment="Stretch"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemTemplate>
                 <DataTemplate>

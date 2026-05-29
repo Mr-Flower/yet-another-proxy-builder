@@ -26,6 +26,9 @@ public partial class MpcSourceManagerWindow : Window
         InitializeComponent();
         _initialized = true;
 
+        ShowFavs.IsCheckedChanged += (_, _) => RefreshList();
+        FilterBox.TextChanged += (_, _) => RefreshList();
+
         Loaded += async (_, _) => await LoadSourcesAsync(forceReload: _allSources.Count == 0);
     }
 
@@ -107,7 +110,7 @@ public partial class MpcSourceManagerWindow : Window
                 : "click ☆ to add favorites");
     }
 
-    private void OnFilterChanged(object? sender, object e) => RefreshList();
+    private void OnFilterChanged(object? sender, RoutedEventArgs e) => RefreshList();
 
     private void OnToggleFavorite(object? sender, RoutedEventArgs e)
     {
