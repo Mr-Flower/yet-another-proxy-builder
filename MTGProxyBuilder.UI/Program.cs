@@ -12,59 +12,74 @@ internal sealed class Program
     public static void Main(string[] args)
     {
         if (OperatingSystem.IsLinux())
-            RegisterBundledSkiaResolver();
+            DiagnoseAndRegisterSkia();
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
-    // On Arch/CachyOS (and any distro with libSkiaSharp.so.88 installed system-wide),
-    // the OS dynamic linker or .NET's own native-library resolver may resolve
-    // "libSkiaSharp" to the system copy instead of the bundled v119, even when
-    // LD_PRELOAD and LD_LIBRARY_PATH are set correctly in the AppRun script.
-    //
-    // NativeLibrary.SetDllImportResolver intercepts P/Invoke resolution *before*
-    // dlopen is ever called, giving us an unconditional full-path load of the
-    // bundled library.  This must run before any SkiaSharp type is first accessed.
-    private static void RegisterBundledSkiaResolver()
+    private static void DiagnoseAndRegisterSkia()
     {
         var baseDir = AppContext.BaseDirectory;
-        var bundledPath = Path.Combine(baseDir, "libSkiaSharp.so");
+        var bundled = Path.Combine(baseDir, "libSkiaSharp.so");
 
-        if (!File.Exists(bundledPath))
+        Err($"[SKIA] AppContext.BaseDirectory = {baseDir}");
+        Err($"[SKIA] bundled path             = {bundled}");
+        Err($"[SKIA] File.Exists              = {File.Exists(bundled)}");
+
+        if (!File.Exists(bundled))
+        {
+            Err("[SKIA] bundled lib missing — falling back to default resolution");
             return;
+        }
 
-        // Preload with RTLD_GLOBAL so the handle is shared across all dlopen callers.
-        PreloadRtldGlobal(bundledPath);
+        // 1. Try to load it directly and report result.
+        var ok = NativeLibrary.TryLoad(bundled, out var handle);
+        Err($"[SKIA] NativeLibrary.TryLoad    = {ok}  handle = {handle}");
 
-        // Register a DllImportResolver for both SkiaSharp and Avalonia.Skia so that
-        // every P/Invoke targeting "libSkiaSharp" (regardless of which assembly issues
-        // it) is redirected to the bundled copy.
+        if (!ok)
+        {
+            try   { NativeLibrary.Load(bundled); }
+            catch (Exception ex) { Err($"[SKIA] Load threw: {ex.Message}"); }
+        }
+
+        // 2. Also try via dlopen so we can compare.
+        var dlopenHandle = TryDlopen(bundled, RTLD_LAZY | RTLD_GLOBAL);
+        Err($"[SKIA] dlopen(RTLD_GLOBAL)      = {dlopenHandle}");
+
+        // 3. Register SetDllImportResolver for SkiaSharp and Avalonia.Skia.
+        //    Assembly.Load may trigger a SkiaSharp module-initialiser that
+        //    registers its own resolver first; we try anyway, but log if it
+        //    was already claimed.
         foreach (var asmName in new[] { "SkiaSharp", "Avalonia.Skia" })
         {
             try
             {
                 var asm = Assembly.Load(asmName);
+                Err($"[SKIA] Assembly.Load({asmName}) OK, registering resolver...");
                 NativeLibrary.SetDllImportResolver(asm, (lib, _, _) =>
                 {
                     if (lib is "libSkiaSharp" or "SkiaSharp")
                     {
-                        NativeLibrary.TryLoad(bundledPath, out var h);
+                        NativeLibrary.TryLoad(bundled, out var h);
+                        Err($"[SKIA] resolver hit: lib={lib} -> handle={h}");
                         return h;
                     }
                     return IntPtr.Zero;
                 });
+                Err($"[SKIA] SetDllImportResolver({asmName}) completed");
             }
-            catch { /* assembly not present — proceed with default resolution */ }
+            catch (Exception ex)
+            {
+                Err($"[SKIA] Assembly.Load({asmName}) failed: {ex.Message}");
+            }
         }
     }
 
-    private static void PreloadRtldGlobal(string path)
+    private static IntPtr TryDlopen(string path, int flags)
     {
-        // Try both libdl variants (glibc < 2.34 and glibc >= 2.34 / Arch).
-        try { Dlopen_libdl(path, RTLD_LAZY | RTLD_GLOBAL); return; } catch { }
-        try { Dlopen_libdl2(path, RTLD_LAZY | RTLD_GLOBAL); return; } catch { }
-        // Last resort: let .NET load it without RTLD_GLOBAL.
-        NativeLibrary.TryLoad(path, out _);
+        try { return Dlopen_libdl (path, flags); } catch { }
+        try { return Dlopen_libdl2(path, flags); } catch { }
+        return IntPtr.Zero;
     }
 
     [DllImport("libdl",      EntryPoint = "dlopen")] static extern IntPtr Dlopen_libdl (string p, int f);
@@ -72,6 +87,8 @@ internal sealed class Program
 
     private const int RTLD_LAZY   = 0x0001;
     private const int RTLD_GLOBAL = 0x0100;
+
+    private static void Err(string s) => Console.Error.WriteLine(s);
 
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<App>()
