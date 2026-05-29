@@ -197,16 +197,6 @@ jobs:
           StartupNotify=true
           EOF
 
-      - name: Patch RPATH into ELF binaries
-        run: |
-          sudo apt-get install -y patchelf
-          # Bake $ORIGIN (= AppDir at runtime) into RPATH so the dynamic linker
-          # searches AppDir for native libs before hitting the system ldconfig.
-          # This works even when LD_PRELOAD / LD_LIBRARY_PATH are ignored.
-          for f in AppDir/tcg-proxy-builder AppDir/libcoreclr.so; do
-            [ -f "$f" ] && patchelf --force-rpath --set-rpath '$ORIGIN' "$f" && echo "Patched RPATH on $f" || true
-          done
-
       - name: Create AppRun
         run: |
           cat > AppDir/AppRun << 'APPRUN'

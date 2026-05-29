@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
 
@@ -8,23 +9,53 @@ internal sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // On Linux, preload the bundled libSkiaSharp.so with RTLD_GLOBAL before
-        // Avalonia initialises, so .NET's P/Invoke resolver always gets the bundled
-        // handle even on systems that have a system libSkiaSharp.so installed.
+        // On Linux, guarantee the bundled libSkiaSharp.so is used instead of any
+        // system-installed copy (e.g. Arch/CachyOS libSkiaSharp.so.88).
+        // Two layers of defence:
+        //   1. RTLD_GLOBAL dlopen so the handle is shared by all subsequent callers.
+        //   2. SetDllImportResolver so .NET's P/Invoke resolver always returns the
+        //      bundled handle, bypassing ldconfig / LD_LIBRARY_PATH lookups entirely.
         if (OperatingSystem.IsLinux())
-            PreloadBundledSkia();
+            RegisterBundledSkiaResolver();
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
-    private static void PreloadBundledSkia()
+    private static void RegisterBundledSkiaResolver()
     {
-        var lib = Path.Combine(AppContext.BaseDirectory, "libSkiaSharp.so");
-        if (!File.Exists(lib)) return;
+        var bundledPath = Path.Combine(AppContext.BaseDirectory, "libSkiaSharp.so");
+        if (!File.Exists(bundledPath))
+            return;
 
-        try { Dlopen_libdl (lib, RTLD_LAZY | RTLD_GLOBAL); return; } catch { }
-        try { Dlopen_libdl2(lib, RTLD_LAZY | RTLD_GLOBAL); return; } catch { }
-        System.Runtime.InteropServices.NativeLibrary.TryLoad(lib, out _);
+        // Layer 1: preload with RTLD_GLOBAL so native callers (e.g. fontconfig
+        // loaded by SkiaSharp) all share the same handle.
+        try { Dlopen_libdl (bundledPath, RTLD_LAZY | RTLD_GLOBAL); }
+        catch
+        {
+            try { Dlopen_libdl2(bundledPath, RTLD_LAZY | RTLD_GLOBAL); }
+            catch { NativeLibrary.TryLoad(bundledPath, out _); }
+        }
+
+        // Layer 2: intercept .NET's P/Invoke resolver so every DllImport targeting
+        // "libSkiaSharp" or "SkiaSharp" (from SkiaSharp or Avalonia.Skia) is
+        // redirected to the bundled path, regardless of ldconfig order.
+        foreach (var asmName in new[] { "SkiaSharp", "Avalonia.Skia" })
+        {
+            try
+            {
+                var asm = Assembly.Load(asmName);
+                NativeLibrary.SetDllImportResolver(asm, (lib, _, _) =>
+                {
+                    if (lib is "libSkiaSharp" or "SkiaSharp")
+                    {
+                        NativeLibrary.TryLoad(bundledPath, out var h);
+                        return h;
+                    }
+                    return IntPtr.Zero;
+                });
+            }
+            catch { /* assembly not loaded — skip */ }
+        }
     }
 
     [DllImport("libdl",      EntryPoint = "dlopen")] static extern IntPtr Dlopen_libdl (string p, int f);
