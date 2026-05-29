@@ -16,12 +16,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Extract version from tag
         id: version
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          # Triggered by tag push or dispatch --ref vX.Y.Z → GITHUB_REF_NAME is the tag.
+          # Triggered by dispatch from the GitHub UI (defaults to main branch) →
+          # GITHUB_REF_NAME is "main"; fall back to the latest git tag instead.
+          if echo "$GITHUB_REF_NAME" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+'; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -z "$TAG" ]; then
+              echo "::error::Cannot determine version: ref is '$GITHUB_REF_NAME' and no git tags found."
+              exit 1
+            fi
+            VERSION="${TAG#v}"
+            echo "Note: ref '$GITHUB_REF_NAME' is not a semver tag — using latest tag $TAG"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version: $VERSION"
 
@@ -68,12 +83,24 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Extract version from tag
         id: version
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if echo "$GITHUB_REF_NAME" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+'; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -z "$TAG" ]; then
+              echo "::error::Cannot determine version: ref is '$GITHUB_REF_NAME' and no git tags found."
+              exit 1
+            fi
+            VERSION="${TAG#v}"
+            echo "Note: ref '$GITHUB_REF_NAME' is not a semver tag — using latest tag $TAG"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Setup .NET
