@@ -8,11 +8,17 @@ namespace MTGProxyBuilder.UI;
 
 internal sealed class Program
 {
+    // Diagnostics file – written with AutoFlush so output survives a SIGABRT crash.
+    private static StreamWriter? _diag;
+
     [STAThread]
     public static void Main(string[] args)
     {
         if (OperatingSystem.IsLinux())
+        {
+            _diag = new StreamWriter("/tmp/tcg-skia-diag.txt", append: false) { AutoFlush = true };
             DiagnoseAndRegisterSkia();
+        }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
@@ -22,57 +28,55 @@ internal sealed class Program
         var baseDir = AppContext.BaseDirectory;
         var bundled = Path.Combine(baseDir, "libSkiaSharp.so");
 
-        Err($"[SKIA] AppContext.BaseDirectory = {baseDir}");
-        Err($"[SKIA] bundled path             = {bundled}");
-        Err($"[SKIA] File.Exists              = {File.Exists(bundled)}");
+        Log($"AppContext.BaseDirectory = {baseDir}");
+        Log($"bundled path             = {bundled}");
+        Log($"File.Exists              = {File.Exists(bundled)}");
 
         if (!File.Exists(bundled))
         {
-            Err("[SKIA] bundled lib missing — falling back to default resolution");
+            Log("bundled lib MISSING – falling back to default resolution");
             return;
         }
 
-        // 1. Try to load it directly and report result.
+        // 1. Direct NativeLibrary.TryLoad
         var ok = NativeLibrary.TryLoad(bundled, out var handle);
-        Err($"[SKIA] NativeLibrary.TryLoad    = {ok}  handle = {handle}");
-
+        Log($"NativeLibrary.TryLoad    = {ok}  handle = {handle}");
         if (!ok)
         {
             try   { NativeLibrary.Load(bundled); }
-            catch (Exception ex) { Err($"[SKIA] Load threw: {ex.Message}"); }
+            catch (Exception ex) { Log($"NativeLibrary.Load threw : {ex.Message}"); }
         }
 
-        // 2. Also try via dlopen so we can compare.
-        var dlopenHandle = TryDlopen(bundled, RTLD_LAZY | RTLD_GLOBAL);
-        Err($"[SKIA] dlopen(RTLD_GLOBAL)      = {dlopenHandle}");
+        // 2. dlopen(RTLD_GLOBAL)
+        var dh = TryDlopen(bundled, RTLD_LAZY | RTLD_GLOBAL);
+        Log($"dlopen(RTLD_GLOBAL)      = {dh}");
 
-        // 3. Register SetDllImportResolver for SkiaSharp and Avalonia.Skia.
-        //    Assembly.Load may trigger a SkiaSharp module-initialiser that
-        //    registers its own resolver first; we try anyway, but log if it
-        //    was already claimed.
+        // 3. SetDllImportResolver
         foreach (var asmName in new[] { "SkiaSharp", "Avalonia.Skia" })
         {
             try
             {
                 var asm = Assembly.Load(asmName);
-                Err($"[SKIA] Assembly.Load({asmName}) OK, registering resolver...");
+                Log($"Assembly.Load({asmName}) OK");
                 NativeLibrary.SetDllImportResolver(asm, (lib, _, _) =>
                 {
                     if (lib is "libSkiaSharp" or "SkiaSharp")
                     {
                         NativeLibrary.TryLoad(bundled, out var h);
-                        Err($"[SKIA] resolver hit: lib={lib} -> handle={h}");
+                        Log($"  resolver hit: lib={lib} -> handle={h}");
                         return h;
                     }
                     return IntPtr.Zero;
                 });
-                Err($"[SKIA] SetDllImportResolver({asmName}) completed");
+                Log($"SetDllImportResolver({asmName}) registered");
             }
             catch (Exception ex)
             {
-                Err($"[SKIA] Assembly.Load({asmName}) failed: {ex.Message}");
+                Log($"Assembly.Load({asmName}) failed: {ex.Message}");
             }
         }
+
+        Log("DiagnoseAndRegisterSkia complete");
     }
 
     private static IntPtr TryDlopen(string path, int flags)
@@ -88,7 +92,12 @@ internal sealed class Program
     private const int RTLD_LAZY   = 0x0001;
     private const int RTLD_GLOBAL = 0x0100;
 
-    private static void Err(string s) => Console.Error.WriteLine(s);
+    private static void Log(string s)
+    {
+        var line = $"[SKIA] {s}";
+        _diag?.WriteLine(line);        // to file (auto-flushed, survives crash)
+        Console.Error.WriteLine(line); // to stderr (may be lost on SIGABRT)
+    }
 
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<App>()
