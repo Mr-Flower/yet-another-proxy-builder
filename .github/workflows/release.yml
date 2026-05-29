@@ -112,11 +112,21 @@ jobs:
         run: |
           mkdir -p AppDir
           cp -r publish/* AppDir/
+
+          # SkiaSharp.NativeAssets.Linux.NoDependencies is now an explicit csproj
+          # reference so libSkiaSharp.so should always be in the publish output.
+          # Fail loudly if it is missing rather than silently using the wrong version.
           if [ ! -f AppDir/libSkiaSharp.so ]; then
-            SKIASO=$(find ~/.nuget/packages -name "libSkiaSharp.so" \
-              -path "*/linux-x64/native/*" -path "*/3.119*/*" 2>/dev/null | head -1)
-            [ -n "$SKIASO" ] && cp "$SKIASO" AppDir/libSkiaSharp.so || { echo "ERROR: libSkiaSharp.so not found"; exit 1; }
+            echo "ERROR: libSkiaSharp.so not found in publish output." >&2
+            echo "Make sure SkiaSharp.NativeAssets.Linux.NoDependencies 3.119.4 is in the csproj." >&2
+            exit 1
           fi
+
+          # Confirm the bundled version is 3.x (119.x), not 2.88.x.
+          # strings + grep for the version symbol skia embeds in the binary.
+          BUNDLED_VER=$(strings AppDir/libSkiaSharp.so 2>/dev/null | grep -oP 'SKIA_VERSION=[0-9]+' | head -1 || true)
+          echo "Bundled libSkiaSharp.so version marker: ${BUNDLED_VER:-unknown}"
+          ls -lh AppDir/libSkiaSharp.so
 
       - name: Bundle native dependencies and fix RPATH
         run: |
