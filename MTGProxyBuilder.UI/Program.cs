@@ -1,5 +1,8 @@
-using Avalonia;
+using System;
+using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using Avalonia;
 
 namespace MTGProxyBuilder.UI;
 
@@ -8,40 +11,64 @@ internal sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // On Linux, pin the bundled libSkiaSharp.so with RTLD_GLOBAL before Avalonia
-        // initialises so .NET's P/Invoke resolver always gets the bundled handle.
         if (OperatingSystem.IsLinux())
-            PreloadBundledSkia();
+            RegisterBundledSkiaResolver();
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
-    private static void PreloadBundledSkia()
+    // On Arch/CachyOS (and any distro with libSkiaSharp.so.88 installed system-wide),
+    // the OS dynamic linker or .NET's own native-library resolver may resolve
+    // "libSkiaSharp" to the system copy instead of the bundled v119, even when
+    // LD_PRELOAD and LD_LIBRARY_PATH are set correctly in the AppRun script.
+    //
+    // NativeLibrary.SetDllImportResolver intercepts P/Invoke resolution *before*
+    // dlopen is ever called, giving us an unconditional full-path load of the
+    // bundled library.  This must run before any SkiaSharp type is first accessed.
+    private static void RegisterBundledSkiaResolver()
     {
-        var lib = Path.Combine(AppContext.BaseDirectory, "libSkiaSharp.so");
-        if (!File.Exists(lib)) return;
+        var baseDir = AppContext.BaseDirectory;
+        var bundledPath = Path.Combine(baseDir, "libSkiaSharp.so");
 
-        // Try RTLD_GLOBAL dlopen so any subsequent dlopen("libSkiaSharp") returns this handle.
-        // Two entries: on modern glibc (>=2.34, Arch/CachyOS/Ubuntu 24+) only libdl.so.2
-        // exists as a standalone file; older distros ship a plain libdl.so.
-        if (TryDlopen(lib, RTLD_LAZY | RTLD_GLOBAL) == IntPtr.Zero)
+        if (!File.Exists(bundledPath))
+            return;
+
+        // Preload with RTLD_GLOBAL so the handle is shared across all dlopen callers.
+        PreloadRtldGlobal(bundledPath);
+
+        // Register a DllImportResolver for both SkiaSharp and Avalonia.Skia so that
+        // every P/Invoke targeting "libSkiaSharp" (regardless of which assembly issues
+        // it) is redirected to the bundled copy.
+        foreach (var asmName in new[] { "SkiaSharp", "Avalonia.Skia" })
         {
-            // Last resort: use .NET's own loader (no RTLD_GLOBAL, but better than nothing).
-            System.Runtime.InteropServices.NativeLibrary.TryLoad(lib, out _);
+            try
+            {
+                var asm = Assembly.Load(asmName);
+                NativeLibrary.SetDllImportResolver(asm, (lib, _, _) =>
+                {
+                    if (lib is "libSkiaSharp" or "SkiaSharp")
+                    {
+                        NativeLibrary.TryLoad(bundledPath, out var h);
+                        return h;
+                    }
+                    return IntPtr.Zero;
+                });
+            }
+            catch { /* assembly not present — proceed with default resolution */ }
         }
     }
 
-    private static IntPtr TryDlopen(string path, int flags)
+    private static void PreloadRtldGlobal(string path)
     {
-        try { return DlopenLibdl(path, flags); }     // glibc < 2.34 / most distros
-        catch { }
-        try { return DlopenLibdlSo2(path, flags); }  // glibc >= 2.34 (Arch, CachyOS, Ubuntu 24+)
-        catch { }
-        return IntPtr.Zero;
+        // Try both libdl variants (glibc < 2.34 and glibc >= 2.34 / Arch).
+        try { Dlopen_libdl(path, RTLD_LAZY | RTLD_GLOBAL); return; } catch { }
+        try { Dlopen_libdl2(path, RTLD_LAZY | RTLD_GLOBAL); return; } catch { }
+        // Last resort: let .NET load it without RTLD_GLOBAL.
+        NativeLibrary.TryLoad(path, out _);
     }
 
-    [DllImport("libdl",      EntryPoint = "dlopen")] static extern IntPtr DlopenLibdl(string p, int f);
-    [DllImport("libdl.so.2", EntryPoint = "dlopen")] static extern IntPtr DlopenLibdlSo2(string p, int f);
+    [DllImport("libdl",      EntryPoint = "dlopen")] static extern IntPtr Dlopen_libdl (string p, int f);
+    [DllImport("libdl.so.2", EntryPoint = "dlopen")] static extern IntPtr Dlopen_libdl2(string p, int f);
 
     private const int RTLD_LAZY   = 0x0001;
     private const int RTLD_GLOBAL = 0x0100;
