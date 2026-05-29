@@ -137,10 +137,13 @@ namespace MTGProxyBuilder.Core.Services
             float lineHeight = layer.FontSize * layer.LineSpacing;
             float y = font.Size; // baseline offset
 
+            // SKFont.MeasureText(string) was added in SkiaSharp 3.x; in 2.88.x use SKPaint.
+            using var measurePaint = new SKPaint { Typeface = font.Typeface, TextSize = font.Size };
+
             foreach (var line in lines)
             {
                 float x = 0;
-                float textWidth = font.MeasureText(line);
+                float textWidth = measurePaint.MeasureText(line);
 
                 switch (layer.TextAlignment)
                 {
