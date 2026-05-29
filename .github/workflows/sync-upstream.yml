@@ -2,7 +2,7 @@ name: Sync upstream
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # 3:00 CET / 4:00 CEST ogni notte
+    - cron: '0 2 * * *'   # ogni notte alle 3:00 CET / 4:00 CEST
   workflow_dispatch:
 
 jobs:
@@ -32,48 +32,115 @@ jobs:
         run: |
           NEW=$(git log HEAD..upstream/main --oneline)
           if [ -z "$NEW" ]; then
-            echo "No new upstream commits — nothing to do"
+            echo "No new upstream commits"
             echo "has_updates=false" >> "$GITHUB_OUTPUT"
           else
-            COUNT=$(echo "$NEW" | wc -l)
-            echo "${COUNT} new commit(s) from upstream:"
-            echo "$NEW"
+            echo "$(echo "$NEW" | wc -l) new commit(s) from upstream"
             echo "has_updates=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Save fork-specific workflows
+      # Salva i file che contengono patch fork-specifiche che NON devono
+      # essere sovrascritte dal merge upstream.
+      - name: Save fork-only files
         if: steps.check.outputs.has_updates == 'true'
         run: |
-          cp .github/workflows/release.yml       /tmp/release.yml.protected
-          cp .github/workflows/sync-upstream.yml /tmp/sync-upstream.yml.protected
+          mkdir -p /tmp/fork
+          cp .github/workflows/release.yml            /tmp/fork/release.yml
+          cp .github/workflows/sync-upstream.yml      /tmp/fork/sync-upstream.yml
+          cp MTGProxyBuilder.UI/Program.cs             /tmp/fork/Program.cs
+          cp MTGProxyBuilder.UI/MainWindow.axaml       /tmp/fork/MainWindow.axaml
 
-      - name: Merge upstream (prefer upstream on conflicts)
+      - name: Merge upstream (upstream wins on conflicts)
         if: steps.check.outputs.has_updates == 'true'
         run: |
           git merge upstream/main --no-ff -X theirs \
             -m "chore: sync with upstream anubisascends/mtg-proxy-builder"
 
-      - name: Restore fork-specific workflows
+      # Ripristina i file fork-specifici se il merge li ha sovrascritti.
+      - name: Restore fork-only files
         if: steps.check.outputs.has_updates == 'true'
         run: |
-          CHANGED=false
+          changed=false
 
-          if ! diff -q /tmp/release.yml.protected .github/workflows/release.yml > /dev/null 2>&1; then
-            cp /tmp/release.yml.protected .github/workflows/release.yml
-            git add .github/workflows/release.yml
-            CHANGED=true
+          restore() {
+            local src="$1" dst="$2"
+            if ! diff -q "$src" "$dst" > /dev/null 2>&1; then
+              cp "$src" "$dst"
+              git add "$dst"
+              changed=true
+              echo "Restored: $dst"
+            fi
+          }
+
+          restore /tmp/fork/release.yml            .github/workflows/release.yml
+          restore /tmp/fork/sync-upstream.yml      .github/workflows/sync-upstream.yml
+          restore /tmp/fork/Program.cs             MTGProxyBuilder.UI/Program.cs
+          restore /tmp/fork/MainWindow.axaml       MTGProxyBuilder.UI/MainWindow.axaml
+
+          $changed && git commit -m "chore: restore fork patches after upstream sync" || true
+
+      # Se upstream ha aggiornato la versione managed di SkiaSharp, allinea
+      # automaticamente NativeAssets.Linux.NoDependencies in Core.csproj e
+      # la versione in Tests.csproj, così i test Linux non si rompono.
+      - name: Align SkiaSharp versions across csproj files
+        if: steps.check.outputs.has_updates == 'true'
+        run: |
+          CORE="MTGProxyBuilder.Core/MTGProxyBuilder.Core.csproj"
+          TESTS="MTGProxyBuilder.Tests/MTGProxyBuilder.Tests.csproj"
+
+          VER=$(grep -oP '(?<=<PackageReference Include="SkiaSharp" Version=")[^"]+' "$CORE" | head -1)
+          if [ -z "$VER" ]; then
+            echo "SkiaSharp version not found in Core.csproj — skipping"
+            exit 0
+          fi
+          echo "SkiaSharp managed version: $VER"
+
+          # Assicura che NativeAssets.Linux.NoDependencies sia presente e allineata
+          if grep -q 'SkiaSharp.NativeAssets.Linux.NoDependencies' "$CORE"; then
+            sed -i "s|NativeAssets\.Linux\.NoDependencies\" Version=\"[^\"]*\"|NativeAssets.Linux.NoDependencies\" Version=\"$VER\"|" "$CORE"
+          else
+            sed -i "s|\(.*<PackageReference Include=\"SkiaSharp\" Version=\"$VER\".*\)|\1\n    <PackageReference Include=\"SkiaSharp.NativeAssets.Linux.NoDependencies\" Version=\"$VER\" />|" "$CORE"
           fi
 
-          if ! diff -q /tmp/sync-upstream.yml.protected .github/workflows/sync-upstream.yml > /dev/null 2>&1; then
-            cp /tmp/sync-upstream.yml.protected .github/workflows/sync-upstream.yml
-            git add .github/workflows/sync-upstream.yml
-            CHANGED=true
+          # Allinea la versione in Tests.csproj
+          sed -i "s|<PackageReference Include=\"SkiaSharp\" Version=\"[^\"]*\"|<PackageReference Include=\"SkiaSharp\" Version=\"$VER\"|" "$TESTS"
+
+          if ! git diff --quiet "$CORE" "$TESTS"; then
+            git add "$CORE" "$TESTS"
+            git commit -m "chore: align SkiaSharp $VER across csproj files after upstream sync"
           fi
 
-          if [ "$CHANGED" = "true" ]; then
-            git commit -m "chore: preserve fork-specific workflows after upstream sync"
-          fi
-
-      - name: Push to origin
+      - name: Push merged changes
         if: steps.check.outputs.has_updates == 'true'
         run: git push origin main
+
+      # Controlla se upstream ha un tag di versione più recente del nostro.
+      # Se sì, crea lo stesso tag sul nostro HEAD — questo attiva il workflow
+      # Release che produce l'AppImage aggiornata.
+      - name: Mirror upstream version tag
+        run: |
+          UPSTREAM_TAG=$(git ls-remote --tags upstream 'refs/tags/v*' \
+            | awk '{print $2}' | sed 's|refs/tags/||' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V | tail -1)
+
+          if [ -z "$UPSTREAM_TAG" ]; then
+            echo "No semver tags found on upstream — skipping"
+            exit 0
+          fi
+          echo "Upstream latest tag: $UPSTREAM_TAG"
+
+          OUR_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "v0.0.0")
+          echo "Our latest tag: $OUR_TAG"
+
+          # Crea il tag solo se upstream è strettamente più recente del nostro
+          NEWEST=$(printf '%s\n%s' "$OUR_TAG" "$UPSTREAM_TAG" | sort -V | tail -1)
+          if [ "$NEWEST" = "$OUR_TAG" ]; then
+            echo "Already at $OUR_TAG (≥ upstream $UPSTREAM_TAG) — no new release needed"
+            exit 0
+          fi
+
+          echo "Tagging HEAD as $UPSTREAM_TAG → triggers Release workflow (AppImage build)"
+          git push origin ":refs/tags/$UPSTREAM_TAG" 2>/dev/null || true
+          git tag "$UPSTREAM_TAG"
+          git push origin "$UPSTREAM_TAG"
