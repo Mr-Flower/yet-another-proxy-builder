@@ -13,8 +13,12 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="PDFsharp" Version="6.1.1" />
-    <PackageReference Include="SkiaSharp" Version="3.119.4" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" />
+    <!-- SkiaSharp.NativeAssets.Linux.NoDependencies 3.119.4 exists on NuGet but
+         its libSkiaSharp.so returns native version 88 at runtime (confirmed by
+         diagnostic output). Pin managed SkiaSharp to 2.88.9 (minimum required by
+         Avalonia.Skia 11.2.8) so managed and native versions both expect v88. -->
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.9" />
   </ItemGroup>
 
 </Project>
