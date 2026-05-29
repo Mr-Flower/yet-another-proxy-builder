@@ -21,13 +21,13 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.2.*" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.*" />
     <PackageReference Include="Avalonia.Skia" Version="11.2.*" />
-    <PackageReference Include="SkiaSharp" Version="3.119.4" />
-    <!-- Required on Linux: SkiaSharp 3.x does not bundle libSkiaSharp.so in the
-         main package. Without this explicit reference the transitive native asset
-         from Avalonia.Skia (SkiaSharp 2.88.x) ends up in the publish output,
-         causing a "version 88 incompatible" crash at startup on any system that
-         also has libSkiaSharp.so.88 installed (e.g. Arch/CachyOS). -->
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" />
+    <!-- SkiaSharp.NativeAssets.Linux.NoDependencies 3.119.x does not exist on NuGet.
+         Pinning managed SkiaSharp to 2.88.8 so it matches the native asset that
+         Avalonia.Skia pulls in transitively (also 2.88.x).  This eliminates the
+         "version 88 incompatible with range [119,120)" crash: managed and native
+         are now both v88, which also matches the system library on Arch/CachyOS. -->
+    <PackageReference Include="SkiaSharp" Version="2.88.8" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.8" />
   </ItemGroup>
 
   <!-- Exclude all legacy WPF files (replaced by .axaml.cs counterparts) -->
