@@ -118,6 +118,8 @@ jobs:
       # Se sì, crea lo stesso tag sul nostro HEAD — questo attiva il workflow
       # Release che produce l'AppImage aggiornata.
       - name: Mirror upstream version tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           UPSTREAM_TAG=$(git ls-remote --tags upstream 'refs/tags/v*' \
             | awk '{print $2}' | sed 's|refs/tags/||' \
@@ -140,8 +142,13 @@ jobs:
             exit 0
           fi
 
-          echo "Tagging HEAD as $UPSTREAM_TAG → triggers Release workflow (AppImage build)"
-          git tag -d "$UPSTREAM_TAG" 2>/dev/null || true          # rimuove tag locale importato da upstream
-          git push origin ":refs/tags/$UPSTREAM_TAG" 2>/dev/null || true   # rimuove tag remoto stale
+          echo "Tagging HEAD as $UPSTREAM_TAG → triggering Release workflow (AppImage build)"
+          git tag -d "$UPSTREAM_TAG" 2>/dev/null || true
+          git push origin ":refs/tags/$UPSTREAM_TAG" 2>/dev/null || true
           git tag "$UPSTREAM_TAG"
           git push origin "$UPSTREAM_TAG"
+
+          # GITHUB_TOKEN non triggerà release.yml automaticamente (blocco anti-ricorsione
+          # di GitHub Actions). Lo dispatchamo esplicitamente puntando al tag appena creato.
+          gh workflow run release.yml --ref "$UPSTREAM_TAG"
+          echo "Release workflow dispatched for $UPSTREAM_TAG"
