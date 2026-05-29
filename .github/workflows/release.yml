@@ -146,14 +146,18 @@ jobs:
             ldd "$lib" 2>/dev/null | grep -oP '/[^ ]+\.so[^ ]*' | while read dep; do
               local name
               name=$(basename "$dep")
-              # Skip glibc/kernel components that must come from the target system
+              # Skip glibc/kernel ABI components that must come from the target system.
+              # Also skip font-stack libs (fontconfig, freetype, expat, brotli, png, zlib):
+              # bundling Ubuntu's fontconfig causes it to ignore the system's font cache and
+              # rebuild from scratch on every launch, adding several minutes of startup delay.
+              # These libraries are universally available on modern distros.
               case "$name" in
                 linux-vdso*|ld-linux*|libc.so*|libm.so*|libpthread.so*|libdl.so*|librt.so*|libresolv.so*) continue ;;
+                libfontconfig*|libfreetype*|libexpat*|libbrotli*|libpng*|libz.so*) continue ;;
               esac
               if [ -f "$dep" ] && [ ! -f "AppDir/$name" ]; then
                 cp "$dep" "AppDir/$name"
                 echo "  bundled: $name (dep of $(basename $lib))"
-                # Recurse one level for transitive deps of fontconfig etc.
                 bundle_deps "$dep"
               fi
             done
