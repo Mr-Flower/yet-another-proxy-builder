@@ -848,7 +848,7 @@
         <!-- ==================== BUSY OVERLAY ==================== -->
         <Border Grid.RowSpan="5" Background="#CC000000"
                 DataContext="{Binding ActiveProject.Inner}"
-                IsVisible="{Binding IsBusy}">
+                IsVisible="{Binding IsBusy, FallbackValue=False}">
             <Border Background="#2D2D30" CornerRadius="8" Padding="30,24"
                     HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="300"
                     BorderBrush="#0078D4" BorderThickness="1">
