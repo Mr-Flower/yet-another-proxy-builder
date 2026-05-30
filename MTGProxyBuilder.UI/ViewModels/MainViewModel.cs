@@ -271,9 +271,93 @@ public class MainViewModel : ViewModelBase
         RefreshBackArtLibrary();
     }
 
-    private async Task CheckForUpdateAsync()
-    {
-        try
+        // Scryfall lookup (card panel)
+        private string _scryfallLookupText = string.Empty;
+        private string _scryfallLookupStatus = string.Empty;
+
+        // Scryfall search
+        private string _scryfallSearchQuery = string.Empty;
+        private ObservableCollection<ScryfallCard> _scryfallResults = new();
+        private ScryfallCard? _selectedScryfallCard;
+        private bool _isSearching;
+        private bool _isBusy;
+        private string _busyMessage = string.Empty;
+        private bool _hasUnsavedChanges;
+
+        // Back art library
+        private ObservableCollection<BackArtEntry> _backArtLibrary = new();
+        private BackArtEntry? _selectedBackArt;
+
+        // Sort and filter
+        private string _filterText = string.Empty;
+        private string _filterRarity = "All";
+        private string _filterColor = "All";
+        private string _sortBy = "Date Added";
+        private bool _sortDescending;
+        private ObservableCollection<CardModel> _filteredCards = new();
+
+        // Page presets
+        private string _selectedPagePreset = "A4";
+        private CardSizePreset? _selectedCardSize;
+
+        private readonly ProjectSerializationService _serializationService;
+        private readonly PdfGeneratorService _pdfGeneratorService;
+        private readonly ScryfallService _scryfallService;
+        private readonly ImageCacheService _imageCacheService;
+        private BackArtLibraryService _backArtLibraryService;
+        private FrontArtLibraryService _frontArtLibraryService;
+        private readonly MoxfieldService _moxfieldService;
+        private readonly ArchidektService _archidektService;
+        private readonly DeckImportService _deckImportService;
+        private readonly MpcFillService _mpcFillService;
+        private readonly MpcFillXmlImportService _mpcXmlImportService;
+        private readonly SearchCoordinator _searchCoordinator;
+        private readonly ImportCoordinator _importCoordinator;
+        private readonly UndoService _undoService = new();
+        private readonly CacheManager _cacheManager = new();
+        private readonly UpdateCheckService _updateService = new();
+        private readonly AppSettingsService _appSettings = new();
+        private bool _updateAvailable;
+        private string _updateMessage = string.Empty;
+        private string _updateDownloadUrl = string.Empty;
+
+        // Art source toggle
+        private bool _useMpcFill;
+        private ObservableCollection<MpcFillCard> _mpcFillResults = new();
+        private MpcFillCard? _selectedMpcFillCard;
+        private string? _searchPreviewUrl;
+
+        // MPCFill advanced search
+        private string _mpcAdvName = string.Empty;
+        private int _mpcAdvMinDpi;
+        private bool _mpcFuzzySearch = true;
+        private bool _mpcUseFavoritesOnly;
+
+        // Advanced search
+        private bool _showAdvancedSearch;
+        private string _advName = string.Empty;
+        private string _advType = string.Empty;
+        private string _advOracle = string.Empty;
+        private string _advColors = string.Empty;
+        private string _advIdentity = string.Empty;
+        private string _advCmcOp = "=";
+        private string _advCmcValue = string.Empty;
+        private string _advRarity = string.Empty;
+        private string _advSet = string.Empty;
+        private string _advFormat = string.Empty;
+        private string _advPowOp = "=";
+        private string _advPowValue = string.Empty;
+        private string _advTouOp = "=";
+        private string _advTouValue = string.Empty;
+        private string _advArtist = string.Empty;
+        private string _advKeyword = string.Empty;
+        private string _advIs = string.Empty;
+
+        // Moxfield import
+        private string _importDeckUrl = string.Empty;
+        private bool _ignoreDuplicates = true;
+
+        public MainViewModel()
         {
             string currentVersion = GetAppVersion();
             var update = await _updateService.CheckForUpdateAsync(currentVersion);
@@ -300,7 +384,108 @@ public class MainViewModel : ViewModelBase
 
         if (_appSettings.Settings.FrontArtLibraryPath != oldFrontPath)
             _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
-        if (_appSettings.Settings.BackArtLibraryPath != oldBackPath)
+            _moxfieldService = new MoxfieldService();
+            _archidektService = new ArchidektService();
+            _deckImportService = new DeckImportService(_moxfieldService, _archidektService);
+            MpcSourceManager = new MpcFillSourceManager();
+            _mpcFillService = new MpcFillService(_imageCacheService, MpcSourceManager);
+            _mpcXmlImportService = new MpcFillXmlImportService(_mpcFillService, _imageCacheService);
+            _searchCoordinator = new SearchCoordinator(_scryfallService, _mpcFillService, _appSettings, MpcSourceManager);
+            _importCoordinator = new ImportCoordinator(_searchCoordinator, _deckImportService, _mpcXmlImportService, _frontArtLibraryService);
+            _mpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
+            _mpcAdvMinDpi = _appSettings.Settings.MpcFillDefaultMinDpi;
+            _mpcFuzzySearch = _appSettings.Settings.MpcFillDefaultFuzzySearch;
+
+            // Pre-fetch MPCFill sources in the background so they're ready when needed
+            _ = _mpcFillService.EnsureSourcesLoadedAsync();
+
+            _currentProject = new ProjectModel();
+            _currentProject.PageSettings.PropertyChanged += OnPageSettingsChanged;
+            _cards = new ObservableCollection<CardModel>();
+            _cards.CollectionChanged += OnCardsCollectionChanged;
+
+            NewProjectCommand = new RelayCommand(_ => NewProject());
+            OpenProjectCommand = new RelayCommand(_ => OpenProject());
+            SaveProjectCommand = new RelayCommand(_ => SaveProject());
+            SaveProjectAsCommand = new RelayCommand(_ => SaveProjectAs());
+            UndoCommand = new RelayCommand(_ => Undo(), _ => _undoService.CanUndo);
+            RedoCommand = new RelayCommand(_ => Redo(), _ => _undoService.CanRedo);
+            ExitCommand = new RelayCommand(_ => Application.Current.Shutdown());
+
+            AddCardFromFileCommand = new RelayCommand(_ => AddCardFromFile());
+            RemoveCardCommand = new RelayCommand(_ => RemoveCard(), _ => SelectedCard != null);
+            BrowseFrontArtworkCommand = new RelayCommand(_ => BrowseFrontArtwork(), _ => SelectedCard != null);
+            BrowseBackArtworkCommand = new RelayCommand(_ => BrowseBackArtwork(), _ => SelectedCard != null);
+            FetchScryfallDataCommand = new RelayCommand(async _ => await FetchScryfallData(), _ => SelectedCard != null);
+            SelectBackArtForAllCommand = new RelayCommand(_ => SelectBackArtForAll(), _ => Cards.Count > 0);
+
+            ScryfallSearchCommand = new RelayCommand(_ => ScryfallSearch(), _ => !string.IsNullOrWhiteSpace(ScryfallSearchQuery));
+            AddScryfallCardCommand = new RelayCommand(_ => AddScryfallCard(), _ => SelectedScryfallCard != null);
+
+            ExportPdfCommand = new RelayCommand(_ => ExportPdf());
+            ExportSvgCommand = new RelayCommand(_ => ExportSvgOnly());
+
+            // Back art library commands
+            AddBackArtToLibraryCommand = new RelayCommand(_ => AddBackArtToLibrary());
+            RemoveBackArtFromLibraryCommand = new RelayCommand(_ => RemoveBackArtFromLibrary(), _ => SelectedBackArt != null);
+            ApplyBackArtToSelectedCommand = new RelayCommand(_ => ApplyBackArtToSelected(), _ => SelectedBackArt != null && SelectedCard != null);
+            ApplyBackArtToAllCommand = new RelayCommand(_ => ApplyBackArtToAll(), _ => SelectedBackArt != null && Cards.Count > 0);
+            ClearBackArtFromAllCommand = new RelayCommand(_ => ClearBackArtFromAll(), _ => Cards.Count > 0);
+
+            // Page layout commands
+            SetPagePresetCommand = new RelayCommand(p => SetPagePreset(p as string));
+            ToggleLandscapeCommand = new RelayCommand(_ => ToggleLandscape());
+
+            // Sort/filter commands
+            ApplySortToProjectCommand = new RelayCommand(_ => ApplySortToProject());
+            ClearFilterCommand = new RelayCommand(_ => ClearFilter());
+
+            // Moxfield import
+            ImportDeckCommand = new RelayCommand(_ => ImportDeck(), _ => !string.IsNullOrWhiteSpace(ImportDeckUrl));
+
+            // Advanced search
+            BuildAdvancedQueryCommand = new RelayCommand(_ => ApplyAdvancedQuery());
+            ClearAdvancedSearchCommand = new RelayCommand(_ => ClearAdvancedSearch());
+
+            // MPCFill sources
+            LoadMpcSourcesCommand = new RelayCommand(_ => LoadMpcSources());
+            ToggleMpcFavoriteFromResultCommand = new RelayCommand(p => ToggleFavoriteFromResult(p));
+            ManageMpcSourcesCommand = new RelayCommand(_ => ManageMpcSources());
+            ImportMpcFillXmlCommand = new RelayCommand(_ => ImportMpcFillXml());
+            ClearCacheCommand = new RelayCommand(_ => ClearCache());
+            ManageBackArtLibraryCommand = new RelayCommand(_ => ManageBackArtLibrary());
+            ManageFrontArtLibraryCommand = new RelayCommand(_ => ManageFrontArtLibrary());
+            DownloadUpdateCommand = new RelayCommand(_ => DownloadUpdate());
+            DismissUpdateCommand = new RelayCommand(_ => UpdateAvailable = false);
+            OpenSettingsCommand = new RelayCommand(_ => OpenSettings());
+
+            // MPCFill / art source
+            AddMpcFillCardCommand = new RelayCommand(_ => AddMpcFillCard(), _ => SelectedMpcFillCard != null);
+            ClearAllCardsCommand = new RelayCommand(_ => ClearAllCards(), _ => Cards.Count > 0);
+            UpdateAllArtFromMpcFillCommand = new RelayCommand(_ => UpdateAllArtFromMpcFill(), _ => Cards.Count > 0);
+
+            // PrintMode values for ComboBox
+            PrintModeValues = new ObservableCollection<PrintMode>(
+                Enum.GetValues<PrintMode>());
+
+            PagePresets = new ObservableCollection<string> { "A4", "A3", "Letter", "Legal", "Tabloid" };
+            _selectedPagePreset = "A4";
+            _selectedCardSize = CardSizePresets.First(p => p.Name == "Magic: The Gathering");
+
+            // Load persisted back art library
+            RefreshBackArtLibrary();
+            ApplyFilterAndSort();
+
+            // Startup cache cleanup
+            _cacheManager.CleanupOnStartup();
+
+        }
+
+        /// <summary>
+        /// Replaces the library services with shared instances from the ShellViewModel.
+        /// Call after construction to ensure all ViewModels use the same library data.
+        /// </summary>
+        public void UseSharedLibraries(FrontArtLibraryService frontLibrary, BackArtLibraryService backLibrary)
         {
             _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
             RefreshBackArtLibrary();
@@ -675,8 +860,27 @@ public class MainViewModel : ViewModelBase
     {
         get
         {
-            var size = _cacheManager.GetTotalCacheSizeBytes();
-            return $"Cache: {CacheManager.FormatBytes(size)}";
+            get => _selectedCard;
+            set
+            {
+                if (SetProperty(ref _selectedCard, value))
+                {
+                    ScryfallLookupText = value?.Name ?? string.Empty;
+                    ScryfallLookupStatus = string.Empty;
+                }
+            }
+        }
+
+        public string ScryfallLookupText
+        {
+            get => _scryfallLookupText;
+            set => SetProperty(ref _scryfallLookupText, value);
+        }
+
+        public string ScryfallLookupStatus
+        {
+            get => _scryfallLookupStatus;
+            set => SetProperty(ref _scryfallLookupStatus, value);
         }
     }
 
@@ -877,6 +1081,175 @@ public class MainViewModel : ViewModelBase
                 return;
             }
 
+        // --- Advanced Search ---
+        public bool ShowAdvancedSearch { get => _showAdvancedSearch; set => SetProperty(ref _showAdvancedSearch, value); }
+        public string AdvName { get => _advName; set => SetProperty(ref _advName, value); }
+        public string AdvType { get => _advType; set => SetProperty(ref _advType, value); }
+        public string AdvOracle { get => _advOracle; set => SetProperty(ref _advOracle, value); }
+        public string AdvColors { get => _advColors; set => SetProperty(ref _advColors, value); }
+        public string AdvIdentity { get => _advIdentity; set => SetProperty(ref _advIdentity, value); }
+        public string AdvCmcOp { get => _advCmcOp; set => SetProperty(ref _advCmcOp, value); }
+        public string AdvCmcValue { get => _advCmcValue; set => SetProperty(ref _advCmcValue, value); }
+        public string AdvRarity { get => _advRarity; set => SetProperty(ref _advRarity, value); }
+        public string AdvSet { get => _advSet; set => SetProperty(ref _advSet, value); }
+        public string AdvFormat { get => _advFormat; set => SetProperty(ref _advFormat, value); }
+        public string AdvPowOp { get => _advPowOp; set => SetProperty(ref _advPowOp, value); }
+        public string AdvPowValue { get => _advPowValue; set => SetProperty(ref _advPowValue, value); }
+        public string AdvTouOp { get => _advTouOp; set => SetProperty(ref _advTouOp, value); }
+        public string AdvTouValue { get => _advTouValue; set => SetProperty(ref _advTouValue, value); }
+        public string AdvArtist { get => _advArtist; set => SetProperty(ref _advArtist, value); }
+        public string AdvKeyword { get => _advKeyword; set => SetProperty(ref _advKeyword, value); }
+        public string AdvIs { get => _advIs; set => SetProperty(ref _advIs, value); }
+
+        public ObservableCollection<string> ComparisonOps { get; } = new() { "=", "!=", "<", ">", "<=", ">=" };
+        public ObservableCollection<string> RarityAdvOptions { get; } = new() { "", "common", "uncommon", "rare", "mythic" };
+        public ObservableCollection<string> FormatOptions { get; } = new()
+        {
+            "", "standard", "pioneer", "modern", "legacy", "vintage", "pauper",
+            "commander", "brawl", "historic", "explorer", "timeless", "oathbreaker"
+        };
+        public ObservableCollection<string> IsOptions { get; } = new()
+        {
+            "", "reprint", "full", "foil", "etched", "promo", "booster",
+            "commander", "companion", "reserved", "vanilla", "funny",
+            "transform", "mdfc", "split", "flip", "dfc",
+            "fetchland", "shockland", "dual", "checkland", "painland"
+        };
+
+        public ICommand BuildAdvancedQueryCommand { get; private set; } = null!;
+        public ICommand ClearAdvancedSearchCommand { get; private set; } = null!;
+
+        private string BuildAdvancedQuery() => AdvancedQueryBuilder.Build(
+            _advName, _advType, _advOracle, _advColors, _advIdentity,
+            _advCmcOp, _advCmcValue, _advRarity, _advSet, _advFormat,
+            _advPowOp, _advPowValue, _advTouOp, _advTouValue,
+            _advArtist, _advKeyword, _advIs);
+
+        private void ApplyAdvancedQuery()
+        {
+            ScryfallSearchQuery = BuildAdvancedQuery();
+            if (!string.IsNullOrWhiteSpace(ScryfallSearchQuery) && ScryfallSearchCommand.CanExecute(null))
+                ScryfallSearchCommand.Execute(null);
+        }
+
+        private void ClearAdvancedSearch()
+        {
+            AdvName = AdvType = AdvOracle = AdvColors = AdvIdentity = string.Empty;
+            AdvCmcOp = AdvPowOp = AdvTouOp = "=";
+            AdvCmcValue = AdvRarity = AdvSet = AdvFormat = string.Empty;
+            AdvPowValue = AdvTouValue = AdvArtist = AdvKeyword = AdvIs = string.Empty;
+            ScryfallSearchQuery = string.Empty;
+        }
+
+        // Card size presets
+        public ObservableCollection<CardSizePreset> CardSizePresets { get; } =
+            new(CardSizePreset.BuiltInPresets);
+
+        public CardSizePreset? SelectedCardSize
+        {
+            get => _selectedCardSize;
+            set
+            {
+                if (SetProperty(ref _selectedCardSize, value) && value != null)
+                {
+                    _currentProject.PageSettings.CardWidthMm = value.WidthMm;
+                    _currentProject.PageSettings.CardHeightMm = value.HeightMm;
+                    StatusText = $"Card size: {value.Name} ({value.WidthMm} x {value.HeightMm} mm)";
+                }
+            }
+        }
+
+        // Page layout
+        public ObservableCollection<string> PagePresets { get; }
+
+        public string SelectedPagePreset
+        {
+            get => _selectedPagePreset;
+            set
+            {
+                if (SetProperty(ref _selectedPagePreset, value) && value != null)
+                    _currentProject.PageSettings.ApplyPagePreset(value);
+            }
+        }
+
+        // --- Commands ---
+
+        public ICommand NewProjectCommand { get; }
+        public ICommand OpenProjectCommand { get; }
+        public ICommand SaveProjectCommand { get; }
+        public ICommand UndoCommand { get; }
+        public ICommand RedoCommand { get; }
+        public UndoService UndoServiceInstance => _undoService;
+        public ICommand SaveProjectAsCommand { get; }
+        public ICommand ExitCommand { get; }
+        public ICommand AddCardFromFileCommand { get; }
+        public ICommand RemoveCardCommand { get; }
+        public ICommand BrowseFrontArtworkCommand { get; }
+        public ICommand BrowseBackArtworkCommand { get; }
+        public ICommand FetchScryfallDataCommand { get; }
+        public ICommand SelectBackArtForAllCommand { get; }
+        public ICommand ScryfallSearchCommand { get; }
+        public ICommand AddScryfallCardCommand { get; }
+        public ICommand ExportPdfCommand { get; }
+        public ICommand ExportSvgCommand { get; }
+        public ICommand AddBackArtToLibraryCommand { get; }
+        public ICommand RemoveBackArtFromLibraryCommand { get; }
+        public ICommand ApplyBackArtToSelectedCommand { get; }
+        public ICommand ApplyBackArtToAllCommand { get; }
+        public ICommand ClearBackArtFromAllCommand { get; }
+        public ICommand SetPagePresetCommand { get; }
+        public ICommand ToggleLandscapeCommand { get; }
+
+        // --- Undo / Redo ---
+
+        private void PushUndo() { _undoService.SaveState(Cards); MarkDirty(); }
+
+        private void Undo()
+        {
+            var restored = _undoService.Undo(Cards);
+            if (restored != null) RestoreCards(restored);
+        }
+
+        private void Redo()
+        {
+            var restored = _undoService.Redo(Cards);
+            if (restored != null) RestoreCards(restored);
+        }
+
+        private void RestoreCards(List<CardModel> cards)
+        {
+            Cards.CollectionChanged -= OnCardsCollectionChanged;
+            Cards.Clear();
+            foreach (var c in cards) Cards.Add(c);
+            Cards.CollectionChanged += OnCardsCollectionChanged;
+
+            _currentProject.PageSettings.CenterGrid();
+            ApplyFilterAndSort();
+            SelectedCard = null;
+            StatusText = "Undo/Redo applied";
+        }
+
+        // --- Command Implementations ---
+
+        private void NewProject()
+        {
+            PushUndo();
+            _undoService.Clear();
+            _currentProject = new ProjectModel();
+            _currentProject.PageSettings.PropertyChanged += OnPageSettingsChanged;
+            Cards.Clear();
+            _currentFilePath = null;
+            SelectedCard = null;
+            OnPropertyChanged(nameof(CurrentProject));
+            OnPropertyChanged(nameof(ProjectName));
+            OnPropertyChanged(nameof(SelectedPrintMode));
+            HasUnsavedChanges = false;
+            StatusText = "New project created";
+        }
+
+        /// <summary>Load a pre-parsed project into this ViewModel (used by ShellViewModel).</summary>
+        public void LoadFromProject(ProjectModel project, string filePath)
+        {
             _currentProject = project;
             _currentProject.PageSettings.PropertyChanged += OnPageSettingsChanged;
             _currentFilePath = path;
@@ -1003,8 +1376,198 @@ public class MainViewModel : ViewModelBase
         if (result != null)
         {
             PushUndo();
-            foreach (var c in targets) c.ArtworkPath = result.ResultPath;
-            StatusText = $"Front art updated for {targets.Count} card(s)";
+            int count = dialog.FileNames.Length;
+            SetBusy($"Loading {count} image(s)...");
+            await Task.Delay(50);
+
+            Cards.CollectionChanged -= OnCardsCollectionChanged;
+            foreach (var filePath in dialog.FileNames)
+            {
+                var card = new CardModel
+                {
+                    Name = Path.GetFileNameWithoutExtension(filePath),
+                    ArtworkPath = filePath
+                };
+                ApplyDefaultBackArt(card);
+                Cards.Add(card);
+            }
+            Cards.CollectionChanged += OnCardsCollectionChanged;
+            _currentProject.PageSettings.CenterGrid();
+            ApplyFilterAndSort();
+            StatusText = $"Added {count} card(s)";
+            ClearBusy();
+        }
+
+        private void RemoveCard()
+        {
+            if (SelectedCard == null) return;
+            PushUndo();
+            Cards.Remove(SelectedCard);
+            SelectedCard = null;
+            StatusText = "Card removed";
+        }
+
+        private async Task FetchScryfallData()
+        {
+            if (SelectedCard == null) return;
+            var searchName = string.IsNullOrWhiteSpace(ScryfallLookupText) ? SelectedCard.Name : ScryfallLookupText.Trim();
+            if (string.IsNullOrWhiteSpace(searchName))
+            {
+                ScryfallLookupStatus = "Enter a card name to search.";
+                return;
+            }
+
+            ScryfallLookupStatus = "Searching Scryfall...";
+            var sc = await _scryfallService.GetCardByNameAsync(searchName);
+            if (sc == null)
+            {
+                ScryfallLookupStatus = $"No card found for \"{searchName}\".";
+                return;
+            }
+
+            var card = SelectedCard;
+            card.ScryfallId = sc.Id;
+            card.Name = sc.Name;
+            card.ManaCost = sc.ManaCost ?? sc.CardFaces?.FirstOrDefault()?.ManaCost ?? string.Empty;
+            card.CMC = sc.CMC;
+            card.TypeLine = sc.TypeLine ?? sc.CardFaces?.FirstOrDefault()?.TypeLine ?? string.Empty;
+            card.OracleText = sc.OracleText ?? sc.CardFaces?.FirstOrDefault()?.OracleText ?? string.Empty;
+            card.Rarity = sc.Rarity ?? string.Empty;
+            card.Colors = sc.Colors != null ? string.Join(",", sc.Colors) : string.Empty;
+            card.ColorIdentity = sc.ColorIdentity != null ? string.Join(",", sc.ColorIdentity) : string.Empty;
+            card.SetCode = sc.SetCode;
+            card.SetName = sc.SetName;
+            card.CollectorNumber = sc.CollectorNumber;
+            card.Artist = sc.Artist ?? string.Empty;
+            card.Power = sc.Power ?? sc.CardFaces?.FirstOrDefault()?.Power ?? string.Empty;
+            card.Toughness = sc.Toughness ?? sc.CardFaces?.FirstOrDefault()?.Toughness ?? string.Empty;
+            card.Loyalty = sc.Loyalty ?? sc.CardFaces?.FirstOrDefault()?.Loyalty ?? string.Empty;
+            card.Keywords = sc.Keywords != null ? string.Join(",", sc.Keywords) : string.Empty;
+            card.IsDoubleFaced = sc.GetBackImageUrl() != null;
+
+            ScryfallLookupStatus = $"Found: {sc.Name} ({sc.SetName})";
+            StatusText = $"Scryfall data loaded for {sc.Name}";
+        }
+
+        private void BrowseFrontArtwork()
+        {
+            if (SelectedCard == null) return;
+            ShowArtSelector(SelectedCard, Dialogs.ArtSelectorMode.Front);
+        }
+
+        private void BrowseBackArtwork()
+        {
+            if (SelectedCard == null) return;
+            ShowArtSelector(SelectedCard, Dialogs.ArtSelectorMode.Back);
+        }
+
+        public void OpenArtSelectorForCard(CardModel card, bool isShowingBack)
+        {
+            SelectedCard = card;
+            ShowArtSelector(card, isShowingBack ? Dialogs.ArtSelectorMode.Back : Dialogs.ArtSelectorMode.Front);
+        }
+
+        public void SelectFrontArtForCards(List<int> cardIndices)
+        {
+            var targets = cardIndices
+                .Where(i => i >= 0 && i < Cards.Count)
+                .Select(i => Cards[i])
+                .Distinct()
+                .ToList();
+            if (targets.Count == 0) return;
+
+            // Use the first card for the art selector dialog
+            var dialog = new Dialogs.ArtSelectorDialog(
+                targets.First(), Dialogs.ArtSelectorMode.Front,
+                _scryfallService, _mpcFillService, _imageCacheService,
+                _backArtLibraryService, Cards, GetMpcFillSources(), BuildMpcFillSearchOptions(),
+                _frontArtLibraryService);
+            dialog.Owner = Application.Current.MainWindow;
+
+            if (dialog.ShowDialog() == true && dialog.ResultPath != null)
+            {
+                PushUndo();
+                if (dialog.ResultMode == Dialogs.ArtSelectorMode.Front)
+                {
+                    foreach (var c in targets)
+                        c.ArtworkPath = dialog.ResultPath;
+                    StatusText = $"Front art updated for {targets.Count} card(s)";
+                }
+                else
+                {
+                    foreach (var c in targets)
+                    {
+                        c.BackArtworkPath = dialog.ResultPath;
+                        c.IncludeBack = true;
+                    }
+                    StatusText = $"Back art applied to {targets.Count} card(s)";
+                    RefreshBackArtLibrary();
+                }
+                RefreshCanvas();
+            }
+        }
+
+        public void SelectBackArtForCards(List<int> cardIndices)
+        {
+            var targets = cardIndices
+                .Where(i => i >= 0 && i < Cards.Count)
+                .Select(i => Cards[i])
+                .Distinct()
+                .ToList();
+            if (targets.Count == 0) return;
+
+            var dialog = new Dialogs.ArtSelectorDialog(
+                targets.First(), Dialogs.ArtSelectorMode.Back,
+                _scryfallService, _mpcFillService, _imageCacheService,
+                _backArtLibraryService, Cards, GetMpcFillSources(), BuildMpcFillSearchOptions(),
+                _frontArtLibraryService);
+            dialog.Owner = Application.Current.MainWindow;
+
+            if (dialog.ShowDialog() == true && dialog.ResultPath != null)
+            {
+                PushUndo();
+                if (dialog.ResultMode == Dialogs.ArtSelectorMode.Back)
+                {
+                    foreach (var c in targets)
+                    {
+                        c.BackArtworkPath = dialog.ResultPath;
+                        c.IncludeBack = true;
+                    }
+                    StatusText = $"Back art applied to {targets.Count} card(s)";
+                    RefreshBackArtLibrary();
+                }
+                else
+                {
+                    foreach (var c in targets)
+                        c.ArtworkPath = dialog.ResultPath;
+                    StatusText = $"Front art updated for {targets.Count} card(s)";
+                }
+                RefreshCanvas();
+            }
+        }
+
+        public void ApplyMajorityBackToCards(List<int> cardIndices)
+        {
+            var mostCommon = GetMostCommonBackArt();
+            if (mostCommon == null)
+            {
+                MessageBox.Show("No cards in the project have back art assigned.", "No Back Art",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            PushUndo();
+            int count = 0;
+            foreach (var idx in cardIndices)
+            {
+                if (idx >= 0 && idx < Cards.Count)
+                {
+                    Cards[idx].BackArtworkPath = mostCommon;
+                    Cards[idx].IncludeBack = true;
+                    count++;
+                }
+            }
+            StatusText = $"Applied back art to {count} card(s)";
             RefreshCanvas();
         }
     }
@@ -1480,6 +2043,145 @@ public class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            // Must have some back art
+            string? back = card.BackArtworkPath ?? card.OriginalBackArtworkPath;
+            if (string.IsNullOrEmpty(back)) return false;
+
+            // Back art must differ from the project's common back
+            if (commonBack != null && string.Equals(back, commonBack, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Finds the most frequently used back art path across all cards in the project.
+        /// Returns null if no cards have back art assigned.
+        /// </summary>
+        private string? GetMostCommonBackArt()
+        {
+            var backPaths = Cards
+                .Where(c => !string.IsNullOrEmpty(c.BackArtworkPath))
+                .GroupBy(c => c.BackArtworkPath!, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(g => g.Sum(c => c.Quantity))
+                .FirstOrDefault();
+
+            return backPaths?.Key;
+        }
+
+        private void ShowArtSelector(CardModel card, Dialogs.ArtSelectorMode initialMode)
+        {
+            var dialog = new Dialogs.ArtSelectorDialog(
+                card, initialMode, _scryfallService, _mpcFillService, _imageCacheService,
+                _backArtLibraryService, Cards, GetMpcFillSources(), BuildMpcFillSearchOptions(),
+                _frontArtLibraryService);
+            dialog.Owner = Application.Current.MainWindow;
+
+            if (dialog.ShowDialog() == true && dialog.ResultPath != null)
+            {
+                PushUndo();
+                if (dialog.ResultMode == Dialogs.ArtSelectorMode.Front)
+                {
+                    if (dialog.ApplyToSameName)
+                    {
+                        int count = 0;
+                        foreach (var c in Cards.Where(c => c.Name == card.Name))
+                        {
+                            c.ArtworkPath = dialog.ResultPath;
+                            count++;
+                        }
+                        StatusText = $"Front art updated for {count} \"{card.Name}\" card(s)";
+                    }
+                    else
+                    {
+                        card.ArtworkPath = dialog.ResultPath;
+                        StatusText = $"Front art updated for {card.Name}";
+                    }
+                }
+                else
+                {
+                    if (dialog.ApplyToNoBack)
+                    {
+                        int count = 0;
+                        foreach (var c in Cards.Where(c => string.IsNullOrEmpty(c.BackArtworkPath)))
+                        {
+                            c.BackArtworkPath = dialog.ResultPath;
+                            c.IncludeBack = true;
+                            count++;
+                        }
+                        StatusText = $"Back art applied to {count} card(s) without back art";
+                    }
+                    else
+                    {
+                        card.BackArtworkPath = dialog.ResultPath;
+                        card.IncludeBack = true;
+                        StatusText = $"Back art updated for {card.Name}";
+                    }
+                }
+                RefreshBackArtLibrary();
+                RefreshCanvas();
+            }
+        }
+
+        private void SelectBackArtForAll()
+        {
+            if (Cards.Count == 0) return;
+            ShowBackArtSelector(Cards.ToList());
+        }
+
+        private void ShowBackArtSelector(List<CardModel> targetCards)
+        {
+            var dialog = new Dialogs.ArtSelectorDialog(
+                targetCards.First(), Dialogs.ArtSelectorMode.Back,
+                _scryfallService, _mpcFillService, _imageCacheService,
+                _backArtLibraryService, Cards, GetMpcFillSources(), BuildMpcFillSearchOptions(),
+                _frontArtLibraryService);
+            dialog.Owner = Application.Current.MainWindow;
+
+            if (dialog.ShowDialog() == true && dialog.ResultPath != null)
+            {
+                PushUndo();
+                if (dialog.ResultMode == Dialogs.ArtSelectorMode.Back)
+                {
+                    var targets = dialog.ApplyToNoBack
+                        ? Cards.Where(c => string.IsNullOrEmpty(c.BackArtworkPath)).ToList()
+                        : targetCards;
+
+                    foreach (var c in targets)
+                    {
+                        c.BackArtworkPath = dialog.ResultPath;
+                        c.IncludeBack = true;
+                    }
+                    StatusText = $"Back art applied to {targets.Count} card(s)";
+                    RefreshBackArtLibrary();
+                }
+                else
+                {
+                    foreach (var c in targetCards)
+                        c.ArtworkPath = dialog.ResultPath;
+                    StatusText = $"Front art updated for {targetCards.Count} card(s)";
+                }
+                RefreshCanvas();
+            }
+        }
+
+        private string? BrowseImageFile(string title)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "Image Files (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp|All Files (*.*)|*.*",
+                Title = title
+            };
+            return dialog.ShowDialog() == true ? dialog.FileName : null;
+        }
+
+        private async void ScryfallSearch()
+        {
+            if (string.IsNullOrWhiteSpace(ScryfallSearchQuery)) return;
+
+            IsSearching = true;
+            await SearchScryfall();
+            IsSearching = false;
             ClearBusy();
             await _dialogService.ShowErrorAsync($"Unexpected error:\n{ex.Message}", "Error");
         }
@@ -1734,166 +2436,50 @@ public class MainViewModel : ViewModelBase
             };
         }
 
-        var rarityOrder = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        private void ManageBackArtLibrary() => ManageArtLibrary(1);
+
+        private void ManageFrontArtLibrary() => ManageArtLibrary(0);
+
+        private void ManageArtLibrary(int initialTab = 0)
         {
-            ["common"] = 0, ["uncommon"] = 1, ["rare"] = 2, ["mythic"] = 3
-        };
-
-        source = SortBy switch
-        {
-            "Name" => SortDescending ? source.OrderByDescending(c => c.Name) : source.OrderBy(c => c.Name),
-            "CMC" => SortDescending ? source.OrderByDescending(c => c.CMC) : source.OrderBy(c => c.CMC),
-            "Rarity" => SortDescending
-                ? source.OrderByDescending(c => rarityOrder.GetValueOrDefault(c.Rarity, -1))
-                : source.OrderBy(c => rarityOrder.GetValueOrDefault(c.Rarity, -1)),
-            "Color" => SortDescending ? source.OrderByDescending(c => c.Colors) : source.OrderBy(c => c.Colors),
-            "Type" => SortDescending ? source.OrderByDescending(c => c.TypeLine) : source.OrderBy(c => c.TypeLine),
-            "Set" => SortDescending
-                ? source.OrderByDescending(c => c.SetName).ThenByDescending(c => c.CollectorNumber)
-                : source.OrderBy(c => c.SetName).ThenBy(c => c.CollectorNumber),
-            "Artist" => SortDescending ? source.OrderByDescending(c => c.Artist) : source.OrderBy(c => c.Artist),
-            "Collector #" => SortDescending
-                ? source.OrderByDescending(c => c.SetCode).ThenByDescending(c => int.TryParse(c.CollectorNumber, out var n) ? n : 9999)
-                : source.OrderBy(c => c.SetCode).ThenBy(c => int.TryParse(c.CollectorNumber, out var n) ? n : 9999),
-            _ => SortDescending ? source.OrderByDescending(c => c.DateAdded) : source.OrderBy(c => c.DateAdded),
-        };
-
-        FilteredCards = new ObservableCollection<CardModel>(source);
-    }
-
-    private void ApplySortToProject()
-    {
-        if (FilteredCards.Count == 0) return;
-        PushUndo();
-        var ordered = FilteredCards.ToList();
-        var hidden = Cards.Except(ordered).ToList();
-        ordered.AddRange(hidden);
-
-        Cards.CollectionChanged -= OnCardsCollectionChanged;
-        Cards.Clear();
-        foreach (var c in ordered) Cards.Add(c);
-        Cards.CollectionChanged += OnCardsCollectionChanged;
-
-        _currentProject.PageSettings.CenterGrid();
-        StatusText = $"Project reordered by {SortBy}";
-    }
-
-    private void ClearFilter()
-    {
-        FilterText = string.Empty;
-        FilterRarity = "All";
-        FilterColor = "All";
-        SortBy = "Date Added";
-        SortDescending = false;
-    }
-
-    // --- Page Layout ---
-
-    private static string DetectPagePreset(PageLayout settings)
-    {
-        float w = settings.PageWidthMm;
-        float h = settings.PageHeightMm;
-        float pw = Math.Min(w, h);
-        float ph = Math.Max(w, h);
-
-        bool Match(float presetW, float presetH) =>
-            Math.Abs(pw - presetW) < 1f && Math.Abs(ph - presetH) < 1f;
-
-        if (Match(210f, 297f)) return "A4";
-        if (Match(297f, 420f)) return "A3";
-        if (Match(215.9f, 279.4f)) return "Letter";
-        if (Match(215.9f, 355.6f)) return "Legal";
-        if (Match(279.4f, 431.8f)) return "Tabloid";
-        return "A4";
-    }
-
-    private void SetPagePreset(string? preset)
-    {
-        if (string.IsNullOrEmpty(preset)) return;
-        _currentProject.PageSettings.ApplyPagePreset(preset);
-        StatusText = $"Page size set to {preset}";
-    }
-
-    private void ToggleLandscape()
-    {
-        _currentProject.PageSettings.IsLandscape = !_currentProject.PageSettings.IsLandscape;
-        StatusText = _currentProject.PageSettings.IsLandscape ? "Landscape orientation" : "Portrait orientation";
-    }
-
-    private void SyncCardsToProject()
-    {
-        _currentProject.Cards = Cards.ToList();
-        _currentProject.LastModified = DateTime.Now;
-    }
-
-    private static readonly HashSet<string> BasicLandNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Plains", "Island", "Swamp", "Mountain", "Forest",
-        "Snow-Covered Plains", "Snow-Covered Island", "Snow-Covered Swamp",
-        "Snow-Covered Mountain", "Snow-Covered Forest", "Wastes"
-    };
-
-    private static bool IsBasicLand(string cardName) => BasicLandNames.Contains(cardName);
-
-    private void ApplyDefaultBackArt(CardModel card)
-    {
-        if (!string.IsNullOrEmpty(card.BackArtworkPath)) return;
-
-        var mostCommon = GetMostCommonBackArt();
-        if (mostCommon != null) { card.BackArtworkPath = mostCommon; card.IncludeBack = true; return; }
-
-        var defaultPath = _backArtLibraryService.DefaultBackArtPath;
-        if (defaultPath != null) { card.BackArtworkPath = defaultPath; card.IncludeBack = true; }
-    }
-
-    private async Task ManageBackArtLibraryAsync()
-    {
-        await _dialogService.ShowBackArtLibraryAsync(_backArtLibraryService, _mpcFillService, _appSettings);
-        RefreshBackArtLibrary();
-        StatusText = $"Back art library: {_backArtLibraryService.Entries.Count} item(s)";
-    }
-
-    private async Task ManageFrontArtLibraryAsync()
-    {
-        await _dialogService.ShowFrontArtLibraryAsync(
-            _frontArtLibraryService, _imageCacheService, _appSettings, _scryfallService);
-        StatusText = $"Front art library: {_frontArtLibraryService.Entries.Count} item(s)";
-    }
-
-    private async Task ClearCacheAsync()
-    {
-        var size = _cacheManager.GetTotalCacheSizeBytes();
-        bool confirmed = await _dialogService.ConfirmAsync(
-            $"Clear all cached files?\n\n" +
-            $"This will free {CacheManager.FormatBytes(size)} of disk space.\n" +
-            $"Downloaded card images will need to be re-downloaded.\n\n" +
-            $"Your projects, back art library, and favorites are not affected.",
-            "Clear Cache");
-
-        if (!confirmed) return;
-
-        var (files, bytes) = _cacheManager.ClearAllCaches();
-        OnPropertyChanged(nameof(CacheSizeText));
-        StatusText = $"Cleared {files} cached file(s), freed {CacheManager.FormatBytes(bytes)}";
-    }
-
-    private async Task OpenSettingsAsync()
-    {
-        string? oldFrontPath = _appSettings.Settings.FrontArtLibraryPath;
-        string? oldBackPath = _appSettings.Settings.BackArtLibraryPath;
-
-        await _dialogService.ShowSettingsAsync(_appSettings, MpcSourceManager, _mpcFillService);
-
-        MpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
-        MpcAdvMinDpi = _appSettings.Settings.MpcFillDefaultMinDpi;
-        MpcFuzzySearch = _appSettings.Settings.MpcFillDefaultFuzzySearch;
-
-        if (_appSettings.Settings.FrontArtLibraryPath != oldFrontPath)
-            _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
-        if (_appSettings.Settings.BackArtLibraryPath != oldBackPath)
-        {
-            _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
+            var dialog = new Dialogs.ArtLibraryDialog(
+                _frontArtLibraryService, _backArtLibraryService,
+                _mpcFillService, _imageCacheService, _appSettings, _scryfallService,
+                initialTab);
+            dialog.Owner = Application.Current.MainWindow;
+            dialog.ShowDialog();
             RefreshBackArtLibrary();
+            StatusText = $"Front: {_frontArtLibraryService.Entries.Count}, Back: {_backArtLibraryService.Entries.Count} item(s)";
+        }
+
+        private void ClearCache()
+        {
+            var size = _cacheManager.GetTotalCacheSizeBytes();
+            var result = MessageBox.Show(
+                $"Clear all cached files?\n\n" +
+                $"This will free {CacheManager.FormatBytes(size)} of disk space.\n" +
+                $"Downloaded card images will need to be re-downloaded.\n\n" +
+                $"Your projects, back art library, and favorites are not affected.",
+                "Clear Cache", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes) return;
+
+            var (files, bytes) = _cacheManager.ClearAllCaches();
+            OnPropertyChanged(nameof(CacheSizeText));
+            StatusText = $"Cleared {files} cached file(s), freed {CacheManager.FormatBytes(bytes)}";
+        }
+
+        private void SetBusy(string message)
+        {
+            BusyMessage = message;
+            StatusText = message;
+            IsBusy = true;
+        }
+
+        private void ClearBusy()
+        {
+            IsBusy = false;
+            BusyMessage = string.Empty;
         }
     }
 

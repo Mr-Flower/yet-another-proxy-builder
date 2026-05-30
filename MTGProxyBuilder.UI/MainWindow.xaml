@@ -15,6 +15,7 @@
         <DropShadowEffect x:Key="PageShadow" BlurRadius="20" ShadowDepth="4" Opacity="0.35"/>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
+        <converters:FilePathToImageConverter x:Key="FilePathToImage"/>
         <converters:NullToCollapsedConverter x:Key="NullToCollapsed"/>
 
         <!-- Tab style -->
@@ -98,8 +99,7 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,2">
                     <Button Style="{StaticResource ToolBtn}" Command="{Binding OpenCardEditorCommand}" Content="Card Editor" Padding="8,4"/>
                     <Rectangle Width="1" Fill="#555555" Margin="2,4"/>
-                    <Button Style="{StaticResource ToolBtn}" Command="{Binding ManageFrontArtLibraryCommand}" Content="Front Art Library" Padding="8,4"/>
-                    <Button Style="{StaticResource ToolBtn}" Command="{Binding ManageBackArtLibraryCommand}" Content="Back Art Library" Padding="8,4"/>
+                    <Button Style="{StaticResource ToolBtn}" Command="{Binding ManageFrontArtLibraryCommand}" Content="Art Library" Padding="8,4"/>
                     <Button Style="{StaticResource ToolBtn}" Command="{Binding OpenSettingsCommand}" Content="Settings" Padding="8,4"/>
                 </StackPanel>
             </Grid>
@@ -541,10 +541,45 @@
                                         </Style>
                                     </StackPanel.Style>
 
+                                    <!-- Name -->
                                     <TextBlock Text="Name" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
-                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Padding="6,4" FontSize="12"
-                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding Name}" Foreground="White" FontSize="12" Padding="6,4" Margin="0,0,0,8"/>
 
+                                    <!-- Scryfall Lookup (visible when ScryfallId is empty) -->
+                                    <Border Margin="0,0,0,8" Background="#252526" CornerRadius="4" Padding="8,6">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ScryfallId}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ScryfallId}" Value="">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <StackPanel>
+                                            <TextBlock Text="Fetch Card Data from Scryfall" Foreground="#CCC" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox Grid.Column="0" Padding="6,4" FontSize="11"
+                                                         Text="{Binding DataContext.ActiveProject.Inner.ScryfallLookupText, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}"
+                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="0,0,6,0"/>
+                                                <Button Grid.Column="1" Content="Fetch" Padding="10,4"
+                                                        Style="{StaticResource AccentBtn}"
+                                                        Command="{Binding DataContext.ActiveProject.Inner.FetchScryfallDataCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                            </Grid>
+                                            <TextBlock Text="{Binding DataContext.ActiveProject.Inner.ScryfallLookupStatus, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                       Foreground="#888" FontSize="9" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Quantity / Mana Cost -->
                                     <Grid Margin="0,0,0,8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -561,33 +596,149 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <TextBlock Text="{Binding TypeLine}" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" TextWrapping="Wrap"/>
-                                    <TextBlock Text="{Binding OracleText}" Foreground="#888" FontSize="10" TextWrapping="Wrap" MaxHeight="80" Margin="0,0,0,4"/>
-                                    <TextBlock Foreground="#666" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,10">
-                                        <Run Text="{Binding SetName, Mode=OneWay}"/> #<Run Text="{Binding CollectorNumber, Mode=OneWay}"/>
-                                        | <Run Text="{Binding Rarity, Mode=OneWay}"/> | <Run Text="{Binding Artist, Mode=OneWay}"/>
-                                    </TextBlock>
+                                    <!-- CMC -->
+                                    <TextBlock Text="Mana Value" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                    <TextBlock Text="{Binding CMC}" Foreground="#CCC" FontSize="11" Margin="0,0,0,8"/>
 
-                                    <TextBlock Text="Front Artwork" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                    <!-- Type Line -->
+                                    <TextBlock Text="Type" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                    <TextBlock Text="{Binding TypeLine}" Foreground="#AAA" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+                                    <!-- Oracle Text -->
+                                    <TextBlock Text="Oracle Text" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                    <TextBlock Text="{Binding OracleText}" Foreground="#888" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                                    <!-- Power / Toughness (creatures only) -->
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.Style>
+                                            <Style TargetType="Grid">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Power}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Grid.Style>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                            <TextBlock Text="Power" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBlock Text="{Binding Power}" Foreground="#CCC" FontSize="11"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                            <TextBlock Text="Toughness" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBlock Text="{Binding Toughness}" Foreground="#CCC" FontSize="11"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Loyalty (planeswalkers only) -->
+                                    <StackPanel Margin="0,0,0,8">
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Loyalty}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
+                                        <TextBlock Text="Loyalty" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                        <TextBlock Text="{Binding Loyalty}" Foreground="#CCC" FontSize="11"/>
+                                    </StackPanel>
+
+                                    <!-- Colors / Color Identity -->
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                            <TextBlock Text="Colors" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBlock Text="{Binding Colors}" Foreground="#CCC" FontSize="11"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                            <TextBlock Text="Color Identity" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBlock Text="{Binding ColorIdentity}" Foreground="#CCC" FontSize="11"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Keywords (only when present) -->
+                                    <StackPanel Margin="0,0,0,8">
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Keywords}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
+                                        <TextBlock Text="Keywords" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                        <TextBlock Text="{Binding Keywords}" Foreground="#CCC" FontSize="10" TextWrapping="Wrap"/>
+                                    </StackPanel>
+
+                                    <!-- Set / Collector # -->
+                                    <Grid Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                            <TextBlock Text="Set" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBlock Foreground="#CCC" FontSize="10" TextWrapping="Wrap">
+                                                <Run Text="{Binding SetName, Mode=OneWay}"/>
+                                                <Run Text="{Binding SetCode, Mode=OneWay, StringFormat='({0})'}" Foreground="#888"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                            <TextBlock Text="#" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBlock Text="{Binding CollectorNumber}" Foreground="#CCC" FontSize="10"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Rarity / Artist -->
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                            <TextBlock Text="Rarity" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBlock Text="{Binding Rarity}" Foreground="#CCC" FontSize="10"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                            <TextBlock Text="Artist" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBlock Text="{Binding Artist}" Foreground="#CCC" FontSize="10" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Select Art -->
                                     <Button Style="{StaticResource AccentBtn}"
                                             Command="{Binding DataContext.ActiveProject.Inner.BrowseFrontArtworkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                             Content="Select Art..." Margin="0,0,0,6" HorizontalAlignment="Stretch" Padding="8,6"/>
+
+                                    <TextBlock Text="Front Artwork" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
                                     <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4">
-                                        <Image Source="{Binding ArtworkPath}" Stretch="Uniform" Margin="4"/>
+                                        <Image Source="{Binding ArtworkPath, Converter={StaticResource FilePathToImage}}" Stretch="Uniform" Margin="4"/>
                                     </Border>
                                     <TextBlock Text="{Binding ArtworkPath}" Foreground="#555" FontSize="9"
                                                TextTrimming="CharacterEllipsis" Margin="0,0,0,10"/>
 
+                                    <!-- Overlay Text -->
                                     <TextBlock Text="Overlay Text" Foreground="#999" FontSize="10" Margin="0,4,0,2"/>
                                     <TextBox Text="{Binding OverlayText, UpdateSourceTrigger=PropertyChanged}" Padding="6,4" FontSize="12"
                                              Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="0,0,0,8"/>
 
+                                    <CheckBox Content="Double-Faced Card" IsChecked="{Binding IsDoubleFaced}" Foreground="#CCC" Margin="0,0,0,4"/>
                                     <CheckBox Content="Include Back Artwork" IsChecked="{Binding IncludeBack}" Foreground="#CCC" Margin="0,0,0,6"/>
-                                    <Button Style="{StaticResource AccentBtn}"
-                                            Command="{Binding DataContext.ActiveProject.Inner.BrowseBackArtworkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                            Content="Select Card Back..." Margin="0,0,0,6" HorizontalAlignment="Stretch" Padding="8,6"/>
+                                    <TextBlock Text="Back Artwork" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
                                     <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4">
-                                        <Image Source="{Binding BackArtworkPath}" Stretch="Uniform" Margin="4"/>
+                                        <Image Source="{Binding BackArtworkPath, Converter={StaticResource FilePathToImage}}" Stretch="Uniform" Margin="4"/>
                                     </Border>
                                     <TextBlock Text="{Binding BackArtworkPath}" Foreground="#555" FontSize="9"
                                                TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
