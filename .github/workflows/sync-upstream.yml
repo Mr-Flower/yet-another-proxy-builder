@@ -53,6 +53,7 @@ jobs:
           # splices the two incompatible versions into non-compiling code. Treat the
           # fork's copy as authoritative; upstream changes to it must be ported by hand.
           cp MTGProxyBuilder.UI/ViewModels/MainViewModel.cs /tmp/fork/MainViewModel.cs
+          cp MTGProxyBuilder.UI/ViewModels/ShellViewModel.cs /tmp/fork/ShellViewModel.cs
 
       - name: Merge upstream (upstream wins on conflicts)
         if: steps.check.outputs.has_updates == 'true'
@@ -81,6 +82,7 @@ jobs:
           restore /tmp/fork/Program.cs             MTGProxyBuilder.UI/Program.cs
           restore /tmp/fork/MainWindow.axaml       MTGProxyBuilder.UI/MainWindow.axaml
           restore /tmp/fork/MainViewModel.cs       MTGProxyBuilder.UI/ViewModels/MainViewModel.cs
+          restore /tmp/fork/ShellViewModel.cs      MTGProxyBuilder.UI/ViewModels/ShellViewModel.cs
 
           $changed && git commit -m "chore: restore fork patches after upstream sync" || true
 
