@@ -110,6 +110,20 @@ jobs:
             git commit -m "chore: align SkiaSharp $VER across csproj files after upstream sync"
           fi
 
+      # Gate di sicurezza: compila l'albero appena mergiato PRIMA di pubblicarlo.
+      # Se un merge upstream rompe la build (es. conflitto su un file che ospita
+      # i nostri hook fork-specifici), il job fallisce e NON pusha — main resta
+      # sull'ultimo stato funzionante. Così "il sync non rompe mai nulla".
+      - name: Setup .NET (build gate)
+        if: steps.check.outputs.has_updates == 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build check — abort push on failure
+        if: steps.check.outputs.has_updates == 'true'
+        run: dotnet build -c Release --nologo
+
       - name: Push merged changes
         if: steps.check.outputs.has_updates == 'true'
         run: git push origin main

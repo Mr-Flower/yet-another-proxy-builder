@@ -39,5 +39,9 @@ public interface IDialogService
     Task ShowFrontArtLibraryAsync(FrontArtLibraryService library, ImageCacheService imageCache, AppSettingsService settings, ScryfallService scryfall);
     Task ShowCardEditorAsync();
 
+    // Fork-specific: image adjustment editor (brightness/contrast/saturation/black-point).
+    // Returns the chosen settings, or null if the user cancelled.
+    Task<ImageAdjustmentSettings?> ShowImageAdjustmentAsync(string imagePath, ImageAdjustmentSettings current);
+
     void Shutdown();
 }

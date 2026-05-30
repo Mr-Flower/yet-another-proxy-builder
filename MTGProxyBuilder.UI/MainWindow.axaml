@@ -498,7 +498,12 @@
                                         HorizontalAlignment="Stretch" Padding="8,6"/>
                                 <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4"/>
                                 <TextBlock Text="{Binding SelectedCard.ArtworkPath}" Foreground="#555"
-                                           FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,0,10"/>
+                                           FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
+                                <!-- fork-specific: image adjustment (brightness/contrast/black-point) -->
+                                <Button Theme="{StaticResource ToolBtn}"
+                                        Command="{Binding AdjustImageCommand}"
+                                        Content="Regola immagine…" Margin="0,0,0,10"
+                                        HorizontalAlignment="Stretch" Padding="8,5"/>
 
                                 <TextBlock Text="Overlay Text" Foreground="#999" FontSize="10" Margin="0,4,0,2"/>
                                 <TextBox Text="{Binding SelectedCard.OverlayText}" Padding="6,4" FontSize="12"

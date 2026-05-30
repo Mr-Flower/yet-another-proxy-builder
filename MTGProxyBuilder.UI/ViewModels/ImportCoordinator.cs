@@ -17,6 +17,7 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly DeckImportService _deckImport;
         private readonly MpcFillXmlImportService _xmlImport;
         private readonly FrontArtLibraryService _frontLibrary;
+        private readonly MTGProxyBuilder.UI.Services.ImageAdjustmentService _imageAdjust = new(); // fork-specific
 
         public ImportCoordinator(
             SearchCoordinator search,
@@ -135,6 +136,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
                 var card = scryfallCard.ToCardModel(frontPath ?? string.Empty, backPath);
                 card.Quantity = entry.Quantity;
+                _imageAdjust.AutoApply(card); // fork-specific: black-point etc. on Scryfall imports
                 importedCards.Add(card);
 
                 if (ignoreDuplicates)

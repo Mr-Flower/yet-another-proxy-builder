@@ -100,6 +100,7 @@ public class MainViewModel : ViewModelBase
     private readonly CacheManager _cacheManager = new();
     private readonly UpdateCheckService _updateService = new();
     private readonly AppSettingsService _appSettings = new();
+    private readonly ImageAdjustmentService _imageAdjust = new(); // fork-specific
     private bool _updateAvailable;
     private string _updateMessage = string.Empty;
     private string _updateDownloadUrl = string.Empty;
@@ -154,6 +155,7 @@ public class MainViewModel : ViewModelBase
     private readonly RelayCommand _removeBackArtFromLibraryCmd;
     private readonly RelayCommand _scryfallSearchCmd;
     private readonly RelayCommand _addScryfallCardCmd;
+    private readonly RelayCommand _adjustImageCmd; // fork-specific
     private readonly RelayCommand _addMpcFillCardCmd;
     private readonly RelayCommand _clearAllCardsCmd;
     private readonly RelayCommand _updateAllArtFromMpcFillCmd;
@@ -211,6 +213,8 @@ public class MainViewModel : ViewModelBase
         ScryfallSearchCommand = _scryfallSearchCmd;
         _addScryfallCardCmd = new RelayCommand(_ => _ = AddScryfallCardAsync(), _ => SelectedScryfallCard != null);
         AddScryfallCardCommand = _addScryfallCardCmd;
+        _adjustImageCmd = new RelayCommand(_ => _ = AdjustImageAsync(), _ => SelectedCard != null); // fork-specific
+        AdjustImageCommand = _adjustImageCmd;
 
         AddCardFromFileCommand = new RelayCommand(_ => _ = AddCardFromFileAsync());
         ExportPdfCommand = new RelayCommand(_ => _ = ExportPdfAsync());
@@ -565,6 +569,7 @@ public class MainViewModel : ViewModelBase
                 _browseFrontArtworkCmd.RaiseCanExecuteChanged();
                 _browseBackArtworkCmd.RaiseCanExecuteChanged();
                 _applyBackArtToSelectedCmd.RaiseCanExecuteChanged();
+                _adjustImageCmd.RaiseCanExecuteChanged(); // fork-specific
             }
         }
     }
@@ -989,6 +994,7 @@ public class MainViewModel : ViewModelBase
     public ICommand SelectBackArtForAllCommand { get; }
     public ICommand ScryfallSearchCommand { get; }
     public ICommand AddScryfallCardCommand { get; }
+    public ICommand AdjustImageCommand { get; } // fork-specific
     public ICommand ExportPdfCommand { get; }
     public ICommand ExportSvgCommand { get; }
     public ICommand AddBackArtToLibraryCommand { get; }
@@ -1853,6 +1859,7 @@ public class MainViewModel : ViewModelBase
             PushUndo();
             var card = SelectedScryfallCard.ToCardModel(frontPath ?? string.Empty, backPath);
             ApplyDefaultBackArt(card);
+            _imageAdjust.AutoApply(card); // fork-specific: black-point etc. on Scryfall imports
             Cards.Add(card);
             ApplyFilterAndSort();
             StatusText = $"Added: {card.Name} ({card.SetName})";
@@ -1862,6 +1869,29 @@ public class MainViewModel : ViewModelBase
             StatusText = $"Download failed: {ex.Message}";
         }
         finally { ClearBusy(); }
+    }
+
+    // fork-specific: open the image adjustment editor for the selected card and bake the result.
+    private async Task AdjustImageAsync()
+    {
+        var card = SelectedCard;
+        if (card == null) return;
+        if (string.IsNullOrEmpty(card.ArtworkPath))
+        {
+            await _dialogService.ShowInfoAsync("La carta selezionata non ha un'immagine fronte.", "Regola immagine");
+            return;
+        }
+
+        var store = _imageAdjust.OpenStore();
+        string original = store.ResolveOriginal(card.ArtworkPath);
+        var current = store.GetSettingsFor(original);
+
+        var result = await _dialogService.ShowImageAdjustmentAsync(original, current);
+        if (result == null) return;
+
+        PushUndo();
+        _imageAdjust.BakeFront(card, result);
+        StatusText = result.IsNoOp ? "Immagine ripristinata all'originale." : "Regolazione immagine applicata.";
     }
 
     private async Task ExportPdfAsync()

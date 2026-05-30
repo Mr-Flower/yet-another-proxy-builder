@@ -285,6 +285,17 @@ public class AvaloniaDialogService : IDialogService
         await dialog.ShowDialog(owner);
     }
 
+    // Fork-specific: image adjustment editor.
+    public async Task<ImageAdjustmentSettings?> ShowImageAdjustmentAsync(string imagePath, ImageAdjustmentSettings current)
+    {
+        var owner = GetMainWindow();
+        if (owner == null) return null;
+
+        var dialog = new ImageAdjustmentWindow(imagePath, current);
+        var ok = await dialog.ShowDialog<bool>(owner);
+        return ok ? dialog.Result : null;
+    }
+
     public void Shutdown()
     {
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime lifetime)
