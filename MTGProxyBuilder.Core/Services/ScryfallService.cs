@@ -185,7 +185,10 @@ namespace MTGProxyBuilder.Core.Services
             try
             {
                 string encoded = System.Net.WebUtility.UrlEncode(cardName);
-                string? url = $"https://api.scryfall.com/cards/search?q={encoded}";
+                // unique=prints returns every printing/version of each matching card
+                // (default is unique=cards, which collapses to one per card).
+                // order=released shows newest printings first.
+                string? url = $"https://api.scryfall.com/cards/search?q={encoded}&unique=prints&order=released";
                 var allCards = new List<ScryfallCard>();
 
                 while (url != null)
