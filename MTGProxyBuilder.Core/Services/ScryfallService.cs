@@ -80,6 +80,10 @@ namespace MTGProxyBuilder.Core.Services
         [JsonProperty("card_faces")]
         public List<CardFace>? CardFaces { get; set; }
 
+        // Related cards (tokens, meld parts, etc.). Tokens have Component == "token".
+        [JsonProperty("all_parts")]
+        public List<ScryfallRelatedPart>? AllParts { get; set; }
+
         public string? GetImageUrl(string size = "large")
         {
             if (ImageUris != null && ImageUris.TryGetValue(size, out var url))
@@ -165,6 +169,26 @@ namespace MTGProxyBuilder.Core.Services
 
         [JsonProperty("image_uris")]
         public Dictionary<string, string>? ImageUris { get; set; }
+    }
+
+    /// <summary>An entry in a card's <c>all_parts</c> (related cards: tokens, meld halves, etc.).</summary>
+    public class ScryfallRelatedPart
+    {
+        [JsonProperty("id")]
+        public string Id { get; set; } = string.Empty;
+
+        /// <summary>"token", "meld_part", "meld_result", "combo_piece", etc.</summary>
+        [JsonProperty("component")]
+        public string Component { get; set; } = string.Empty;
+
+        [JsonProperty("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonProperty("type_line")]
+        public string? TypeLine { get; set; }
+
+        [JsonProperty("uri")]
+        public string Uri { get; set; } = string.Empty;
     }
 
     public class ScryfallService
@@ -258,6 +282,38 @@ namespace MTGProxyBuilder.Core.Services
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Returns the token cards related to the given card (via Scryfall's all_parts),
+        /// with their artwork already downloaded and cached. Empty if the card makes no tokens.
+        /// </summary>
+        public async Task<List<(ScryfallCard Token, string ArtworkPath)>> GetTokensForCardAsync(string scryfallId)
+        {
+            var tokens = new List<(ScryfallCard, string)>();
+            try
+            {
+                var card = await GetCardByIdAsync(scryfallId);
+                var parts = card?.AllParts?.Where(p =>
+                    string.Equals(p.Component, "token", StringComparison.OrdinalIgnoreCase)).ToList();
+                if (parts == null || parts.Count == 0) return tokens;
+
+                foreach (var part in parts)
+                {
+                    await Task.Delay(100); // Scryfall rate limit
+                    var tokenCard = await GetCardByIdAsync(part.Id);
+                    if (tokenCard == null) continue;
+
+                    var path = await DownloadAndCacheImageAsync(tokenCard);
+                    if (path != null)
+                        tokens.Add((tokenCard, path));
+                }
+            }
+            catch
+            {
+                // network/parse failure — return whatever we managed to gather
+            }
+            return tokens;
         }
 
         /// <summary>Fetch a card by name (exact match).</summary>

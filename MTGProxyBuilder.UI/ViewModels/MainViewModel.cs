@@ -1071,55 +1071,66 @@ public class MainViewModel : ViewModelBase
 
     public async void CreateTokensFromCards(List<CardModel> sourceCards)
     {
-        string? commonBack = GetMostCommonBackArt();
-        var eligibleCards = sourceCards.Where(c => IsEligibleForToken(c, commonBack)).ToList();
-
-        if (eligibleCards.Count == 0)
+        // Real token generation: fetch the token cards Scryfall associates with each
+        // source card (via all_parts) and add them as their own cards. Only Scryfall
+        // cards carry the relationship, so cards without a ScryfallId are skipped.
+        var scryfallCards = sourceCards.Where(c => !string.IsNullOrEmpty(c.ScryfallId)).ToList();
+        if (scryfallCards.Count == 0)
         {
             await _dialogService.ShowInfoAsync(
-                "None of the selected cards have unique back artwork different from the project's common back.",
-                "No Tokens to Create");
+                "I token si possono generare solo da carte importate da Scryfall.",
+                "Nessun token");
             return;
         }
 
-        PushUndo();
-        string overlayText = _appSettings.Settings.DefaultTokenText;
-
-        foreach (var source in eligibleCards)
+        SetBusy("Ricerca token associati...");
+        try
         {
-            var token = new CardModel
+            string? commonBack = GetMostCommonBackArt();
+            var newTokens = new List<CardModel>();
+            var seenTokenIds = new HashSet<string>();
+
+            foreach (var source in scryfallCards)
             {
-                Name = source.Name + " (Token)",
-                ArtworkPath = source.ArtworkPath,
-                Quantity = 1,
-                OverlayText = overlayText,
-                ManaCost = source.ManaCost,
-                TypeLine = source.TypeLine,
-                SetCode = source.SetCode,
-                SetName = source.SetName,
-                DateAdded = DateTime.Now
-            };
+                var tokens = await _scryfallService.GetTokensForCardAsync(source.ScryfallId!);
+                foreach (var (token, artworkPath) in tokens)
+                {
+                    // De-dup identical tokens shared by multiple selected cards.
+                    if (!seenTokenIds.Add(token.Id)) continue;
 
-            if (commonBack != null) { token.BackArtworkPath = commonBack; token.IncludeBack = true; }
-            else ApplyDefaultBackArt(token);
+                    var tokenCard = token.ToCardModel(artworkPath, null);
+                    if (commonBack != null) { tokenCard.BackArtworkPath = commonBack; tokenCard.IncludeBack = true; }
+                    else ApplyDefaultBackArt(tokenCard);
 
-            Cards.Add(token);
+                    newTokens.Add(tokenCard);
+                }
+            }
+
+            if (newTokens.Count == 0)
+            {
+                ClearBusy();
+                await _dialogService.ShowInfoAsync(
+                    "Le carte selezionate non hanno token associati su Scryfall.",
+                    "Nessun token");
+                return;
+            }
+
+            PushUndo();
+            foreach (var t in newTokens)
+                Cards.Add(t);
+
+            ApplyFilterAndSort();
+            StatusText = $"Creati {newTokens.Count} token.";
         }
-
-        ApplyFilterAndSort();
-        StatusText = $"Created {eligibleCards.Count} token card(s)";
+        catch (Exception ex)
+        {
+            StatusText = $"Generazione token fallita: {ex.Message}";
+        }
+        finally { ClearBusy(); }
     }
 
     public void CreateTokenFromCard(CardModel sourceCard) =>
         CreateTokensFromCards(new List<CardModel> { sourceCard });
-
-    private bool IsEligibleForToken(CardModel card, string? commonBack)
-    {
-        string? back = card.BackArtworkPath ?? card.OriginalBackArtworkPath;
-        if (string.IsNullOrEmpty(back)) return false;
-        if (commonBack != null && string.Equals(back, commonBack, StringComparison.OrdinalIgnoreCase)) return false;
-        return true;
-    }
 
     private string? GetMostCommonBackArt()
     {
