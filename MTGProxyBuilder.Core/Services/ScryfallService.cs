@@ -316,6 +316,19 @@ namespace MTGProxyBuilder.Core.Services
             return tokens;
         }
 
+        /// <summary>
+        /// Like GetTokensForCardAsync, but starts from a card name (used for cards that
+        /// have no Scryfall id, e.g. MPCFill imports): resolves the name to a Scryfall
+        /// card, then returns its associated tokens with art downloaded.
+        /// </summary>
+        public async Task<List<(ScryfallCard Token, string ArtworkPath)>> GetTokensForCardByNameAsync(string cardName)
+        {
+            var card = await GetCardByNameAsync(cardName);
+            if (card == null || string.IsNullOrEmpty(card.Id))
+                return new List<(ScryfallCard, string)>();
+            return await GetTokensForCardAsync(card.Id);
+        }
+
         /// <summary>Fetch a card by name (exact match).</summary>
         public async Task<ScryfallCard?> GetCardByNameAsync(string cardName)
         {

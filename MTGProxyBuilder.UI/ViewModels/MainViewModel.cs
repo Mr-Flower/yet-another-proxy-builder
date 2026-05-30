@@ -1071,14 +1071,17 @@ public class MainViewModel : ViewModelBase
 
     public async void CreateTokensFromCards(List<CardModel> sourceCards)
     {
-        // Real token generation: fetch the token cards Scryfall associates with each
-        // source card (via all_parts) and add them as their own cards. Only Scryfall
-        // cards carry the relationship, so cards without a ScryfallId are skipped.
-        var scryfallCards = sourceCards.Where(c => !string.IsNullOrEmpty(c.ScryfallId)).ToList();
-        if (scryfallCards.Count == 0)
+        // Real token generation: fetch the token cards associated with each source card
+        // (via Scryfall all_parts) and add them as their own cards. Scryfall cards use
+        // their id directly; cards without one (MPCFill, local images) are resolved by
+        // name so tokens can still be created for them.
+        var eligible = sourceCards
+            .Where(c => !string.IsNullOrEmpty(c.ScryfallId) || !string.IsNullOrEmpty(c.Name))
+            .ToList();
+        if (eligible.Count == 0)
         {
             await _dialogService.ShowInfoAsync(
-                "I token si possono generare solo da carte importate da Scryfall.",
+                "Nessuna carta valida selezionata per la generazione token.",
                 "Nessun token");
             return;
         }
@@ -1090,9 +1093,12 @@ public class MainViewModel : ViewModelBase
             var newTokens = new List<CardModel>();
             var seenTokenIds = new HashSet<string>();
 
-            foreach (var source in scryfallCards)
+            foreach (var source in eligible)
             {
-                var tokens = await _scryfallService.GetTokensForCardAsync(source.ScryfallId!);
+                var tokens = !string.IsNullOrEmpty(source.ScryfallId)
+                    ? await _scryfallService.GetTokensForCardAsync(source.ScryfallId!)
+                    : await _scryfallService.GetTokensForCardByNameAsync(source.Name);
+
                 foreach (var (token, artworkPath) in tokens)
                 {
                     // De-dup identical tokens shared by multiple selected cards.

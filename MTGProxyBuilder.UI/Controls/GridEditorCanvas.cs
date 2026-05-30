@@ -16,6 +16,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
 
@@ -378,12 +379,29 @@ namespace MTGProxyBuilder.UI.Controls
         //  POINTER EVENTS
         // ================================================================
 
+        // Focusing the canvas (needed for keyboard shortcuts) makes the parent
+        // ScrollViewer "bring it into view", which scrolls back to the top on the very
+        // first click. Capture and restore the scroll offset around the Focus() call.
+        private void FocusPreservingScroll()
+        {
+            if (IsFocused) { Focus(); return; }
+
+            var scroll = this.FindAncestorOfType<ScrollViewer>();
+            if (scroll == null) { Focus(); return; }
+
+            var offset = scroll.Offset;
+            Focus();
+            // Restore now and again after the bring-into-view pass runs post-layout.
+            scroll.Offset = offset;
+            Dispatcher.UIThread.Post(() => scroll.Offset = offset, DispatcherPriority.Render);
+        }
+
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             base.OnPointerPressed(e);
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
 
-            Focus();
+            FocusPreservingScroll();
             var pos = e.GetPosition(this);
             int flatSlot = HitTestSlot(pos);
 
