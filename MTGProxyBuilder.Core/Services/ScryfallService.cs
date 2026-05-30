@@ -117,7 +117,6 @@ namespace MTGProxyBuilder.Core.Services
                 BackArtworkPath = backArtworkPath,
                 OriginalBackArtworkPath = backArtworkPath,
                 IncludeBack = hasBack,
-                IsDoubleFaced = hasBack,
                 ManaCost = manaCost,
                 CMC = CMC,
                 TypeLine = typeLine,
