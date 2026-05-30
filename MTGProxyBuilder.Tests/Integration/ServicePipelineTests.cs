@@ -50,7 +50,11 @@ public class ServicePipelineTests : IDisposable
         var (results, error) = await _scryfall.SearchCardAsync("!\"Sol Ring\"");
         if (error != null) return; // skip if rate limited or network unavailable
         Assert.NotEmpty(results);
-        Assert.All(results, c => Assert.Equal("Sol Ring", c.Name));
+        // Search now uses unique=prints, so the exact-name query returns every
+        // printing of Sol Ring (many), and art-card printings can carry a doubled
+        // name like "Sol Ring // Sol Ring". Match on the name containing "Sol Ring"
+        // rather than exact equality.
+        Assert.All(results, c => Assert.Contains("Sol Ring", c.Name));
     }
 
     [Fact]
