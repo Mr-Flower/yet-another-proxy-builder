@@ -32,6 +32,7 @@ namespace MTGProxyBuilder.Core.Models
         private string _keywords = string.Empty;
         private DateTime _dateAdded = DateTime.Now;
         private string _overlayText = string.Empty;
+        private CardSource _source = CardSource.Unknown; // fork-specific
 
         public string CardId
         {
@@ -192,6 +193,13 @@ namespace MTGProxyBuilder.Core.Models
         {
             get => _overlayText;
             set { _overlayText = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>Macro-source of the artwork (Scryfall / MPCFill). Fork-specific.</summary>
+        public CardSource Source
+        {
+            get => _source;
+            set { _source = value; OnPropertyChanged(); }
         }
 
         /// <summary>Helper: primary card type (Creature, Instant, Sorcery, etc.)</summary>

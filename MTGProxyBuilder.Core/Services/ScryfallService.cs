@@ -132,7 +132,8 @@ namespace MTGProxyBuilder.Core.Services
                 Toughness = toughness,
                 Loyalty = loyalty,
                 Keywords = Keywords != null ? string.Join(",", Keywords) : string.Empty,
-                DateAdded = DateTime.Now
+                DateAdded = DateTime.Now,
+                Source = CardSource.Scryfall // fork-specific
             };
         }
 

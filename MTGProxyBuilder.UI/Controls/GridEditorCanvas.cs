@@ -39,6 +39,8 @@ namespace MTGProxyBuilder.UI.Controls
 
         // Selection state
         private readonly HashSet<int> _selectedSlots = new();
+        // Selection highlight overlays, updated independently of the full redraw
+        private readonly List<Control> _selectionRects = new();
         private int _lastSelectedSlot = -1;
 
         // Flip state
@@ -299,7 +301,7 @@ namespace MTGProxyBuilder.UI.Controls
                         {
                             var es = slots[flat];
                             bool flipped  = IsCardFlipped(es.CardIndex);
-                            bool selected = _selectedSlots.Contains(flat);
+                            bool selected = false; // selection drawn via UpdateSelectionHighlight overlay
                             PlaceCardVisual(es.Card, x, y, cellW, cellH, bleed, cardW, cardH, pageTop, pageW, pageH, flipped, selected);
                         }
                     }
@@ -321,6 +323,7 @@ namespace MTGProxyBuilder.UI.Controls
                     await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
             }
 
+            UpdateSelectionHighlight();
             IsRendering = false;
             RenderProgress = null;
         }
@@ -401,7 +404,7 @@ namespace MTGProxyBuilder.UI.Controls
                     else _selectedSlots.Add(flatSlot);
                     _lastSelectedSlot = flatSlot;
                     SyncSelectedCard();
-                    _ = RedrawAsync();
+                    UpdateSelectionHighlight();
                     e.Handled = true;
                     return;
                 }
@@ -413,7 +416,7 @@ namespace MTGProxyBuilder.UI.Controls
                     for (int s = from; s <= to; s++)
                         if (s < _expandedSlots.Count) _selectedSlots.Add(s);
                     SyncSelectedCard();
-                    _ = RedrawAsync();
+                    UpdateSelectionHighlight();
                     e.Handled = true;
                     return;
                 }
@@ -432,7 +435,7 @@ namespace MTGProxyBuilder.UI.Controls
                     _selectedSlots.Clear();
                     _lastSelectedSlot = -1;
                     SyncSelectedCard();
-                    _ = RedrawAsync();
+                    UpdateSelectionHighlight();
                 }
             }
             e.Handled = true;
@@ -470,7 +473,7 @@ namespace MTGProxyBuilder.UI.Controls
                 _selectedSlots.Add(_pendingSelectSlot);
                 _lastSelectedSlot = _pendingSelectSlot;
                 SyncSelectedCard();
-                _ = RedrawAsync();
+                UpdateSelectionHighlight();
             }
 
             if (_dragGhost    != null) Children.Remove(_dragGhost);
@@ -486,7 +489,7 @@ namespace MTGProxyBuilder.UI.Controls
             {
                 _selectedSlots.Clear();
                 SyncSelectedCard();
-                _ = RedrawAsync();
+                UpdateSelectionHighlight();
                 e.Handled = true;
             }
         }
@@ -543,7 +546,7 @@ namespace MTGProxyBuilder.UI.Controls
             {
                 menu.Items.Add(new Separator());
                 var clear = new MenuItem { Header = "Clear Selection" };
-                clear.Click += (_, _) => { _selectedSlots.Clear(); SyncSelectedCard(); _ = RedrawAsync(); };
+                clear.Click += (_, _) => { _selectedSlots.Clear(); SyncSelectedCard(); UpdateSelectionHighlight(); };
                 menu.Items.Add(clear);
             }
 
@@ -658,6 +661,34 @@ namespace MTGProxyBuilder.UI.Controls
             int slotOnPage = flatSlot % _perPage;
             float pageTop = page * (_pageH + PageGapPx);
             return (_marginL + (slotOnPage % _cols) * _cellW, pageTop + _marginT + (slotOnPage / _cols) * _cellH);
+        }
+
+        // Lightweight selection update: add/remove blue highlight rectangles without
+        // tearing down and rebuilding the whole canvas. Rebuilding (RedrawAsync) reloads
+        // every image and resets the Canvas size, which made the view flash and the
+        // ScrollViewer jump back to the top on every click.
+        private void UpdateSelectionHighlight()
+        {
+            foreach (var r in _selectionRects)
+                Children.Remove(r);
+            _selectionRects.Clear();
+
+            if (_cellW <= 0 || _cellH <= 0) return;
+
+            foreach (int slot in _selectedSlots)
+            {
+                if (slot < 0 || slot >= _expandedSlots.Count) continue;
+                var (x, y) = SlotToPosition(slot);
+                var selRect = new Rectangle
+                {
+                    Width = _cellW, Height = _cellH,
+                    Stroke = Brushes.DodgerBlue, StrokeThickness = 3,
+                    IsHitTestVisible = false
+                };
+                SetLeft(selRect, x); SetTop(selRect, y);
+                Children.Add(selRect);
+                _selectionRects.Add(selRect);
+            }
         }
 
         // ================================================================

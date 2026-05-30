@@ -28,6 +28,9 @@ public partial class ImageAdjustmentWindow : Window
     /// <summary>The settings the user applied, or null if they cancelled.</summary>
     public ImageAdjustmentSettings? Result { get; private set; }
 
+    /// <summary>Which cards to apply to (this card / all by source). Valid when Result != null.</summary>
+    public ImageAdjustmentTarget Target { get; private set; } = ImageAdjustmentTarget.ThisCard;
+
     public ImageAdjustmentWindow(string imagePath, ImageAdjustmentSettings current)
     {
         InitializeComponent();
@@ -159,6 +162,9 @@ public partial class ImageAdjustmentWindow : Window
 
     private void OnApply(object? sender, RoutedEventArgs e)
     {
+        // ComboBox order matches the ImageAdjustmentTarget enum (0..3).
+        int idx = TargetCombo.SelectedIndex;
+        Target = idx >= 0 && idx <= 3 ? (ImageAdjustmentTarget)idx : ImageAdjustmentTarget.ThisCard;
         Result = BuildSettings();
         Close(true);
     }

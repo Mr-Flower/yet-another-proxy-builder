@@ -68,6 +68,15 @@
 
             <Border Height="1" Background="#444" Margin="0,0,0,10"/>
 
+            <!-- Applica a (target per fonte) -->
+            <TextBlock Text="Applica a" Foreground="#CCC" FontSize="12" Margin="0,0,0,2"/>
+            <ComboBox x:Name="TargetCombo" HorizontalAlignment="Stretch" Margin="0,0,0,10" SelectedIndex="0">
+                <ComboBoxItem>Solo questa carta</ComboBoxItem>
+                <ComboBoxItem>Tutte le carte Scryfall</ComboBoxItem>
+                <ComboBoxItem>Tutte le carte MPCFill</ComboBoxItem>
+                <ComboBoxItem>Tutte le carte (entrambe le fonti)</ComboBoxItem>
+            </ComboBox>
+
             <CheckBox x:Name="AutoApplyCheck"
                       Content="Applica automaticamente alle nuove carte da Scryfall"
                       Foreground="#CCC" Margin="0,0,0,4"/>

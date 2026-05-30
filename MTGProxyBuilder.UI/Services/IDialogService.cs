@@ -11,6 +11,9 @@ public enum ArtSelectorMode { Front, Back }
 
 public record ArtSelectorResult(string ResultPath, bool ApplyToSameName, bool ApplyToNoBack);
 
+// Fork-specific: result of the image adjustment dialog (settings + which cards to apply to).
+public record ImageAdjustmentResult(ImageAdjustmentSettings Settings, ImageAdjustmentTarget Target);
+
 public interface IDialogService
 {
     // File pickers
@@ -41,7 +44,7 @@ public interface IDialogService
 
     // Fork-specific: image adjustment editor (brightness/contrast/saturation/black-point).
     // Returns the chosen settings, or null if the user cancelled.
-    Task<ImageAdjustmentSettings?> ShowImageAdjustmentAsync(string imagePath, ImageAdjustmentSettings current);
+    Task<ImageAdjustmentResult?> ShowImageAdjustmentAsync(string imagePath, ImageAdjustmentSettings current);
 
     void Shutdown();
 }

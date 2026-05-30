@@ -1326,9 +1326,29 @@ public class MainViewModel : ViewModelBase
         var result = await _dialogService.ShowImageAdjustmentAsync(original, current);
         if (result == null) return;
 
+        var settings = result.Settings;
+
+        // Decide which cards to bake based on the chosen target (this card / by source / both).
+        var targets = result.Target switch
+        {
+            ImageAdjustmentTarget.AllScryfall => Cards.Where(c => c.Source == CardSource.Scryfall),
+            ImageAdjustmentTarget.AllMpcFill  => Cards.Where(c => c.Source == CardSource.MpcFill),
+            ImageAdjustmentTarget.AllBoth     => Cards.Where(c => !string.IsNullOrEmpty(c.ArtworkPath)),
+            _                                 => new[] { card }.AsEnumerable()
+        };
+
         PushUndo();
-        _imageAdjust.BakeFront(card, result);
-        StatusText = result.IsNoOp ? "Immagine ripristinata all'originale." : "Regolazione immagine applicata.";
+        int n = 0;
+        foreach (var c in targets)
+        {
+            if (string.IsNullOrEmpty(c.ArtworkPath)) continue;
+            _imageAdjust.BakeFront(c, settings);
+            n++;
+        }
+
+        StatusText = result.Target == ImageAdjustmentTarget.ThisCard
+            ? (settings.IsNoOp ? "Immagine ripristinata all'originale." : "Regolazione immagine applicata.")
+            : $"Regolazione applicata a {n} carta/e.";
     }
 
     private async Task ExportPdfAsync()
