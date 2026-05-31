@@ -17,19 +17,16 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly SearchCoordinator _search;
         private readonly DeckImportService _deckImport;
         private readonly MpcFillXmlImportService _xmlImport;
-        private readonly FrontArtLibraryService _frontLibrary;
         private readonly MTGProxyBuilder.UI.Services.ImageAdjustmentService _imageAdjust = new(); // fork-specific
 
         public ImportCoordinator(
             SearchCoordinator search,
             DeckImportService deckImport,
-            MpcFillXmlImportService xmlImport,
-            FrontArtLibraryService frontLibrary)
+            MpcFillXmlImportService xmlImport)
         {
             _search = search;
             _deckImport = deckImport;
             _xmlImport = xmlImport;
-            _frontLibrary = frontLibrary;
         }
 
         private static readonly HashSet<string> BasicLands = new(StringComparer.OrdinalIgnoreCase)
@@ -149,6 +146,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
                     string? frontPath = null;
                     string? backPath = null;
+                    bool usedMpcArt = false;
 
                     // Tokens come from Scryfall only; MPCFill name search wouldn't match a token.
                     if (useMpcFill && !isToken)
@@ -159,6 +157,7 @@ namespace MTGProxyBuilder.UI.ViewModels
                             mc.Name.Contains(entry.CardName, StringComparison.OrdinalIgnoreCase));
                         if (bestMatch != null)
                             frontPath = await _search.DownloadMpcFillArtAsync(bestMatch);
+                        usedMpcArt = frontPath != null;
                         frontPath ??= await _search.DownloadScryfallArtAsync(scryfallCard);
                     }
                     else
@@ -171,6 +170,7 @@ namespace MTGProxyBuilder.UI.ViewModels
 
                     var card = scryfallCard.ToCardModel(frontPath ?? string.Empty, backPath);
                     card.Quantity = entry.Quantity;
+                    if (usedMpcArt) card.Source = CardSource.MpcFill; // front art actually came from MPCFill
                     slots[idx] = card;
                 }
                 finally
@@ -261,6 +261,7 @@ namespace MTGProxyBuilder.UI.ViewModels
                     BackArtworkPath = backPath,
                     IncludeBack = backPath != null,
                     Quantity = quantity,
+                    Source = CardSource.MpcFill,
                     DateAdded = DateTime.Now
                 };
 
@@ -287,6 +288,7 @@ namespace MTGProxyBuilder.UI.ViewModels
                 Name = mpcCard.Name.Split('(')[0].Trim(),
                 ArtworkPath = path ?? string.Empty,
                 Artist = mpcCard.Source,
+                Source = CardSource.MpcFill,
                 DateAdded = DateTime.Now
             };
             return (card, null);

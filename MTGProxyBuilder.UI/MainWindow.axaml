@@ -353,7 +353,8 @@
                                 <TextBlock Text="{Binding SelectedCard.TypeLine}" Foreground="#AAA"
                                            FontSize="11" Margin="0,0,0,4" TextWrapping="Wrap"/>
                                 <TextBlock Text="{Binding SelectedCard.OracleText}" Foreground="#888"
-                                           FontSize="10" TextWrapping="Wrap" MaxHeight="80" Margin="0,0,0,4"/>
+                                           FontSize="10" TextWrapping="Wrap" MaxHeight="80"
+                                           TextTrimming="CharacterEllipsis" Margin="0,0,0,4"/>
                                 <TextBlock Foreground="#666" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,10">
                                     <Run Text="{Binding SelectedCard.SetName, Mode=OneWay}"/>
                                     <Run Text=" #"/><Run Text="{Binding SelectedCard.CollectorNumber, Mode=OneWay}"/>
@@ -368,6 +369,7 @@
                                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                         Padding="8,8" FontWeight="SemiBold"/>
 
+                                <Separator Margin="0,2,0,8" Background="#3A3A3D"/>
                                 <TextBlock Text="Front Artwork" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
                                 <Button Theme="{StaticResource AccentBtn}"
                                         Command="{Binding BrowseFrontArtworkCommand}"
@@ -564,7 +566,8 @@
                             </Grid>
                             <Slider Minimum="0" Maximum="3.048"
                                     Value="{Binding CurrentProject.PageSettings.BleedWidthMm}"
-                                    SmallChange="0.1" LargeChange="0.5" Margin="0,0,0,2"/>
+                                    SmallChange="0.1" LargeChange="0.5" Margin="0,0,0,2"
+                                    ToolTip.Tip="Bleed is the extra image kept around the card so trimming never leaves a white edge. The cut line stays on the card border; this only changes how much margin gets trimmed. 0 = none, 3.05 mm = the 1/8&quot; MakePlayingCards standard."/>
                             <TextBlock Text="0 = no bleed · max = 1/8 in (3.05 mm, MakePlayingCards standard)"
                                        Foreground="#666" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,4"/>
 
@@ -653,7 +656,7 @@
                 <TextBlock Text="{Binding StatusText}" Foreground="White" FontSize="11"/>
                 <TextBlock Grid.Column="1" Foreground="#CCE8FF" FontSize="11">
                     <Run Text="{Binding Cards.Count, Mode=OneWay}"/>
-                    <Run Text=" cards  |  v"/>
+                    <Run Text=" cards"/>
                 </TextBlock>
             </Grid>
         </Border>

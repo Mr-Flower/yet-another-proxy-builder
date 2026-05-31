@@ -181,7 +181,7 @@ public class MainViewModel : ViewModelBase
         _mpcFillService = new MpcFillService(_imageCacheService, MpcSourceManager);
         _mpcXmlImportService = new MpcFillXmlImportService(_mpcFillService, _imageCacheService);
         _searchCoordinator = new SearchCoordinator(_scryfallService, _mpcFillService, _appSettings, MpcSourceManager);
-        _importCoordinator = new ImportCoordinator(_searchCoordinator, _deckImportService, _mpcXmlImportService, _frontArtLibraryService);
+        _importCoordinator = new ImportCoordinator(_searchCoordinator, _deckImportService, _mpcXmlImportService);
         _mpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
         _mpcAdvMinDpi = _appSettings.Settings.MpcFillDefaultMinDpi;
         _mpcFuzzySearch = _appSettings.Settings.MpcFillDefaultFuzzySearch;
