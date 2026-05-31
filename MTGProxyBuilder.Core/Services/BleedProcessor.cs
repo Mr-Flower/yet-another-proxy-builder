@@ -80,63 +80,22 @@ namespace MTGProxyBuilder.Core.Services
         }
 
         // MakePlayingCards / MPCFill standard bleed per side (the margin baked into MPCFill art):
-        // exactly 1/8 inch.
-        private const double MpcBleedMm = 25.4 / 8.0; // = 3.175 mm
-
         /// <summary>
         /// Resolves the image to draw filling a full (card + 2*bleed) cell, matching the PDF output.
-        /// Scryfall scans are bleed-extended (and corner-squared). MPCFill art is authored full-bleed,
-        /// so it's first cropped back to the bare card (removing its built-in ~3 mm MPC bleed) and then
-        /// extended to the USER's bleed — otherwise its larger built-in bleed sits inside the cut line
-        /// and the card looks "under-cut". Returns the original path when no bleed is needed.
+        /// - MPCFill art is authored full-bleed (it already includes its own 1/8" margin), so it is drawn
+        ///   WHOLE, filling the cell as-is — no crop, no extension. The cut line at the corners is
+        ///   positioned to trim that extra 1/8".
+        /// - Scryfall scans are the bare card, so the bleed is added by duplicating the edge pixels
+        ///   outward (and squaring off white corners). The card itself ends at the cut line.
+        /// Returns the original path when no bleed is needed or for MPCFill (drawn directly).
         /// </summary>
         public string? GetDisplayImage(string sourcePath, int bleedPixels, double cardWmm, double cardHmm)
         {
             if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath) || bleedPixels <= 0)
                 return sourcePath;
-            if (!ImageAlreadyHasBleed(sourcePath))
-                return GetBleedExtendedImage(sourcePath, bleedPixels);
-
-            string cacheKey = $"{sourcePath}|{bleedPixels}|{cardWmm}x{cardHmm}|mpc";
-            if (_processedCache.TryGetValue(cacheKey, out var cached) && File.Exists(cached))
-                return cached;
-
-            try
-            {
-                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}" +
-                              $"_b{bleedPixels}_{(int)cardWmm}x{(int)cardHmm}_mpc_v6";
-                string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
-                if (File.Exists(outputPath)) { _processedCache[cacheKey] = outputPath; return outputPath; }
-
-                using var src = SKBitmap.Decode(sourcePath);
-                if (src == null) return sourcePath;
-
-                // Crop the built-in MPC bleed: per-side fraction = mpcBleed / (card + 2*mpcBleed).
-                double fracW = cardWmm > 0 ? MpcBleedMm / (cardWmm + 2 * MpcBleedMm) : 0;
-                double fracH = cardHmm > 0 ? MpcBleedMm / (cardHmm + 2 * MpcBleedMm) : 0;
-                int cropX = (int)Math.Round(src.Width * fracW);
-                int cropY = (int)Math.Round(src.Height * fracH);
-                int bareW = Math.Max(1, src.Width - 2 * cropX);
-                int bareH = Math.Max(1, src.Height - 2 * cropY);
-
-                using var bare = new SKBitmap(bareW, bareH);
-                using (var c = new SKCanvas(bare))
-                    c.DrawBitmap(src,
-                        new SKRect(cropX, cropY, src.Width - cropX, src.Height - cropY),
-                        new SKRect(0, 0, bareW, bareH));
-
-                using var output = RenderBleed(bare, bleedPixels);
-                using var stream = File.OpenWrite(outputPath);
-                output.Encode(stream, SKEncodedImageFormat.Jpeg, 95);
-
-                _processedCache[cacheKey] = outputPath;
-                return outputPath;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"MPC bleed processing error: {ex.Message}");
-                return sourcePath;
-            }
+            if (ImageAlreadyHasBleed(sourcePath))
+                return sourcePath; // MPCFill: draw whole image, fill the cell
+            return GetBleedExtendedImage(sourcePath, bleedPixels); // Scryfall: extend edges
         }
 
         /// <summary>

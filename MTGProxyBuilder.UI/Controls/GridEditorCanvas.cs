@@ -769,9 +769,12 @@ namespace MTGProxyBuilder.UI.Controls
                 string disp = _displayPathCache.TryGetValue(DisplayKey(imagePath, _bleedPx, _useBleed, _cardWmm), out var d)
                     ? d : imagePath;
                 bmp = GetCachedImage(disp);
-                // The display image carries the bleed and fills the whole cell whenever it was
-                // processed (Scryfall extended OR MPCFill cropped+extended) -> display path != raw.
-                bledImage = _useBleed && bmp != null && !string.Equals(disp, imagePath, StringComparison.Ordinal);
+                // Fill the whole cell when the drawn image carries the bleed: either a Scryfall scan was
+                // edge-extended (disp != raw), or it's MPCFill art that already includes its own bleed
+                // and is drawn whole.
+                bledImage = _useBleed && bmp != null
+                    && (!string.Equals(disp, imagePath, StringComparison.Ordinal)
+                        || BleedProcessor.ImageAlreadyHasBleed(imagePath));
             }
 
             CardVisualRenderer.PlaceCard(this, card, bmp,

@@ -112,8 +112,10 @@ public class BleedProcessorTests
         => Assert.Equal(expected, BleedProcessor.ImageAlreadyHasBleed(path));
 
     [Fact]
-    public void GetDisplayImage_MpcFillArt_CropsAndExtendsToJpg()
+    public void GetDisplayImage_MpcFillArt_ReturnedWholeUnprocessed()
     {
+        // MPCFill art is already full-bleed -> drawn whole (no crop, no extend), so GetDisplayImage
+        // returns the original path unchanged; the cut line trims the built-in 1/8".
         var proc = new BleedProcessor();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"disp_mpc_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
@@ -122,10 +124,7 @@ public class BleedProcessorTests
             string input = Path.Combine(tmpDir, "mpc_full.png"); // mpc_ prefix => already full-bleed
             CreateTestImage(input, 80, 112);
             var result = proc.GetDisplayImage(input, 6, 63, 88);
-            Assert.NotNull(result);
-            Assert.NotEqual(input, result);
-            Assert.True(File.Exists(result), "processed MPC image should exist");
-            Assert.EndsWith(".jpg", result!);
+            Assert.Equal(input, result);
         }
         finally { try { Directory.Delete(tmpDir, true); } catch { } proc.ClearCache(); }
     }
