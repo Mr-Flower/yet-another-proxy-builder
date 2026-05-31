@@ -235,54 +235,14 @@ namespace MTGProxyBuilder.UI.Controls
 
             if (cols <= 0 || rows <= 0 || perPage <= 0) { Children.Clear(); return; }
 
-            var slots = new List<ExpandedSlot>();
-            var cards = CardsSource;
-            if (cards != null)
-                for (int i = 0; i < cards.Count; i++)
-                    for (int q = 0; q < cards[i].Quantity; q++)
-                        slots.Add(new ExpandedSlot(cards[i], i));
+            var slots = BuildExpandedSlots();
+            var pathsToLoad = CollectPathsToLoad(slots);
 
-            var pathsToLoad = new HashSet<string>();
-            foreach (var s in slots)
+            if (pathsToLoad.Count > 0 && !await PreloadDisplayImagesAsync(pathsToLoad, (int)cellW * 2, token))
             {
-                bool showBack = IsCardFlipped(s.CardIndex);
-                string? path = showBack ? (s.Card.BackArtworkPath ?? s.Card.ArtworkPath) : s.Card.ArtworkPath;
-                if (string.IsNullOrEmpty(path)) continue;
-                // Skip only if the display (possibly bled) image is already decoded in the cache.
-                if (_displayPathCache.TryGetValue(DisplayKey(path, _bleedMm, _processBleed, _cardWmm), out var disp)
-                    && _imageCache.ContainsKey(disp))
-                    continue;
-                pathsToLoad.Add(path);
+                IsRendering = false;
+                return;
             }
-
-            if (pathsToLoad.Count > 0)
-            {
-                IsRendering = true;
-                int loaded = 0, total = pathsToLoad.Count;
-                int decodeWidth = (int)cellW * 2;
-                double bleedMm = _bleedMm;
-                bool processBleed = _processBleed;
-                double cardWmm = _cardWmm;
-                foreach (var path in pathsToLoad)
-                {
-                    if (token.IsCancellationRequested) { IsRendering = false; return; }
-                    await Task.Run(() =>
-                    {
-                        // Resolve (and disk-generate) the display image on the background thread, then
-                        // decode the result into the bitmap cache. Scryfall -> edge-extend to the chosen
-                        // bleed; MPCFill -> crop its native 1/8" down to it. Reg-marks -> raw path.
-                        string disp = _displayPathCache.GetOrAdd(DisplayKey(path, bleedMm, processBleed, cardWmm),
-                            _ => processBleed
-                                ? (_bleedProcessor.GetDisplayImage(path, bleedMm, cardWmm) ?? path)
-                                : path);
-                        LoadImageToCache(disp, decodeWidth);
-                    }, token);
-                    loaded++;
-                    RenderProgress = $"Loading images ({loaded}/{total})...";
-                    await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
-                }
-            }
-
             if (token.IsCancellationRequested) { IsRendering = false; return; }
 
             _pageW = pageW; _pageH = pageH; _cellW = cellW; _cellH = cellH;
@@ -394,6 +354,66 @@ namespace MTGProxyBuilder.UI.Controls
             UpdateSelectionHighlight();
             IsRendering = false;
             RenderProgress = null;
+        }
+
+        /// <summary>Expands the card list into one slot per physical copy (Quantity).</summary>
+        private List<ExpandedSlot> BuildExpandedSlots()
+        {
+            var slots = new List<ExpandedSlot>();
+            var cards = CardsSource;
+            if (cards != null)
+                for (int i = 0; i < cards.Count; i++)
+                    for (int q = 0; q < cards[i].Quantity; q++)
+                        slots.Add(new ExpandedSlot(cards[i], i));
+            return slots;
+        }
+
+        /// <summary>Returns the source image paths whose (bleed-processed) display image isn't decoded
+        /// in the bitmap cache yet — i.e. the ones that still need loading before this redraw.</summary>
+        private HashSet<string> CollectPathsToLoad(List<ExpandedSlot> slots)
+        {
+            var pathsToLoad = new HashSet<string>();
+            foreach (var s in slots)
+            {
+                bool showBack = IsCardFlipped(s.CardIndex);
+                string? path = showBack ? (s.Card.BackArtworkPath ?? s.Card.ArtworkPath) : s.Card.ArtworkPath;
+                if (string.IsNullOrEmpty(path)) continue;
+                if (_displayPathCache.TryGetValue(DisplayKey(path, _bleedMm, _processBleed, _cardWmm), out var disp)
+                    && _imageCache.ContainsKey(disp))
+                    continue;
+                pathsToLoad.Add(path);
+            }
+            return pathsToLoad;
+        }
+
+        /// <summary>
+        /// Resolves each path to its display image (Scryfall edge-extend / MPCFill crop, or raw in
+        /// registration-marks mode) on a background thread and decodes it into the bitmap cache, yielding
+        /// to the UI between images. Returns false if the redraw was cancelled mid-load.
+        /// </summary>
+        private async Task<bool> PreloadDisplayImagesAsync(HashSet<string> pathsToLoad, int decodeWidth, CancellationToken token)
+        {
+            IsRendering = true;
+            int loaded = 0, total = pathsToLoad.Count;
+            double bleedMm = _bleedMm;
+            bool processBleed = _processBleed;
+            double cardWmm = _cardWmm;
+            foreach (var path in pathsToLoad)
+            {
+                if (token.IsCancellationRequested) return false;
+                await Task.Run(() =>
+                {
+                    string disp = _displayPathCache.GetOrAdd(DisplayKey(path, bleedMm, processBleed, cardWmm),
+                        _ => processBleed
+                            ? (_bleedProcessor.GetDisplayImage(path, bleedMm, cardWmm) ?? path)
+                            : path);
+                    LoadImageToCache(disp, decodeWidth);
+                }, token);
+                loaded++;
+                RenderProgress = $"Loading images ({loaded}/{total})...";
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+            }
+            return true;
         }
 
         private const float InToPx = 96f;
