@@ -19,6 +19,11 @@ namespace MTGProxyBuilder.Core.Services
         [JsonProperty("checkForUpdates")]
         public bool CheckForUpdates { get; set; } = true;
 
+        /// <summary>When enabled, every downloaded card image (Scryfall + MPCFill) is also copied,
+        /// at original size, into the front art library so it persists and is reusable by name.</summary>
+        [JsonProperty("autoSaveDownloadedToLibrary")]
+        public bool AutoSaveDownloadedToLibrary { get; set; }
+
         [JsonProperty("mpcFillUseFavoritesOnly")]
         public bool MpcFillUseFavoritesOnly { get; set; }
 

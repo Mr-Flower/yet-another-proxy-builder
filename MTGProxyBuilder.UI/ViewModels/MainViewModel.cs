@@ -1025,6 +1025,23 @@ public class MainViewModel : ViewModelBase
         ClearBusy();
     }
 
+    /// <summary>
+    /// fork-specific: when the "save downloaded images to library" option is on, copy each card's
+    /// full-size front art into the front art library so it persists and is reusable by name. The
+    /// MPCFill marker ("mpc_" filename) is preserved so bleed handling stays correct.
+    /// </summary>
+    private void ArchiveToLibraryIfEnabled(IEnumerable<CardModel> cards)
+    {
+        if (!_appSettings.Settings.AutoSaveDownloadedToLibrary) return;
+        foreach (var c in cards)
+        {
+            if (string.IsNullOrEmpty(c.ArtworkPath) || !File.Exists(c.ArtworkPath)) continue;
+            bool isMpc = c.Source == CardSource.MpcFill || BleedProcessor.ImageAlreadyHasBleed(c.ArtworkPath);
+            _frontArtLibraryService.AddFromFile(
+                c.ArtworkPath, c.Name, isMpc ? "MPCFill" : "Scryfall", markAsBled: isMpc);
+        }
+    }
+
     private void RemoveCard()
     {
         if (SelectedCard == null) return;
@@ -1388,6 +1405,7 @@ public class MainViewModel : ViewModelBase
             ApplyDefaultBackArt(card);
             _imageAdjust.AutoApply(card); // fork-specific: black-point etc. on Scryfall imports
             Cards.Add(card);
+            ArchiveToLibraryIfEnabled(new[] { card });
             ApplyFilterAndSort();
             StatusText = $"Added: {card.Name} ({card.SetName})";
         }
@@ -1798,6 +1816,7 @@ public class MainViewModel : ViewModelBase
                 PushUndo();
                 ApplyDefaultBackArt(card);
                 Cards.Add(card);
+                ArchiveToLibraryIfEnabled(new[] { card });
                 ApplyFilterAndSort();
                 StatusText = $"Added: {card.Name} (from MPCFill, {SelectedMpcFillCard.Source})";
             }
@@ -1875,6 +1894,7 @@ public class MainViewModel : ViewModelBase
 
             Cards.CollectionChanged -= OnCardsCollectionChanged;
             foreach (var c in result.Cards) { ApplyDefaultBackArt(c); Cards.Add(c); }
+            ArchiveToLibraryIfEnabled(result.Cards);
             Cards.CollectionChanged += OnCardsCollectionChanged;
 
             _currentProject.PageSettings.CenterGrid();
@@ -1939,6 +1959,7 @@ public class MainViewModel : ViewModelBase
 
             Cards.CollectionChanged -= OnCardsCollectionChanged;
             foreach (var c in result.Cards) { ApplyDefaultBackArt(c); Cards.Add(c); }
+            ArchiveToLibraryIfEnabled(result.Cards);
             Cards.CollectionChanged += OnCardsCollectionChanged;
 
             _currentProject.PageSettings.CenterGrid();
@@ -1984,6 +2005,7 @@ public class MainViewModel : ViewModelBase
 
             Cards.CollectionChanged -= OnCardsCollectionChanged;
             foreach (var c in result.Cards) { ApplyDefaultBackArt(c); Cards.Add(c); }
+            ArchiveToLibraryIfEnabled(result.Cards);
             Cards.CollectionChanged += OnCardsCollectionChanged;
 
             _currentProject.PageSettings.CenterGrid();

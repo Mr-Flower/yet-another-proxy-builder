@@ -95,6 +95,10 @@
                     </ComboBox>
 
                     <CheckBox x:Name="UpdateCheckBox" Content="Check for updates on startup" Margin="0,4,0,0"/>
+                    <CheckBox x:Name="AutoSaveLibraryBox" Margin="0,4,0,0"
+                              Content="Save every downloaded image (Scryfall + MPCFill) to the art library"/>
+                    <TextBlock Text="Keeps a full-size, reusable copy of each card image in the front art library. Downloads are always cached for previews regardless; this also archives them permanently."
+                               Foreground="#888" FontSize="10" TextWrapping="Wrap" Margin="20,0,0,0"/>
                 </StackPanel>
 
                 <!-- PAGE: Libraries -->

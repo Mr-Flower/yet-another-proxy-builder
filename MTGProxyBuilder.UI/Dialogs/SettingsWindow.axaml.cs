@@ -34,6 +34,7 @@ public partial class SettingsWindow : Window
         TokenTextBox.Text = s.DefaultTokenText;
         BleedBox.Text = s.DefaultBleedMm.ToString();
         UpdateCheckBox.IsChecked = s.CheckForUpdates;
+        AutoSaveLibraryBox.IsChecked = s.AutoSaveDownloadedToLibrary;
         UseFavoritesCheckBox.IsChecked = s.MpcFillUseFavoritesOnly;
 
         SelectComboByContent(PagePresetBox, s.DefaultPagePreset);
@@ -126,6 +127,7 @@ public partial class SettingsWindow : Window
         s.DefaultTokenText = TokenTextBox.Text ?? "";
         s.DefaultPagePreset = GetComboContent(PagePresetBox) ?? "A4";
         s.CheckForUpdates = UpdateCheckBox.IsChecked == true;
+        s.AutoSaveDownloadedToLibrary = AutoSaveLibraryBox.IsChecked == true;
         s.MpcFillUseFavoritesOnly = UseFavoritesCheckBox.IsChecked == true;
 
         if (float.TryParse(BleedBox.Text, out var bleed)) s.DefaultBleedMm = bleed;
