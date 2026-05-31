@@ -161,91 +161,8 @@ public partial class ArtSelectorWindow : Window
 
         var libraryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // 1. Library matches
-        if (_frontArtLibrary != null)
-        {
-            var libraryMatches = _frontArtLibrary.SearchByCardName(_card.Name);
-            if (libraryMatches.Count > 0)
-            {
-                StatusLabel.Text = $"Found {libraryMatches.Count} in library, searching online...";
-                foreach (var m in libraryMatches) libraryNames.Add(m.Name);
-
-                var deferredImages = new List<(Image img, string entryId, string path)>();
-                foreach (var entry in libraryMatches)
-                {
-                    if (shown.Contains(entry.FilePath)) continue;
-                    shown.Add(entry.FilePath);
-
-                    var border = new Border
-                    {
-                        Width = ArtTileBuilder.TileWidth, Height = ArtTileBuilder.TileHeight,
-                        Margin = new Thickness(4), Background = AppBrushes.TileBg,
-                        CornerRadius = new CornerRadius(4), Cursor = new Cursor(StandardCursorType.Hand),
-                        BorderThickness = new Thickness(2), BorderBrush = AppBrushes.AccentGreen,
-                        ClipToBounds = true
-                    };
-                    ToolTip.SetTip(border, $"{entry.Name}\nLibrary | {entry.Source}");
-
-                    var stack = new StackPanel();
-                    var imgBorder = new Border
-                    {
-                        Height = ArtTileBuilder.ImageHeight, Background = Brushes.Black,
-                        CornerRadius = new CornerRadius(3, 3, 0, 0), ClipToBounds = true
-                    };
-                    var img = new Image { Stretch = Stretch.UniformToFill };
-                    imgBorder.Child = img;
-                    deferredImages.Add((img, entry.Id, entry.FilePath));
-                    stack.Children.Add(imgBorder);
-                    stack.Children.Add(new TextBlock
-                    {
-                        Text = "★ " + entry.Name, Foreground = AppBrushes.AccentGreen,
-                        FontSize = ArtTileBuilder.LabelFontSize, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
-                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-                        Margin = new Thickness(3, 4, 3, 0)
-                    });
-                    stack.Children.Add(new TextBlock
-                    {
-                        Text = $"Library | {entry.Source}", Foreground = AppBrushes.TextMuted,
-                        FontSize = ArtTileBuilder.DetailFontSize, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-                        Margin = new Thickness(3, 0, 3, 2)
-                    });
-                    border.Child = stack;
-
-                    string path = entry.FilePath;
-                    string capturedName = entry.Name;
-                    string detail = $"Library | {entry.Source}";
-                    border.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) SelectOption(capturedName, path, detail, border); };
-                    border.DoubleTapped += (_, _) => { SelectOption(capturedName, path, detail, border); Close(); };
-                    border.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Right) ShowContextMenu(border, path, capturedName, null); };
-
-                    OptionsPanel.Children.Add(border);
-                    _allTiles.Add(new TileInfo(border, entry.Name, entry.Source, detail));
-                }
-
-                // Load thumbnails progressively
-                if (deferredImages.Count > 0)
-                {
-                    const int batchSize = 20;
-                    for (int i = 0; i < deferredImages.Count; i += batchSize)
-                    {
-                        var batch = deferredImages.Skip(i).Take(batchSize).ToList();
-                        var thumbSvc = _frontThumbnails;
-                        var bitmaps = await Task.Run(() =>
-                        {
-                            var results = new List<Bitmap?>();
-                            foreach (var (_, entryId, p) in batch)
-                            {
-                                var loadPath = thumbSvc?.GetOrCreate(entryId, p) ?? p;
-                                results.Add(ArtTileBuilder.GetThumbnail(loadPath));
-                            }
-                            return results;
-                        });
-                        for (int j = 0; j < batch.Count && j < bitmaps.Count; j++)
-                            if (bitmaps[j] != null) batch[j].img.Source = bitmaps[j];
-                    }
-                }
-            }
-        }
+        // 1. Library matches (★ green-bordered tiles, loaded before the online search)
+        await AddLibraryMatchesAsync(shown, libraryNames);
 
         // 2. API search
         StatusLabel.Text = $"Searching for \"{_card.Name}\"...";
@@ -369,6 +286,101 @@ public partial class ArtSelectorWindow : Window
             AddActionTile("Browse File...", () => _ = OnBrowseFileAsync());
     }
 
+    /// <summary>
+    /// Adds a tile for each front-library entry matching the card name (★, green border) and loads
+    /// their thumbnails. Records the matched names in <paramref name="libraryNames"/> so the online
+    /// results can skip art that's already in the library.
+    /// </summary>
+    private async Task AddLibraryMatchesAsync(HashSet<string> shown, HashSet<string> libraryNames)
+    {
+        if (_frontArtLibrary == null) return;
+        var libraryMatches = _frontArtLibrary.SearchByCardName(_card.Name);
+        if (libraryMatches.Count == 0) return;
+
+        StatusLabel.Text = $"Found {libraryMatches.Count} in library, searching online...";
+        foreach (var m in libraryMatches) libraryNames.Add(m.Name);
+
+        var deferredImages = new List<(Image img, string entryId, string path)>();
+        foreach (var entry in libraryMatches)
+            if (shown.Add(entry.FilePath))
+                deferredImages.Add(BuildLibraryTile(entry));
+
+        await LoadDeferredThumbnailsAsync(deferredImages, _frontThumbnails);
+    }
+
+    /// <summary>Builds one green-bordered library tile (image + name + source) wired for select /
+    /// double-click / context menu, adds it to the panel, and returns its deferred-image handle.</summary>
+    private (Image img, string entryId, string path) BuildLibraryTile(BackArtEntry entry)
+    {
+        var border = new Border
+        {
+            Width = ArtTileBuilder.TileWidth, Height = ArtTileBuilder.TileHeight,
+            Margin = new Thickness(4), Background = AppBrushes.TileBg,
+            CornerRadius = new CornerRadius(4), Cursor = new Cursor(StandardCursorType.Hand),
+            BorderThickness = new Thickness(2), BorderBrush = AppBrushes.AccentGreen,
+            ClipToBounds = true
+        };
+        ToolTip.SetTip(border, $"{entry.Name}\nLibrary | {entry.Source}");
+
+        var stack = new StackPanel();
+        var imgBorder = new Border
+        {
+            Height = ArtTileBuilder.ImageHeight, Background = Brushes.Black,
+            CornerRadius = new CornerRadius(3, 3, 0, 0), ClipToBounds = true
+        };
+        var img = new Image { Stretch = Stretch.UniformToFill };
+        imgBorder.Child = img;
+        stack.Children.Add(imgBorder);
+        stack.Children.Add(new TextBlock
+        {
+            Text = "★ " + entry.Name, Foreground = AppBrushes.AccentGreen,
+            FontSize = ArtTileBuilder.LabelFontSize, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, Margin = new Thickness(3, 4, 3, 0)
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = $"Library | {entry.Source}", Foreground = AppBrushes.TextMuted,
+            FontSize = ArtTileBuilder.DetailFontSize, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            Margin = new Thickness(3, 0, 3, 2)
+        });
+        border.Child = stack;
+
+        string path = entry.FilePath;
+        string capturedName = entry.Name;
+        string detail = $"Library | {entry.Source}";
+        border.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) SelectOption(capturedName, path, detail, border); };
+        border.DoubleTapped += (_, _) => { SelectOption(capturedName, path, detail, border); Close(); };
+        border.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Right) ShowContextMenu(border, path, capturedName, null); };
+
+        OptionsPanel.Children.Add(border);
+        _allTiles.Add(new TileInfo(border, entry.Name, entry.Source, detail));
+        return (img, entry.Id, entry.FilePath);
+    }
+
+    /// <summary>Loads tile thumbnails in batches of 20 on a background thread (via the shared
+    /// thumbnail cache), assigning each to its Image as the batch completes.</summary>
+    private static async Task LoadDeferredThumbnailsAsync(
+        List<(Image img, string entryId, string path)> deferred, ThumbnailService? thumbSvc)
+    {
+        const int batchSize = 20;
+        for (int i = 0; i < deferred.Count; i += batchSize)
+        {
+            var batch = deferred.Skip(i).Take(batchSize).ToList();
+            var bitmaps = await Task.Run(() =>
+            {
+                var results = new List<Bitmap?>();
+                foreach (var (_, entryId, p) in batch)
+                {
+                    var loadPath = thumbSvc?.GetOrCreate(entryId, p) ?? p;
+                    results.Add(ArtTileBuilder.GetThumbnail(loadPath));
+                }
+                return results;
+            });
+            for (int j = 0; j < batch.Count && j < bitmaps.Count; j++)
+                if (bitmaps[j] != null) batch[j].img.Source = bitmaps[j];
+        }
+    }
+
     private async Task LoadBackOptionsAsync(HashSet<string> shown)
     {
         if (!string.IsNullOrEmpty(_card.OriginalBackArtworkPath)
@@ -444,27 +456,10 @@ public partial class ArtSelectorWindow : Window
 
         StatusLabel.Text = $"{shown.Count} option(s) found";
 
-        // Load thumbnails
+        // Load thumbnails (shared loader, same batching as the front library)
         if (deferredImages.Count > 0)
         {
-            const int batchSize = 20;
-            for (int i = 0; i < deferredImages.Count; i += batchSize)
-            {
-                var batch = deferredImages.Skip(i).Take(batchSize).ToList();
-                var thumbSvc = _backThumbnails;
-                var bitmaps = await Task.Run(() =>
-                {
-                    var results = new List<Bitmap?>();
-                    foreach (var (_, entryId, p) in batch)
-                    {
-                        var loadPath = thumbSvc?.GetOrCreate(entryId, p) ?? p;
-                        results.Add(ArtTileBuilder.GetThumbnail(loadPath));
-                    }
-                    return results;
-                });
-                for (int j = 0; j < batch.Count && j < bitmaps.Count; j++)
-                    if (bitmaps[j] != null) batch[j].img.Source = bitmaps[j];
-            }
+            await LoadDeferredThumbnailsAsync(deferredImages, _backThumbnails);
             StatusLabel.Text = $"{shown.Count} option(s) found";
         }
     }
