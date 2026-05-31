@@ -959,13 +959,8 @@ public class MainViewModel : ViewModelBase
         if (paths.Length == 0) return;
 
         // Ask how to treat these local images for bleed (and what source they count as).
-        var choice = await _dialogService.ConfirmCancelAsync(
-            "How should these images be treated for bleed?\n\n" +
-            "• Yes = MPCFill style: they already include the 1/8\" bleed border (it will be trimmed)\n" +
-            "• No = Scryfall style: bare card, the bleed will be added for you",
-            "Local image bleed");
-        if (choice == MessageResult.Cancel) return;
-        bool asMpc = choice == MessageResult.Yes;
+        bool? asMpcChoice = await AskLocalImageBleedStyleAsync();
+        if (asMpcChoice is not bool asMpc) return; // cancelled
 
         PushUndo();
         SetBusy($"Loading {paths.Length} image(s)...");
@@ -973,31 +968,44 @@ public class MainViewModel : ViewModelBase
 
         Cards.CollectionChanged -= OnCardsCollectionChanged;
         foreach (var filePath in paths)
-        {
-            string name = Path.GetFileNameWithoutExtension(filePath);
-
-            // Persist the image in the front art library (named, so it's reusable as artwork by name
-            // later), tagging it MPCFill when asMpc so its built-in bleed is cropped correctly. Fall
-            // back to the original path if the library copy fails.
-            var entry = _frontArtLibraryService.AddFromFile(
-                filePath, name, asMpc ? "Local MPCFill" : "Local", markAsBled: asMpc);
-            string artPath = entry?.FilePath ?? filePath;
-
-            var card = new CardModel
-            {
-                Name = name,
-                ArtworkPath = artPath,
-                Source = asMpc ? CardSource.MpcFill : CardSource.Scryfall
-            };
-            ApplyDefaultBackArt(card);
-            Cards.Add(card);
-        }
+            Cards.Add(CreateCardFromLocalFile(filePath, asMpc));
         Cards.CollectionChanged += OnCardsCollectionChanged;
         _currentProject.PageSettings.CenterGrid();
         ApplyFilterAndSort();
         RefreshCanvas();
         StatusText = $"Added {paths.Length} card(s) ({(asMpc ? "MPCFill" : "Scryfall")} bleed)";
         ClearBusy();
+    }
+
+    /// <summary>Asks how local images should be treated for bleed. Returns true for MPCFill style
+    /// (crop the built-in 1/8"), false for Scryfall style (add bleed), or null if cancelled.</summary>
+    private async Task<bool?> AskLocalImageBleedStyleAsync()
+    {
+        var choice = await _dialogService.ConfirmCancelAsync(
+            "How should these images be treated for bleed?\n\n" +
+            "• Yes = MPCFill style: they already include the 1/8\" bleed border (it will be trimmed)\n" +
+            "• No = Scryfall style: bare card, the bleed will be added for you",
+            "Local image bleed");
+        return choice == MessageResult.Cancel ? null : choice == MessageResult.Yes;
+    }
+
+    /// <summary>Builds a card from a local image file, copying it into the front art library (named, so
+    /// it's reusable by name) with the right bleed marker, and falling back to the original path if the
+    /// library copy fails.</summary>
+    private CardModel CreateCardFromLocalFile(string filePath, bool asMpc)
+    {
+        string name = Path.GetFileNameWithoutExtension(filePath);
+        var entry = _frontArtLibraryService.AddFromFile(
+            filePath, name, asMpc ? "Local MPCFill" : "Local", markAsBled: asMpc);
+
+        var card = new CardModel
+        {
+            Name = name,
+            ArtworkPath = entry?.FilePath ?? filePath,
+            Source = asMpc ? CardSource.MpcFill : CardSource.Scryfall
+        };
+        ApplyDefaultBackArt(card);
+        return card;
     }
 
     /// <summary>
@@ -1489,32 +1497,10 @@ public class MainViewModel : ViewModelBase
         SetBusy("Generating PDF...");
         try
         {
-            bool success = await _pdfGeneratorService.GeneratePdfAsync(_currentProject, path);
-
-            if (success)
-            {
-                string svgInfo = "";
-                if (_currentProject.PrintSettings.ExportSvgCutLines)
-                {
-                    var svgService = new SvgCutLineService();
-                    string outputDir = Path.GetDirectoryName(path) ?? ".";
-                    string baseName = Path.GetFileNameWithoutExtension(path);
-                    var svgFiles = await svgService.GenerateSvgAsync(_currentProject, outputDir, baseName);
-                    svgInfo = svgFiles.Count > 0
-                        ? $"\n\nSVG cut files ({svgFiles.Count}):\n" + string.Join("\n", svgFiles.Select(Path.GetFileName))
-                        : "";
-                }
-
-                StatusText = $"PDF exported: {Path.GetFileName(path)}";
-                await _dialogService.ShowInfoAsync(
-                    $"PDF exported successfully!\n\n{path}{svgInfo}", "Export Complete");
-            }
+            if (await _pdfGeneratorService.GeneratePdfAsync(_currentProject, path))
+                await OnPdfExportedAsync(path);
             else
-            {
-                StatusText = "PDF export failed";
-                await _dialogService.ShowErrorAsync(
-                    "Failed to generate PDF. Check that card images exist.", "Export Failed");
-            }
+                await ReportPdfExportFailedAsync();
         }
         catch (Exception ex)
         {
@@ -1523,15 +1509,49 @@ public class MainViewModel : ViewModelBase
         }
         finally
         {
-            // Restore the compressed cached paths so the canvas/app stays lightweight.
-            foreach (var (card, front, back) in fullResSwaps)
-            {
-                card.ArtworkPath = front;
-                card.BackArtworkPath = back;
-            }
-            if (fullResSwaps.Count > 0) RefreshCanvas();
+            RestoreCachedArt(fullResSwaps); // keep the canvas/app on the lightweight cached copies
             ClearBusy();
         }
+    }
+
+    /// <summary>Reports a successful export, including any SVG cut-line sidecar files that were written.</summary>
+    private async Task OnPdfExportedAsync(string pdfPath)
+    {
+        string svgInfo = await ExportSvgSidecarIfEnabledAsync(pdfPath);
+        StatusText = $"PDF exported: {Path.GetFileName(pdfPath)}";
+        await _dialogService.ShowInfoAsync($"PDF exported successfully!\n\n{pdfPath}{svgInfo}", "Export Complete");
+    }
+
+    private async Task ReportPdfExportFailedAsync()
+    {
+        StatusText = "PDF export failed";
+        await _dialogService.ShowErrorAsync("Failed to generate PDF. Check that card images exist.", "Export Failed");
+    }
+
+    /// <summary>Writes SVG cut-line files next to the PDF when that option is on, and returns a short
+    /// summary line for the success dialog (empty when disabled or nothing was written).</summary>
+    private async Task<string> ExportSvgSidecarIfEnabledAsync(string pdfPath)
+    {
+        if (!_currentProject.PrintSettings.ExportSvgCutLines) return "";
+
+        var svgService = new SvgCutLineService();
+        string outputDir = Path.GetDirectoryName(pdfPath) ?? ".";
+        string baseName = Path.GetFileNameWithoutExtension(pdfPath);
+        var svgFiles = await svgService.GenerateSvgAsync(_currentProject, outputDir, baseName);
+        return svgFiles.Count > 0
+            ? $"\n\nSVG cut files ({svgFiles.Count}):\n" + string.Join("\n", svgFiles.Select(Path.GetFileName))
+            : "";
+    }
+
+    /// <summary>Restores the cards' compressed cached art paths after a full-resolution export.</summary>
+    private void RestoreCachedArt(List<(CardModel Card, string Front, string? Back)> swaps)
+    {
+        foreach (var (card, front, back) in swaps)
+        {
+            card.ArtworkPath = front;
+            card.BackArtworkPath = back;
+        }
+        if (swaps.Count > 0) RefreshCanvas();
     }
 
     /// <summary>
