@@ -278,15 +278,9 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         public async Task<(CardModel? Card, string? Error)> AddMpcFillCardAsync(MpcFillCard mpcCard)
         {
+            // Art is only cached (the cache key carries the "mpc_" bleed marker) — NOT auto-saved to
+            // the library. The library is user-managed (explicit "+ Add to Library" only).
             var path = await _search.DownloadMpcFillArtAsync(mpcCard);
-
-            if (path != null)
-            {
-                string libName = $"{mpcCard.Name} [{mpcCard.Source}]";
-                var entry = _frontLibrary.AddFromFile(path, libName, mpcCard.Source);
-                if (entry != null)
-                    _frontLibrary.ApplyMpcFillDefaults(entry.Id, mpcCard.Source);
-            }
 
             var card = new CardModel
             {

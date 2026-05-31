@@ -994,21 +994,11 @@ public class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// fork-specific: when the "save downloaded images to library" option is on, copy each card's
-    /// full-size front art into the front art library so it persists and is reusable by name. The
-    /// MPCFill marker ("mpc_" filename) is preserved so bleed handling stays correct.
+    /// fork-specific: intentionally a no-op. Downloaded art is kept ONLY in the image cache (browsed
+    /// as thumbnails, full file fetched on export); it is no longer auto-copied into the art library.
+    /// The library is user-managed — add art explicitly via "+ Add to Library" in the art selector.
     /// </summary>
-    private void ArchiveToLibraryIfEnabled(IEnumerable<CardModel> cards)
-    {
-        if (!_appSettings.Settings.AutoSaveDownloadedToLibrary) return;
-        foreach (var c in cards)
-        {
-            if (string.IsNullOrEmpty(c.ArtworkPath) || !File.Exists(c.ArtworkPath)) continue;
-            bool isMpc = c.Source == CardSource.MpcFill || BleedProcessor.ImageAlreadyHasBleed(c.ArtworkPath);
-            _frontArtLibraryService.AddFromFile(
-                c.ArtworkPath, c.Name, isMpc ? "MPCFill" : "Scryfall", markAsBled: isMpc);
-        }
-    }
+    private void ArchiveToLibraryIfEnabled(IEnumerable<CardModel> cards) { }
 
     private void RemoveCard()
     {
