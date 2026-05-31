@@ -240,10 +240,12 @@ public partial class ArtSelectorWindow : Window
         var mpcOpts = BuildSearchOptionsFromControls();
         mpcOpts.FuzzySearch = false;
 
+        // Reopen without re-querying Scryfall: GetAllPrintingsAsync caches the printing list on disk.
+        bool printingsWereCached = _scryfall.HasCachedPrintings(_card.Name);
         var scryfallTask = Task.Run(async () =>
         {
-            // uniquePrints: true -> every printing/version of this exact card
-            try { return (await _scryfall.SearchCardAsync($"!\"{_card.Name}\"", uniquePrints: true)).Cards; }
+            // every printing/version of this exact card (disk-cached across opens)
+            try { return await _scryfall.GetAllPrintingsAsync(_card.Name); }
             catch { return new List<ScryfallCard>(); }
         });
         var mpcTask = Task.Run(async () =>
@@ -266,7 +268,9 @@ public partial class ArtSelectorWindow : Window
 
         int totalImages = scryfallResults.Count + mpcResults.Count;
 
-        if (totalImages > 200)
+        // Only prompt about a large download the FIRST time (live search). On reopen the printing
+        // list — and its images — are already cached, so don't nag the user again.
+        if (totalImages > 200 && !printingsWereCached)
         {
             var confirmed = await Dispatcher.UIThread.InvokeAsync(async () =>
             {
@@ -726,8 +730,13 @@ public partial class ArtSelectorWindow : Window
                 tile.Source.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
                 tile.Detail.Contains(searchText, StringComparison.OrdinalIgnoreCase);
 
-            bool matchesSource = string.IsNullOrEmpty(sourceFilter) ||
-                tile.Source.Equals(sourceFilter, StringComparison.OrdinalIgnoreCase);
+            bool matchesSource = string.IsNullOrEmpty(sourceFilter)
+                || (sourceFilter.Equals(McpFillAllFilter, StringComparison.OrdinalIgnoreCase)
+                    // "MPCFill (all)" = any tile that isn't Scryfall or Library (i.e. an MPC source).
+                    ? (!tile.Source.Equals("Scryfall", StringComparison.OrdinalIgnoreCase)
+                       && !tile.Source.Equals("Library", StringComparison.OrdinalIgnoreCase)
+                       && !string.IsNullOrEmpty(tile.Source))
+                    : tile.Source.Equals(sourceFilter, StringComparison.OrdinalIgnoreCase));
 
             tile.Tile.IsVisible = matchesSearch && matchesSource;
             if (tile.Tile.IsVisible) visible++;
@@ -737,14 +746,33 @@ public partial class ArtSelectorWindow : Window
             StatusLabel.Text = $"Showing {visible} of {total} option(s)";
     }
 
+    // Synthetic dropdown entry that matches every MPCFill source at once.
+    private const string McpFillAllFilter = "MPCFill (all)";
+
     private void PopulateSourceFilter()
     {
-        var sources = _allTiles
+        var distinct = _allTiles
             .Where(t => !t.IsAction && !string.IsNullOrEmpty(t.Source))
             .Select(t => t.Source)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(s => s);
-        SearchBar.SetSources(sources, "All Sources");
+            .ToList();
+
+        bool hasScryfall = distinct.Any(s => s.Equals("Scryfall", StringComparison.OrdinalIgnoreCase));
+        bool hasLibrary = distinct.Any(s => s.Equals("Library", StringComparison.OrdinalIgnoreCase));
+        var mpcSources = distinct
+            .Where(s => !s.Equals("Scryfall", StringComparison.OrdinalIgnoreCase)
+                     && !s.Equals("Library", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Order: Scryfall, MPCFill (all), each MPC source, Library. ("All Sources" = no filter.)
+        var ordered = new List<string>();
+        if (hasScryfall) ordered.Add("Scryfall");
+        if (mpcSources.Count > 0) ordered.Add(McpFillAllFilter);
+        ordered.AddRange(mpcSources);
+        if (hasLibrary) ordered.Add("Library");
+
+        SearchBar.SetSources(ordered, "All Sources");
     }
 
     // ================================================================

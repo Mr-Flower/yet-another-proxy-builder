@@ -264,6 +264,44 @@ namespace MTGProxyBuilder.Core.Services
             }
         }
 
+        private string PrintingsCacheFile(string cardName)
+        {
+            string safe = string.Concat(cardName.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_'));
+            if (safe.Length > 80) safe = safe[..80];
+            return Path.Combine(_imageCache.CacheDirectory, $"printings_{safe}.json");
+        }
+
+        /// <summary>True if this card's full printing list is already cached on disk.</summary>
+        public bool HasCachedPrintings(string cardName) => File.Exists(PrintingsCacheFile(cardName));
+
+        /// <summary>
+        /// Returns every printing of the exact card name, cached to disk so reopening the art
+        /// selector doesn't re-query Scryfall every time. Falls back to a live unique=prints search
+        /// on a cache miss and persists the result.
+        /// </summary>
+        public async Task<List<ScryfallCard>> GetAllPrintingsAsync(string cardName)
+        {
+            string cacheFile = PrintingsCacheFile(cardName);
+            if (File.Exists(cacheFile))
+            {
+                try
+                {
+                    var json = await File.ReadAllTextAsync(cacheFile);
+                    var cached = JsonConvert.DeserializeObject<List<ScryfallCard>>(json);
+                    if (cached is { Count: > 0 }) return cached;
+                }
+                catch { /* corrupt cache -> fall through to live search */ }
+            }
+
+            var (cards, _) = await SearchCardAsync($"!\"{cardName}\"", uniquePrints: true);
+            if (cards.Count > 0)
+            {
+                try { await File.WriteAllTextAsync(cacheFile, JsonConvert.SerializeObject(cards)); }
+                catch { /* cache write is best-effort */ }
+            }
+            return cards;
+        }
+
         public async Task<string?> DownloadAndCacheImageAsync(ScryfallCard card, bool back = false, string size = "large")
         {
             string sizeSuffix = size == "large" ? "" : $"_{size}";
