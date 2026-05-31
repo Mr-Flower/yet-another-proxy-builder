@@ -79,7 +79,7 @@
                     Background="#3E3E42" Foreground="White" BorderThickness="0"
                     Click="OnCancel"/>
             <Button x:Name="OkBtn" Content="Apply" Padding="14,6"
-                    Background="#0078D4" Foreground="White" BorderThickness="0"
+                    Background="#7A6FB0" Foreground="White" BorderThickness="0"
                     Click="OnApply"/>
         </StackPanel>
     </Grid>

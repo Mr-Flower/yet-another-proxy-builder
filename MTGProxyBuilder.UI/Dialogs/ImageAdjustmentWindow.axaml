@@ -99,7 +99,7 @@
             <Button x:Name="CancelBtn" Content="Annulla" Padding="12,6"
                     Background="#3E3E42" Foreground="White" BorderThickness="0" Click="OnCancel"/>
             <Button x:Name="ApplyBtn" Content="Applica" Padding="14,6"
-                    Background="#0078D4" Foreground="White" BorderThickness="0" Click="OnApply"/>
+                    Background="#7A6FB0" Foreground="White" BorderThickness="0" Click="OnApply"/>
         </StackPanel>
     </Grid>
 </Window>

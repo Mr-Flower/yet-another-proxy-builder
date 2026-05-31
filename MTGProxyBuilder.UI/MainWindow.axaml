@@ -374,10 +374,10 @@
                                     </ListBox.ItemTemplate>
                                 </ListBox>
 
-                                <Border Height="320" Background="#111" CornerRadius="4" Margin="0,6,0,0"
+                                <Border Height="420" Background="#111" CornerRadius="4" Margin="0,6,0,0"
                                         ClipToBounds="True"
                                         IsVisible="{Binding SearchPreviewUrl, Converter={StaticResource NullToCollapsed}}">
-                                    <Image Stretch="Uniform" Margin="4"
+                                    <Image Stretch="Uniform" Margin="4" VerticalAlignment="Center"
                                            converters:ImageLoader.Source="{Binding SearchPreviewUrl}"/>
                                 </Border>
 
@@ -565,7 +565,7 @@
                                         Command="{Binding BrowseFrontArtworkCommand}"
                                         Content="Select Art..." Margin="0,0,0,6"
                                         HorizontalAlignment="Stretch" Padding="8,6"/>
-                                <Border Height="230" Background="#111" CornerRadius="4" Margin="0,0,0,4"
+                                <Border Height="300" Background="#111" CornerRadius="4" Margin="0,0,0,4"
                                         ClipToBounds="True">
                                     <Image Stretch="Uniform" Margin="4"
                                            converters:ImageLoader.Source="{Binding SelectedCard.ArtworkPath}"/>
@@ -590,7 +590,7 @@
                                         Command="{Binding BrowseBackArtworkCommand}"
                                         Content="Select Card Back..." Margin="0,0,0,6"
                                         HorizontalAlignment="Stretch" Padding="8,6"/>
-                                <Border Height="230" Background="#111" CornerRadius="4" Margin="0,0,0,4"
+                                <Border Height="300" Background="#111" CornerRadius="4" Margin="0,0,0,4"
                                         ClipToBounds="True">
                                     <Image Stretch="Uniform" Margin="4"
                                            converters:ImageLoader.Source="{Binding SelectedCard.BackArtworkPath}"/>

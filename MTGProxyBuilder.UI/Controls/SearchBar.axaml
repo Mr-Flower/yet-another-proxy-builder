@@ -21,7 +21,7 @@
 
         <!-- Search button -->
         <Button x:Name="SearchButton" Grid.Column="1" Content="Search" Padding="10,4" Margin="4,0,0,0"
-                Background="#0078D4" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"
+                Background="#7A6FB0" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"
                 Click="OnSearchButtonClick"/>
 
         <!-- Source filter dropdown -->

@@ -225,7 +225,10 @@ public class MainViewModel : ViewModelBase
         AddScryfallCardCommand = _addScryfallCardCmd;
         _adjustImageCmd = new RelayCommand(_ => _ = AdjustImageAsync(), _ => SelectedCard != null); // fork-specific
         AdjustImageCommand = _adjustImageCmd;
-        ApplyDarkenToAllCommand = new RelayCommand(_ => ApplyDarkenToAll(), _ => Cards.Count > 0); // fork-specific
+        // Always enabled: ApplyDarkenToAll no-ops gracefully with no cards. (RelayCommand has no
+        // auto-requery, and this command had no field to RaiseCanExecuteChanged from, so a
+        // Cards.Count predicate left the button stuck disabled after cards were added.)
+        ApplyDarkenToAllCommand = new RelayCommand(_ => ApplyDarkenToAll()); // fork-specific
         ResetDarkenCommand = new RelayCommand(_ => ResetDarken());
         SaveDarkenDefaultCommand = new RelayCommand(_ => SaveDarkenDefault());
 
@@ -1395,6 +1398,7 @@ public class MainViewModel : ViewModelBase
             _imageAdjust.BakeFront(c, settings);
             n++;
         }
+        RefreshCanvas();
 
         StatusText = result.Target == ImageAdjustmentTarget.ThisCard
             ? (settings.IsNoOp ? "Immagine ripristinata all'originale." : "Regolazione immagine applicata.")

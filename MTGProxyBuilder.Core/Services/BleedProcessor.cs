@@ -98,21 +98,32 @@ namespace MTGProxyBuilder.Core.Services
                         new SKRect(bleedPixels + srcW, bleedPixels, outW, bleedPixels + srcH));
                 }
 
-                // Corners: fill with the corner pixel color
-                var topLeft = source.GetPixel(0, 0);
-                var topRight = source.GetPixel(srcW - 1, 0);
-                var bottomLeft = source.GetPixel(0, srcH - 1);
-                var bottomRight = source.GetPixel(srcW - 1, srcH - 1);
+                // Corners: Scryfall/scan images have a WHITE triangle outside the rounded black
+                // frame at each corner. Sampling the literal corner pixel (0,0) picks up that white,
+                // so the bleed corner — and the white sliver that pokes into the image — stays white
+                // and shows as a gap once the card is cut with rounded corners.
+                //
+                // Instead sample the frame colour from a point inset diagonally into the card (which
+                // lands on the dark border, not the white triangle) and fill an enlarged corner square
+                // that also covers the white sliver inside the image. The painted region sits outside
+                // the rounded cut line, so this is safe for full-art cards too.
+                int inset = Math.Clamp(Math.Min(srcW, srcH) / 20, 1, Math.Min(srcW, srcH) / 2);
 
+                var topLeft = source.GetPixel(inset, inset);
+                var topRight = source.GetPixel(srcW - 1 - inset, inset);
+                var bottomLeft = source.GetPixel(inset, srcH - 1 - inset);
+                var bottomRight = source.GetPixel(srcW - 1 - inset, srcH - 1 - inset);
+
+                int corner = bleedPixels + inset;
                 using var paint = new SKPaint();
                 paint.Color = topLeft;
-                canvas.DrawRect(0, 0, bleedPixels, bleedPixels, paint);
+                canvas.DrawRect(0, 0, corner, corner, paint);
                 paint.Color = topRight;
-                canvas.DrawRect(bleedPixels + srcW, 0, bleedPixels, bleedPixels, paint);
+                canvas.DrawRect(outW - corner, 0, corner, corner, paint);
                 paint.Color = bottomLeft;
-                canvas.DrawRect(0, bleedPixels + srcH, bleedPixels, bleedPixels, paint);
+                canvas.DrawRect(0, outH - corner, corner, corner, paint);
                 paint.Color = bottomRight;
-                canvas.DrawRect(bleedPixels + srcW, bleedPixels + srcH, bleedPixels, bleedPixels, paint);
+                canvas.DrawRect(outW - corner, outH - corner, corner, corner, paint);
 
                 // Save as JPEG (much faster than PNG, fine for print)
                 using var stream = File.OpenWrite(outputPath);

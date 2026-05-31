@@ -18,7 +18,7 @@ public static class AppBrushes
     public static readonly SolidColorBrush Label = new(Color.FromRgb(0xAA, 0xAA, 0xAA));
 
     // Accents
-    public static readonly SolidColorBrush AccentBlue = new(Color.FromRgb(0x00, 0x78, 0xD4));
+    public static readonly SolidColorBrush AccentBlue = new(Color.FromRgb(0x7A, 0x6F, 0xB0));
     public static readonly SolidColorBrush AccentGreen = new(Color.FromRgb(0x4C, 0xAF, 0x50));
     public static readonly SolidColorBrush AccentRed = new(Color.FromRgb(0xE0, 0x60, 0x60));
     public static readonly SolidColorBrush SelectionBlue = new(Color.FromRgb(0x1E, 0x90, 0xFF));

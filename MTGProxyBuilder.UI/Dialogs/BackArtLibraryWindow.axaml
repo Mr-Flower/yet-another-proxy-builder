@@ -19,13 +19,13 @@
             <Setter Property="Padding" Value="3"/>
         </Style>
         <Style Selector="ListBoxItem:selected">
-            <Setter Property="Background" Value="#0078D4"/>
+            <Setter Property="Background" Value="#7A6FB0"/>
         </Style>
         <Style Selector="ListBoxItem:pointerover">
             <Setter Property="Background" Value="#3E3E42"/>
         </Style>
         <Style Selector="ListBoxItem:selected:pointerover">
-            <Setter Property="Background" Value="#0078D4"/>
+            <Setter Property="Background" Value="#7A6FB0"/>
         </Style>
     </Window.Styles>
 
@@ -41,7 +41,7 @@
         <Border Grid.Row="0" Background="#252526" Padding="8,6" BorderBrush="#333" BorderThickness="0,0,0,1">
             <WrapPanel>
                 <Button Content="+ Add Files" Padding="10,4" Margin="0,0,4,0"
-                        Background="#0078D4" Foreground="White" BorderThickness="0"
+                        Background="#7A6FB0" Foreground="White" BorderThickness="0"
                         Click="OnAddFromFile"/>
                 <Button Content="Download MPCFill Backs" x:Name="DownloadBtn" Padding="10,4" Margin="0,0,4,0"
                         Background="#3E3E42" Foreground="White" BorderThickness="0"

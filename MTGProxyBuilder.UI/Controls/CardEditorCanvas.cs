@@ -83,7 +83,11 @@ namespace MTGProxyBuilder.UI.Controls
                 change.Property == ZoomProperty ||
                 change.Property == RefreshTriggerProperty)
             {
-                if (change.Property == ProjectProperty)
+                // Re-subscribe on RefreshTrigger too: layers are added to the existing Project
+                // instance (Project itself never changes), bumping RefreshTrigger. Without this,
+                // newly added layers' PropertyChanged is never hooked, so Property Panel edits
+                // (text, font, colour, size, rotation…) wouldn't repaint the canvas live.
+                if (change.Property == ProjectProperty || change.Property == RefreshTriggerProperty)
                     SubscribeToLayers();
                 QueueRedraw();
             }

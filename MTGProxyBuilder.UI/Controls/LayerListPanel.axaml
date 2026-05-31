@@ -17,14 +17,14 @@
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
         <Style Selector="ListBoxItem:selected">
-            <Setter Property="Background" Value="#0078D4"/>
+            <Setter Property="Background" Value="#7A6FB0"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
         <Style Selector="ListBoxItem:pointerover">
             <Setter Property="Background" Value="#3E3E42"/>
         </Style>
         <Style Selector="ListBoxItem:selected:pointerover">
-            <Setter Property="Background" Value="#0078D4"/>
+            <Setter Property="Background" Value="#7A6FB0"/>
         </Style>
     </UserControl.Styles>
 

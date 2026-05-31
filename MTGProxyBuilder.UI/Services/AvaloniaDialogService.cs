@@ -114,7 +114,7 @@ public class AvaloniaDialogService : IDialogService
     // ================================================================
 
     public Task ShowInfoAsync(string message, string title = "Information")
-        => ShowMessageAsync(message, title, "#0078D4", hasCancel: false, hasNo: false);
+        => ShowMessageAsync(message, title, "#7A6FB0", hasCancel: false, hasNo: false);
 
     public Task ShowErrorAsync(string message, string title = "Error")
         => ShowMessageAsync(message, title, "#C42B1C", hasCancel: false, hasNo: false);
@@ -124,12 +124,12 @@ public class AvaloniaDialogService : IDialogService
 
     public async Task<bool> ConfirmAsync(string message, string title = "Confirm")
     {
-        var result = await ShowMessageAsync(message, title, "#0078D4", hasCancel: false, hasNo: true);
+        var result = await ShowMessageAsync(message, title, "#7A6FB0", hasCancel: false, hasNo: true);
         return result == MessageResult.Yes;
     }
 
     public async Task<MessageResult> ConfirmCancelAsync(string message, string title = "Confirm")
-        => await ShowMessageAsync(message, title, "#0078D4", hasCancel: true, hasNo: true);
+        => await ShowMessageAsync(message, title, "#7A6FB0", hasCancel: true, hasNo: true);
 
     private static async Task<MessageResult> ShowMessageAsync(
         string message, string title, string accentHex, bool hasCancel, bool hasNo)

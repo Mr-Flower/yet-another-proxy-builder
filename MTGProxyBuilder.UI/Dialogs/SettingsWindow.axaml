@@ -8,7 +8,7 @@
 
     <Window.Styles>
         <Style Selector="TextBlock.SectionHeader">
-            <Setter Property="Foreground" Value="#0078D4"/>
+            <Setter Property="Foreground" Value="#7A6FB0"/>
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Margin" Value="0,10,0,4"/>
@@ -241,7 +241,7 @@
                         Background="#3E3E42" Foreground="White" BorderThickness="0"
                         Click="OnCancel"/>
                 <Button Content="Save" Padding="14,5"
-                        Background="#0078D4" Foreground="White" BorderThickness="0"
+                        Background="#7A6FB0" Foreground="White" BorderThickness="0"
                         Click="OnSave"/>
             </StackPanel>
         </Border>
