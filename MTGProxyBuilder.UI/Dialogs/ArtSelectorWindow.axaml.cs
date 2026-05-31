@@ -301,52 +301,51 @@ public partial class ArtSelectorWindow : Window
         int completed = 0;
         var semaphore = new SemaphoreSlim(8);
 
-        var scryfallDownloads = scryfallResults
-            .Where(sc => sc.GetImageUrl() != null)
-            .Select(async sc =>
-            {
-                await semaphore.WaitAsync();
-                try
-                {
-                    var cached = await _scryfall.DownloadAndCacheImageAsync(sc, size: "normal");
-                    var done = Interlocked.Increment(ref completed);
-                    await Dispatcher.UIThread.InvokeAsync(() => StatusLabel.Text = $"Downloading art {done}/{totalImages}...");
-                    if (cached != null)
-                        return (Label: $"{sc.SetName} #{sc.CollectorNumber}", Path: cached,
-                                Detail: $"Scryfall | {sc.Artist ?? ""}", Card: (ScryfallCard?)sc, Source: (string?)null);
-                    return default;
-                }
-                finally { semaphore.Release(); }
-            }).ToList();
-
-        var mpcDownloads = mpcResults.Select(async mc =>
+        // Add each tile AS its image resolves (not after the whole batch), and resolve already-cached
+        // art instantly — skipping the semaphore and the download path entirely. So reopening the
+        // selector shows every previously-downloaded option immediately, and on a first open the tiles
+        // stream in instead of all appearing at once after the slowest download.
+        void AddResultTile(string label, string path, string detail, ScryfallCard? card, string? source)
         {
-            await semaphore.WaitAsync();
-            try
+            if (shown.Add(path))
             {
-                var cached = await _mpcFill.DownloadAndCacheImageAsync(mc);
-                var done = Interlocked.Increment(ref completed);
-                await Dispatcher.UIThread.InvokeAsync(() => StatusLabel.Text = $"Downloading art {done}/{totalImages}...");
-                if (cached != null)
-                    return (Label: mc.Name, Path: cached,
-                            Detail: $"MPCFill | {mc.Source} | {mc.Dpi} DPI", Card: (ScryfallCard?)null, Source: (string?)mc.Source);
-                return default;
-            }
-            finally { semaphore.Release(); }
-        }).ToList();
-
-        var downloadResults = await Task.WhenAll(scryfallDownloads.Concat(mpcDownloads));
-
-        foreach (var result in downloadResults)
-        {
-            if (result.Path != null && !shown.Contains(result.Path))
-            {
-                AddOption(result.Label, result.Path, false, result.Detail, result.Source);
-                shown.Add(result.Path);
-                if (result.Card != null)
-                    _scryfallCardsByPath[result.Path] = result.Card;
+                AddOption(label, path, false, detail, source);
+                if (card != null)
+                    _scryfallCardsByPath[path] = card;
             }
         }
+
+        async Task ResolveAsync(string? cachedPath, Func<Task<string?>> download,
+            string label, string detail, ScryfallCard? card, string? source)
+        {
+            string? path = cachedPath;
+            if (path == null)
+            {
+                await semaphore.WaitAsync();
+                try { path = await download(); }
+                finally { semaphore.Release(); }
+            }
+            var done = Interlocked.Increment(ref completed);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (path != null) AddResultTile(label, path, detail, card, source);
+                StatusLabel.Text = $"Loading art {done}/{totalImages}...";
+            });
+        }
+
+        var scryfallDownloads = scryfallResults
+            .Where(sc => sc.GetImageUrl() != null)
+            .Select(sc => ResolveAsync(
+                _scryfall.GetCachedImagePath(sc, size: "normal"),
+                () => _scryfall.DownloadAndCacheImageAsync(sc, size: "normal"),
+                $"{sc.SetName} #{sc.CollectorNumber}", $"Scryfall | {sc.Artist ?? ""}", sc, null));
+
+        var mpcDownloads = mpcResults.Select(mc => ResolveAsync(
+            _mpcFill.GetCachedImagePath(mc),
+            () => _mpcFill.DownloadAndCacheImageAsync(mc),
+            mc.Name, $"MPCFill | {mc.Source} | {mc.Dpi} DPI", null, mc.Source));
+
+        await Task.WhenAll(scryfallDownloads.Concat(mpcDownloads));
 
         if (_frontArtLibrary == null)
             AddActionTile("Browse File...", () => _ = OnBrowseFileAsync());

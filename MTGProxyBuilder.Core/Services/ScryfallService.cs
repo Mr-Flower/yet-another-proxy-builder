@@ -326,10 +326,21 @@ namespace MTGProxyBuilder.Core.Services
             return await _imageCache.CacheImageFromUrlAsync(_httpClient, url, cacheKey);
         }
 
-        public async Task<string?> DownloadAndCacheImageAsync(ScryfallCard card, bool back = false, string size = "large")
+        /// <summary>Cache key for a card image at a given size/face (shared by download + cache-probe).</summary>
+        private static string ImageCacheKey(ScryfallCard card, bool back, string size)
         {
             string sizeSuffix = size == "large" ? "" : $"_{size}";
-            string cacheKey = back ? $"{card.Id}_back{sizeSuffix}" : $"{card.Id}{sizeSuffix}";
+            return back ? $"{card.Id}_back{sizeSuffix}" : $"{card.Id}{sizeSuffix}";
+        }
+
+        /// <summary>Cached path for this card's image if already on disk, else null. Lets callers (the
+        /// art selector) show already-downloaded art instantly without re-entering the download path.</summary>
+        public string? GetCachedImagePath(ScryfallCard card, bool back = false, string size = "large")
+            => _imageCache.GetCachedImagePath(ImageCacheKey(card, back, size));
+
+        public async Task<string?> DownloadAndCacheImageAsync(ScryfallCard card, bool back = false, string size = "large")
+        {
+            string cacheKey = ImageCacheKey(card, back, size);
 
             var cached = _imageCache.GetCachedImagePath(cacheKey);
             if (cached != null) return cached;

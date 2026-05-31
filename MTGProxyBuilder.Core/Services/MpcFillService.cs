@@ -223,6 +223,11 @@ namespace MTGProxyBuilder.Core.Services
             catch (Exception ex) { return (new(), $"Error: {ex.Message}"); }
         }
 
+        /// <summary>Cached path for this card's image if already on disk, else null. Lets callers (the
+        /// art selector) show already-downloaded art instantly without re-entering the download path.</summary>
+        public string? GetCachedImagePath(MpcFillCard card)
+            => _imageCache.GetCachedImagePath($"mpc_{card.Identifier}");
+
         /// <summary>Download and cache a card image from MPCFill.</summary>
         public async Task<string?> DownloadAndCacheImageAsync(MpcFillCard card)
         {
