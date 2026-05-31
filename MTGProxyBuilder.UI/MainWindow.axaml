@@ -422,8 +422,38 @@
             <GridSplitter Grid.Column="1" Background="#243352" ResizeDirection="Columns"/>
 
             <!-- ===== LEFT: Canvas / Page Preview ===== -->
-            <Grid Grid.Column="2">
-                <ScrollViewer x:Name="CanvasScrollViewer"
+            <Grid Grid.Column="2" RowDefinitions="Auto,*">
+
+                <!-- Compact filter / sort bar above the grid (replaces the old Filter tab) -->
+                <Border Grid.Row="0" Background="#16213E" Padding="8,5">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="Filter" Foreground="#7C8AA5" FontSize="11" VerticalAlignment="Center"/>
+                        <TextBox Text="{Binding FilterText}" Width="160" Padding="6,3" FontSize="11"
+                                 Watermark="name…"
+                                 Background="#243352" Foreground="White" BorderBrush="#3A4A6B" CaretBrush="White"/>
+                        <ComboBox ItemsSource="{Binding RarityOptions}" SelectedItem="{Binding FilterRarity}"
+                                  MinWidth="90" Padding="4,2" FontSize="11" VerticalAlignment="Center"/>
+                        <ComboBox ItemsSource="{Binding ColorOptions}" SelectedItem="{Binding FilterColor}"
+                                  MinWidth="90" Padding="4,2" FontSize="11" VerticalAlignment="Center"/>
+                        <Border Width="1" Background="#3A4A6B" Margin="2,2"/>
+                        <TextBlock Text="Sort" Foreground="#7C8AA5" FontSize="11" VerticalAlignment="Center"/>
+                        <ComboBox ItemsSource="{Binding SortOptions}" SelectedItem="{Binding SortBy}"
+                                  MinWidth="110" Padding="4,2" FontSize="11" VerticalAlignment="Center"/>
+                        <CheckBox Content="Desc" IsChecked="{Binding SortDescending}"
+                                  Foreground="#CCC" FontSize="11" VerticalAlignment="Center"/>
+                        <Button Theme="{StaticResource ToolBtn}" Command="{Binding ApplySortToProjectCommand}"
+                                Content="Apply" Padding="8,3" FontSize="11"/>
+                        <Button Theme="{StaticResource ToolBtn}" Command="{Binding ClearFilterCommand}"
+                                Content="Clear" Padding="8,3" FontSize="11"/>
+                        <TextBlock Foreground="#7C8AA5" FontSize="11" VerticalAlignment="Center">
+                            <Run Text="{Binding FilteredCards.Count, Mode=OneWay}"/>
+                            <Run Text="/"/>
+                            <Run Text="{Binding Cards.Count, Mode=OneWay}"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <ScrollViewer Grid.Row="1" x:Name="CanvasScrollViewer"
                               HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Auto"
                               Background="#0F1729">
@@ -854,65 +884,6 @@
                     </ScrollViewer>
                 </TabItem>
 
-                <!-- ===== FILTER PANEL ===== -->
-                <TabItem Header="Filter" Foreground="#AAA">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#16213E">
-                        <StackPanel Margin="10,8">
-                            <TextBlock Text="FILTER" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
-                            <TextBlock Text="Search" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
-                            <TextBox Text="{Binding FilterText}" Padding="6,4" FontSize="11"
-                                     Background="#243352" Foreground="White" BorderBrush="#555"
-                                     CaretBrush="White" Margin="0,0,0,6"/>
-
-                            <Grid Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="Rarity" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
-                                    <ComboBox ItemsSource="{Binding RarityOptions}" SelectedItem="{Binding FilterRarity}"
-                                              Padding="3" FontSize="11"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Text="Color" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
-                                    <ComboBox ItemsSource="{Binding ColorOptions}" SelectedItem="{Binding FilterColor}"
-                                              Padding="3" FontSize="11"/>
-                                </StackPanel>
-                            </Grid>
-
-                            <TextBlock Text="SORT" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,8,0,6"/>
-                            <TextBlock Text="Sort by" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
-                            <ComboBox ItemsSource="{Binding SortOptions}" SelectedItem="{Binding SortBy}"
-                                      Padding="3" FontSize="11" Margin="0,0,0,6"/>
-                            <CheckBox Content="Descending" IsChecked="{Binding SortDescending}"
-                                      Foreground="#CCC" Margin="0,0,0,8"/>
-
-                            <Grid Margin="0,0,0,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="4"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Button Grid.Column="0" Theme="{StaticResource AccentBtn}"
-                                        Command="{Binding ApplySortToProjectCommand}"
-                                        Content="Apply Sort" Margin="0,0,2,0"/>
-                                <Button Grid.Column="2" Theme="{StaticResource ToolBtn}"
-                                        Command="{Binding ClearFilterCommand}"
-                                        Content="Clear All" Margin="2,0,0,0"/>
-                            </Grid>
-
-                            <TextBlock Foreground="#888" FontSize="11" Margin="0,8,0,0">
-                                <Run Text="Showing "/>
-                                <Run Text="{Binding FilteredCards.Count, Mode=OneWay}"/>
-                                <Run Text=" of "/>
-                                <Run Text="{Binding Cards.Count, Mode=OneWay}"/>
-                                <Run Text=" cards"/>
-                            </TextBlock>
-                        </StackPanel>
-                    </ScrollViewer>
-                </TabItem>
 
             </TabControl>
         </Grid>
