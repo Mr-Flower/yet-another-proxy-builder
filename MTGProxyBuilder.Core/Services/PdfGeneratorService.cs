@@ -89,6 +89,13 @@ namespace MTGProxyBuilder.Core.Services
             });
         }
 
+        /// <summary>Pre-computed point-space geometry for one page's card grid.</summary>
+        private readonly record struct PageGeometry(
+            float StartX, float StartY, float BleedPt, float CardWPt, float CardHPt,
+            float CellW, float CellH, int Cols, float PageWPt, float PageHPt);
+
+        /// <summary>Renders one page: cut guides (behind), card art + overlay text, outlines, then
+        /// registration marks. Returns early when the page would be empty.</summary>
         private void AddPage(PdfDocument doc, PageLayout settings, PrintSettings printSettings,
             List<CardModel> cards, int pageIndex, bool front,
             Dictionary<string, string> bleedCache)
@@ -98,97 +105,103 @@ namespace MTGProxyBuilder.Core.Services
 
             int perPage = settings.CardsPerPage;
             if (perPage <= 0) return;
-
             int startIdx = pageIndex * perPage;
             if (startIdx >= cards.Count) return;
 
             using var gfx = XGraphics.FromPdfPage(page);
-
-            // Card-position adjustment: nudge the whole centered grid on the sheet (printer offset
-            // compensation). Only the draw origin moves — card spacing and bleed are unchanged.
-            float startX = (settings.MarginLeftMm + settings.OffsetXmm) * MmToPt;
-            float startY = (settings.MarginTopMm + settings.OffsetYmm) * MmToPt;
-            // Bleed magnitude locked to the MPC 1/8" standard (BleedWidthMm only toggles it on/off),
-            // matching the bled images produced in GeneratePdfAsync so the cut line lands correctly.
-            float bleedPt = settings.EffectiveBleedMm * MmToPt;
-            float cardWPt = settings.CardWidthMm * MmToPt;
-            float cardHPt = settings.CardHeightMm * MmToPt;
-            float cellW = cardWPt + 2 * bleedPt;
-            float cellH = cardHPt + 2 * bleedPt;
-
-            int cols = settings.CardsPerRow;
-            float pageWPt = settings.PageWidthMm * MmToPt;
-            float pageHPt = settings.PageHeightMm * MmToPt;
-
-            // When registration marks are active, suppress bleed, cut guides, and outlines
+            var geo = ComputeGeometry(settings);
+            // Registration-marks mode suppresses bleed, cut guides and outlines.
             bool useBleed = bleedCache.Count > 0 && !printSettings.ShowRegistrationMarks;
 
-            // Pass 1: Draw cut guides BEHIND card art (disabled with registration marks)
             if (printSettings.ShowCutGuides && !printSettings.ShowRegistrationMarks)
+                DrawCutGuidesPass(gfx, geo, cards, startIdx, perPage, front);
+
+            DrawCardsPass(gfx, geo, cards, startIdx, perPage, front, bleedCache, useBleed);
+
+            if (printSettings.ShowCardOutline && !printSettings.ShowRegistrationMarks)
+                DrawOutlinesPass(gfx, geo, printSettings, cards, startIdx, perPage, front);
+
+            if (printSettings.ShowRegistrationMarks && front)
+                DrawRegistrationMarks(gfx, geo.PageWPt, geo.PageHPt, printSettings);
+        }
+
+        /// <summary>
+        /// Computes the page grid geometry in points. The grid origin includes the user's card-position
+        /// adjustment (printer-offset compensation — moves the whole grid, not card spacing). The bleed
+        /// is the MPC 1/8" standard (BleedWidthMm only toggles it), matching the bled images.
+        /// </summary>
+        private static PageGeometry ComputeGeometry(PageLayout s)
+        {
+            float bleedPt = s.EffectiveBleedMm * MmToPt;
+            float cardWPt = s.CardWidthMm * MmToPt;
+            float cardHPt = s.CardHeightMm * MmToPt;
+            return new PageGeometry(
+                StartX: (s.MarginLeftMm + s.OffsetXmm) * MmToPt,
+                StartY: (s.MarginTopMm + s.OffsetYmm) * MmToPt,
+                BleedPt: bleedPt, CardWPt: cardWPt, CardHPt: cardHPt,
+                CellW: cardWPt + 2 * bleedPt, CellH: cardHPt + 2 * bleedPt,
+                Cols: s.CardsPerRow,
+                PageWPt: s.PageWidthMm * MmToPt, PageHPt: s.PageHeightMm * MmToPt);
+        }
+
+        /// <summary>Top-left point of cell <paramref name="i"/>. Back pages mirror columns so they line
+        /// up with the fronts when the sheet is flipped.</summary>
+        private static (float X, float Y) CellOrigin(PageGeometry g, int i, bool front)
+        {
+            int row = i / g.Cols;
+            int col = front ? (i % g.Cols) : (g.Cols - 1 - (i % g.Cols));
+            return (g.StartX + col * g.CellW, g.StartY + row * g.CellH);
+        }
+
+        /// <summary>Draws the cut guides for every occupied cell (behind the card art).</summary>
+        private void DrawCutGuidesPass(XGraphics gfx, PageGeometry g, List<CardModel> cards,
+            int startIdx, int perPage, bool front)
+        {
+            for (int i = 0; i < perPage && startIdx + i < cards.Count; i++)
             {
-                for (int i = 0; i < perPage && (startIdx + i) < cards.Count; i++)
-                {
-                    int row = i / cols;
-                    int col = front ? (i % cols) : (cols - 1 - (i % cols));
-                    float cellX = startX + col * cellW;
-                    float cellY = startY + row * cellH;
-
-                    DrawCutGuides(gfx, cellX, cellY, cellW, cellH, bleedPt, cardWPt, cardHPt, pageWPt, pageHPt);
-                }
+                var (x, y) = CellOrigin(g, i, front);
+                DrawCutGuides(gfx, x, y, g.CellW, g.CellH, g.BleedPt, g.CardWPt, g.CardHPt, g.PageWPt, g.PageHPt);
             }
+        }
 
-            // Pass 2: Draw card images ON TOP of cut guides
-            for (int i = 0; i < perPage && (startIdx + i) < cards.Count; i++)
+        /// <summary>Draws each card's image (and its overlay text) on top of the cut guides.</summary>
+        private void DrawCardsPass(XGraphics gfx, PageGeometry g, List<CardModel> cards,
+            int startIdx, int perPage, bool front, Dictionary<string, string> bleedCache, bool useBleed)
+        {
+            for (int i = 0; i < perPage && startIdx + i < cards.Count; i++)
             {
                 var card = cards[startIdx + i];
+                var (x, y) = CellOrigin(g, i, front);
+                DrawCardImage(gfx, g, card, x, y, front, bleedCache, useBleed);
 
-                int row = i / cols;
-                int col = front ? (i % cols) : (cols - 1 - (i % cols));
-
-                float cellX = startX + col * cellW;
-                float cellY = startY + row * cellH;
-
-                string imagePath = front ? card.ArtworkPath : (card.BackArtworkPath ?? card.ArtworkPath);
-
-                if (useBleed && !string.IsNullOrEmpty(imagePath) && bleedCache.TryGetValue(imagePath, out var bleedImage))
-                {
-                    DrawCard(gfx, bleedImage, cellX, cellY, cellW, cellH);
-                }
-                else if (!string.IsNullOrEmpty(imagePath))
-                {
-                    DrawCard(gfx, imagePath, cellX + bleedPt, cellY + bleedPt, cardWPt, cardHPt);
-                }
-                else
-                {
-                    DrawCard(gfx, null, cellX + bleedPt, cellY + bleedPt, cardWPt, cardHPt);
-                }
-
-                // Overlay text (e.g. "TOKEN") rendered on front face only
                 if (front && !string.IsNullOrEmpty(card.OverlayText))
-                {
-                    DrawOverlayText(gfx, card.OverlayText,
-                        cellX + bleedPt, cellY + bleedPt, cardWPt, cardHPt);
-                }
+                    DrawOverlayText(gfx, card.OverlayText, x + g.BleedPt, y + g.BleedPt, g.CardWPt, g.CardHPt);
             }
+        }
 
-            // Pass 3: Draw card outlines ON TOP of card art (disabled with registration marks)
-            if (printSettings.ShowCardOutline && !printSettings.ShowRegistrationMarks)
+        /// <summary>Draws one card: the bled image filling the cell when bleed is on, otherwise the bare
+        /// card inset by the bleed margin (or a placeholder when there's no art).</summary>
+        private void DrawCardImage(XGraphics gfx, PageGeometry g, CardModel card, float cellX, float cellY,
+            bool front, Dictionary<string, string> bleedCache, bool useBleed)
+        {
+            string imagePath = front ? card.ArtworkPath : (card.BackArtworkPath ?? card.ArtworkPath);
+
+            if (useBleed && !string.IsNullOrEmpty(imagePath) && bleedCache.TryGetValue(imagePath, out var bleedImage))
+                DrawCard(gfx, bleedImage, cellX, cellY, g.CellW, g.CellH);
+            else if (!string.IsNullOrEmpty(imagePath))
+                DrawCard(gfx, imagePath, cellX + g.BleedPt, cellY + g.BleedPt, g.CardWPt, g.CardHPt);
+            else
+                DrawCard(gfx, null, cellX + g.BleedPt, cellY + g.BleedPt, g.CardWPt, g.CardHPt);
+        }
+
+        /// <summary>Draws the card outline guides for every occupied cell (on top of the card art).</summary>
+        private void DrawOutlinesPass(XGraphics gfx, PageGeometry g, PrintSettings printSettings,
+            List<CardModel> cards, int startIdx, int perPage, bool front)
+        {
+            for (int i = 0; i < perPage && startIdx + i < cards.Count; i++)
             {
-                for (int i = 0; i < perPage && (startIdx + i) < cards.Count; i++)
-                {
-                    int row = i / cols;
-                    int col = front ? (i % cols) : (cols - 1 - (i % cols));
-                    float cellX = startX + col * cellW;
-                    float cellY = startY + row * cellH;
-
-                    DrawCardOutline(gfx, cellX, cellY, cellW, cellH, bleedPt, cardWPt, cardHPt, printSettings);
-                }
-            }
-
-            // Pass 4: Draw registration marks ON TOP of everything (front pages only)
-            if (printSettings.ShowRegistrationMarks && front)
-            {
-                DrawRegistrationMarks(gfx, pageWPt, pageHPt, printSettings);
+                var (x, y) = CellOrigin(g, i, front);
+                DrawCardOutline(gfx, x, y, g.CellW, g.CellH, g.BleedPt, g.CardWPt, g.CardHPt, printSettings);
             }
         }
 
