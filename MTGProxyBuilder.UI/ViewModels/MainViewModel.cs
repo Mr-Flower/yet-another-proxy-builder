@@ -166,6 +166,7 @@ public class MainViewModel : ViewModelBase
     private readonly RelayCommand _scryfallSearchCmd;
     private readonly RelayCommand _addScryfallCardCmd;
     private readonly RelayCommand _adjustImageCmd; // fork-specific
+    private readonly RelayCommand _unlinkCardCopyCmd; // fork-specific
     private readonly RelayCommand _addMpcFillCardCmd;
     private readonly RelayCommand _clearAllCardsCmd;
     private readonly RelayCommand _updateAllArtFromMpcFillCmd;
@@ -225,6 +226,8 @@ public class MainViewModel : ViewModelBase
         AddScryfallCardCommand = _addScryfallCardCmd;
         _adjustImageCmd = new RelayCommand(_ => _ = AdjustImageAsync(), _ => SelectedCard != null); // fork-specific
         AdjustImageCommand = _adjustImageCmd;
+        _unlinkCardCopyCmd = new RelayCommand(_ => UnlinkCardCopy(), _ => SelectedCard != null && SelectedCard.Quantity > 1); // fork-specific
+        UnlinkCardCopyCommand = _unlinkCardCopyCmd;
         // Always enabled: ApplyDarkenToAll no-ops gracefully with no cards. (RelayCommand has no
         // auto-requery, and this command had no field to RaiseCanExecuteChanged from, so a
         // Cards.Count predicate left the button stuck disabled after cards were added.)
@@ -402,6 +405,7 @@ public class MainViewModel : ViewModelBase
                 _browseBackArtworkCmd.RaiseCanExecuteChanged();
                 _applyBackArtToSelectedCmd.RaiseCanExecuteChanged();
                 _adjustImageCmd.RaiseCanExecuteChanged(); // fork-specific
+                _unlinkCardCopyCmd.RaiseCanExecuteChanged(); // fork-specific
             }
         }
     }
@@ -824,6 +828,7 @@ public class MainViewModel : ViewModelBase
     public ICommand ScryfallSearchCommand { get; }
     public ICommand AddScryfallCardCommand { get; }
     public ICommand AdjustImageCommand { get; } // fork-specific
+    public ICommand UnlinkCardCopyCommand { get; } // fork-specific
     public ICommand ApplyDarkenToAllCommand { get; } // fork-specific: right-side Darken panel
     public ICommand ResetDarkenCommand { get; }      // fork-specific
     public ICommand SaveDarkenDefaultCommand { get; } // fork-specific
@@ -1359,6 +1364,29 @@ public class MainViewModel : ViewModelBase
             StatusText = $"Download failed: {ex.Message}";
         }
         finally { ClearBusy(); }
+    }
+
+    // fork-specific: split one copy off a stacked card (Quantity > 1) so it can be edited
+    // independently. Decrements the original's quantity and inserts a distinct Quantity=1 clone
+    // right after it, then selects the clone. Total card count is preserved.
+    private void UnlinkCardCopy()
+    {
+        var card = SelectedCard;
+        if (card == null || card.Quantity <= 1) return;
+
+        PushUndo();
+        int idx = Cards.IndexOf(card);
+        card.Quantity -= 1;
+
+        var copy = card.Clone();
+        copy.Quantity = 1;
+        if (idx >= 0) Cards.Insert(idx + 1, copy);
+        else Cards.Add(copy);
+
+        SelectedCard = copy; // edits now affect only this single copy
+        _unlinkCardCopyCmd.RaiseCanExecuteChanged();
+        RefreshCanvas();
+        StatusText = $"Scollegata 1 copia di \"{copy.Name}\" — ora modificabile separatamente.";
     }
 
     // fork-specific: open the image adjustment editor for the selected card and bake the result.

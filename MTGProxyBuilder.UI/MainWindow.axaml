@@ -549,6 +549,16 @@
                                     </StackPanel>
                                 </Grid>
 
+                                <!-- fork-specific: split one copy off a stacked card so it can be edited alone.
+                                     Disabled (greyed) when this card has only one copy. -->
+                                <Button Theme="{StaticResource ToolBtn}"
+                                        Command="{Binding UnlinkCardCopyCommand}"
+                                        Content="✂  Scollega questa copia"
+                                        ToolTip.Tip="Stacca 1 copia da questa pila per modificarla separatamente dalle altre"
+                                        Background="#3E3E42" Foreground="#CCC"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                        Padding="8,5" Margin="0,0,0,8"/>
+
                                 <TextBlock Text="{Binding SelectedCard.TypeLine}" Foreground="#AAA"
                                            FontSize="11" Margin="0,0,0,4" TextWrapping="Wrap"/>
                                 <TextBlock Text="{Binding SelectedCard.OracleText}" Foreground="#888"

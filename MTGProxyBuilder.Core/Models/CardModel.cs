@@ -206,6 +206,41 @@ namespace MTGProxyBuilder.Core.Models
         public string PrimaryType =>
             TypeLine.Split("—")[0].Trim().Split(' ').LastOrDefault() ?? string.Empty;
 
+        /// <summary>
+        /// Deep copy of this card as a DISTINCT physical card (gets a fresh CardId).
+        /// Used to split one copy off a stacked card so it can be edited independently.
+        /// Quantity is copied as-is; callers typically set it to 1.
+        /// </summary>
+        public CardModel Clone() => new()
+        {
+            // CardId intentionally NOT copied — the field initializer assigns a new Guid.
+            Name = Name,
+            ArtworkPath = ArtworkPath,
+            BackArtworkPath = BackArtworkPath,
+            OriginalBackArtworkPath = OriginalBackArtworkPath,
+            ScryfallId = ScryfallId,
+            Quantity = Quantity,
+            IncludeBack = IncludeBack,
+            ManaCost = ManaCost,
+            CMC = CMC,
+            TypeLine = TypeLine,
+            OracleText = OracleText,
+            Rarity = Rarity,
+            Colors = Colors,
+            ColorIdentity = ColorIdentity,
+            SetCode = SetCode,
+            SetName = SetName,
+            CollectorNumber = CollectorNumber,
+            Artist = Artist,
+            Power = Power,
+            Toughness = Toughness,
+            Loyalty = Loyalty,
+            Keywords = Keywords,
+            DateAdded = DateAdded,
+            OverlayText = OverlayText,
+            Source = Source
+        };
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
