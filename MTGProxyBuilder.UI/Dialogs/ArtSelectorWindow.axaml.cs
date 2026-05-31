@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -39,6 +40,12 @@ public partial class ArtSelectorWindow : Window
     public bool ApplyToThisCopyOnly { get; private set; }
 
     private readonly Dictionary<string, ScryfallCard> _scryfallCardsByPath = new(StringComparer.OrdinalIgnoreCase);
+
+    // Session cache of the online search results per card name, so reopening the selector for the same
+    // (or an identically-named) card doesn't re-query Scryfall/MPCFill over the network. The "Research
+    // MPCFill" button clears the entry to force a fresh search with the new filters.
+    private static readonly ConcurrentDictionary<string, (List<ScryfallCard> Scryfall, List<MpcFillCard> Mpc)>
+        _apiResultsCache = new(StringComparer.OrdinalIgnoreCase);
 
     private record TileInfo(Border Tile, string Name, string Source, string Detail, bool IsAction = false);
     private readonly List<TileInfo> _allTiles = new();
@@ -228,12 +235,8 @@ public partial class ArtSelectorWindow : Window
                             var results = new List<Bitmap?>();
                             foreach (var (_, entryId, p) in batch)
                             {
-                                try
-                                {
-                                    var loadPath = thumbSvc?.GetOrCreate(entryId, p) ?? p;
-                                    results.Add(new Bitmap(loadPath));
-                                }
-                                catch { results.Add(null); }
+                                var loadPath = thumbSvc?.GetOrCreate(entryId, p) ?? p;
+                                results.Add(ArtTileBuilder.GetThumbnail(loadPath));
                             }
                             return results;
                         });
@@ -249,28 +252,43 @@ public partial class ArtSelectorWindow : Window
         var mpcOpts = BuildSearchOptionsFromControls();
         mpcOpts.FuzzySearch = false;
 
-        // Reopen without re-querying Scryfall: GetAllPrintingsAsync caches the printing list on disk.
-        bool printingsWereCached = _scryfall.HasCachedPrintings(_card.Name);
-        var scryfallTask = Task.Run(async () =>
-        {
-            // every printing/version of this exact card (disk-cached across opens)
-            try { return await _scryfall.GetAllPrintingsAsync(_card.Name); }
-            catch { return new List<ScryfallCard>(); }
-        });
-        var mpcTask = Task.Run(async () =>
-        {
-            try
-            {
-                var (results, _) = await _mpcFill.SearchAsync(
-                    _card.Name, fuzzySearch: false, sourcesOverride: _mpcSourcesOverride, options: mpcOpts);
-                return results.Where(mc => mc.Name.Contains(_card.Name, StringComparison.OrdinalIgnoreCase)).ToList();
-            }
-            catch { return new List<MpcFillCard>(); }
-        });
+        // Reuse this session's results for the same card name — no network round-trip on reopen.
+        // (Scryfall's printing list is also disk-cached across restarts; MPCFill is re-queried once
+        // per restart.) "Research MPCFill" clears this entry to force a fresh search.
+        bool resultsWereCached = _apiResultsCache.ContainsKey(_card.Name);
+        bool printingsWereCached = resultsWereCached || _scryfall.HasCachedPrintings(_card.Name);
 
-        await Task.WhenAll(scryfallTask, mpcTask);
-        var scryfallResults = scryfallTask.Result;
-        var mpcResults = mpcTask.Result;
+        List<ScryfallCard> scryfallResults;
+        List<MpcFillCard> mpcResults;
+        if (_apiResultsCache.TryGetValue(_card.Name, out var cachedApi))
+        {
+            scryfallResults = cachedApi.Scryfall;
+            mpcResults = cachedApi.Mpc;
+        }
+        else
+        {
+            var scryfallTask = Task.Run(async () =>
+            {
+                // every printing/version of this exact card (disk-cached across opens)
+                try { return await _scryfall.GetAllPrintingsAsync(_card.Name); }
+                catch { return new List<ScryfallCard>(); }
+            });
+            var mpcTask = Task.Run(async () =>
+            {
+                try
+                {
+                    var (results, _) = await _mpcFill.SearchAsync(
+                        _card.Name, fuzzySearch: false, sourcesOverride: _mpcSourcesOverride, options: mpcOpts);
+                    return results.Where(mc => mc.Name.Contains(_card.Name, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+                catch { return new List<MpcFillCard>(); }
+            });
+
+            await Task.WhenAll(scryfallTask, mpcTask);
+            scryfallResults = scryfallTask.Result;
+            mpcResults = mpcTask.Result;
+            _apiResultsCache[_card.Name] = (scryfallResults, mpcResults);
+        }
 
         if (libraryNames.Count > 0)
             mpcResults = mpcResults.Where(mc => !libraryNames.Contains($"{mc.Name} [{mc.Source}]")).ToList();
@@ -439,12 +457,8 @@ public partial class ArtSelectorWindow : Window
                     var results = new List<Bitmap?>();
                     foreach (var (_, entryId, p) in batch)
                     {
-                        try
-                        {
-                            var loadPath = thumbSvc?.GetOrCreate(entryId, p) ?? p;
-                            results.Add(new Bitmap(loadPath));
-                        }
-                        catch { results.Add(null); }
+                        var loadPath = thumbSvc?.GetOrCreate(entryId, p) ?? p;
+                        results.Add(ArtTileBuilder.GetThumbnail(loadPath));
                     }
                     return results;
                 });
@@ -869,6 +883,7 @@ public partial class ArtSelectorWindow : Window
     private async void OnResearchMpcFill(object? sender, RoutedEventArgs e)
     {
         _mpcSearchOptions = BuildSearchOptionsFromControls();
+        _apiResultsCache.TryRemove(_card.Name, out _); // force a fresh search with the new filters
         _scryfallCardsByPath.Clear();
         OkBtn.IsEnabled = false;
         ResultPath = null;

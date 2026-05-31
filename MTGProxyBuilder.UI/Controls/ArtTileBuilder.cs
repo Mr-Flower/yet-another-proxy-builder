@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.IO;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -18,6 +20,27 @@ namespace MTGProxyBuilder.UI.Controls
         public const double ImageHeight = 235;
         public const double LabelFontSize = 11;
         public const double DetailFontSize = 9;
+
+        // Process-wide cache of tile-sized thumbnails, keyed by source path. Each image is decoded once
+        // (downscaled to tile width) and reused — so reopening a selector for the same/identical card is
+        // instant instead of re-decoding every option from disk. Images themselves stay on disk, so a
+        // program restart re-decodes (once) but never re-downloads.
+        private static readonly ConcurrentDictionary<string, Bitmap?> _thumbCache = new();
+
+        /// <summary>A cached, downscaled bitmap for a tile (decoded once per path per session), or null.</summary>
+        public static Bitmap? GetThumbnail(string? path, int decodeWidth = 220)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            return _thumbCache.GetOrAdd(path, p =>
+            {
+                try
+                {
+                    using var stream = File.OpenRead(p);
+                    return Bitmap.DecodeToWidth(stream, decodeWidth);
+                }
+                catch { return null; }
+            });
+        }
 
         /// <summary>Creates an art option tile with image, label, and detail text.</summary>
         public static Border CreateOptionTile(string label, string imagePath, bool isCurrent, string detail,
@@ -41,20 +64,16 @@ namespace MTGProxyBuilder.UI.Controls
                 Height = ImageHeight, Background = Brushes.Black,
                 CornerRadius = new Avalonia.CornerRadius(3, 3, 0, 0), ClipToBounds = true
             };
-            try
-            {
-                var bmp = new Bitmap(imagePath);
+            var bmp = GetThumbnail(imagePath, decodePixelWidth);
+            if (bmp != null)
                 imgBorder.Child = new Image { Source = bmp, Stretch = Stretch.UniformToFill };
-            }
-            catch
-            {
+            else
                 imgBorder.Child = new TextBlock
                 {
                     Text = "?", Foreground = Brushes.Gray, FontSize = 24,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 };
-            }
             stack.Children.Add(imgBorder);
 
             var lbl = new TextBlock
