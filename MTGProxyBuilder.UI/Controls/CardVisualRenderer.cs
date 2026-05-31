@@ -17,7 +17,7 @@ namespace MTGProxyBuilder.UI.Controls
         public static void PlaceCard(Canvas canvas, CardModel card, Bitmap? bmp,
             float x, float y, float cellW, float cellH, float bleed, float cardW, float cardH,
             float pageTop, float pageW, float pageH, bool flipped, bool selected,
-            bool showCutGuides, PrintSettings? printSettings)
+            bool showCutGuides, PrintSettings? printSettings, bool imageIncludesBleed = false)
         {
             bool hasBackArt = !string.IsNullOrEmpty(card.BackArtworkPath);
             bool showNoBackPlaceholder = flipped && !hasBackArt;
@@ -25,6 +25,13 @@ namespace MTGProxyBuilder.UI.Controls
             if (showNoBackPlaceholder)
             {
                 DrawNoBackPlaceholder(canvas, x + bleed, y + bleed, cardW, cardH, card.Name);
+            }
+            else if (bmp != null && imageIncludesBleed)
+            {
+                // Bled image already contains the bleed margin: draw it filling the whole cell,
+                // exactly as the PDF does. No darkening overlay — this IS the real bleed.
+                var image = new Image { Source = bmp, Width = cellW, Height = cellH, Stretch = Stretch.Fill };
+                Canvas.SetLeft(image, x); Canvas.SetTop(image, y); canvas.Children.Add(image);
             }
             else if (bmp != null)
             {

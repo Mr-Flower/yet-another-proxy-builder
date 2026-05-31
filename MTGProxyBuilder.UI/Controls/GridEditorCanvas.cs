@@ -56,6 +56,15 @@ namespace MTGProxyBuilder.UI.Controls
         // Image cache
         private static readonly ConcurrentDictionary<string, Bitmap?> _imageCache = new();
 
+        // Bleed-extended images for a WYSIWYG preview matching the PDF. The bled JPEGs are produced
+        // and disk-cached by BleedProcessor (shared with PDF export); here we additionally map
+        // (sourcePath|bleedPx|useBleed) -> display path so PlaceCardVisual can look them up cheaply.
+        private static readonly BleedProcessor _bleedProcessor = new();
+        private static readonly ConcurrentDictionary<string, string> _displayPathCache = new();
+        private int _bleedPx;
+        private bool _useBleed;
+        private static string DisplayKey(string raw, int bleedPx, bool useBleed) => $"{raw}|{bleedPx}|{useBleed}";
+
         // Debounce + async redraw
         private DispatcherTimer? _redrawTimer;
         private CancellationTokenSource? _redrawCts;
@@ -197,6 +206,14 @@ namespace MTGProxyBuilder.UI.Controls
             float bleed   = settings.BleedWidthMm  * mmPx;
             float cardW   = settings.CardWidthMm   * mmPx;
             float cardH   = settings.CardHeightMm  * mmPx;
+
+            // WYSIWYG bleed: use the SAME bleed-pixel formula as PdfGeneratorService so the preview
+            // shows the exact bled image the PDF will. Registration-marks mode suppresses bleed.
+            bool regMarksActive = PrintSettingsSource?.ShowRegistrationMarks == true;
+            _bleedPx = settings.BleedWidthMm > 0
+                ? Math.Max(1, (int)(settings.BleedWidthMm / settings.CardWidthMm * 600)) : 0;
+            _useBleed = _bleedPx > 0 && !regMarksActive;
+
             int cols = settings.CardsPerRow;
             int rows = settings.CardsPerColumn;
             int perPage  = settings.CardsPerPage;
@@ -215,18 +232,32 @@ namespace MTGProxyBuilder.UI.Controls
             {
                 bool showBack = IsCardFlipped(s.CardIndex);
                 string? path = showBack ? (s.Card.BackArtworkPath ?? s.Card.ArtworkPath) : s.Card.ArtworkPath;
-                if (!string.IsNullOrEmpty(path) && !_imageCache.ContainsKey(path))
-                    pathsToLoad.Add(path);
+                if (string.IsNullOrEmpty(path)) continue;
+                // Skip only if the display (possibly bled) image is already decoded in the cache.
+                if (_displayPathCache.TryGetValue(DisplayKey(path, _bleedPx, _useBleed), out var disp)
+                    && _imageCache.ContainsKey(disp))
+                    continue;
+                pathsToLoad.Add(path);
             }
 
             if (pathsToLoad.Count > 0)
             {
                 IsRendering = true;
                 int loaded = 0, total = pathsToLoad.Count;
+                int decodeWidth = (int)cellW * 2;
+                int bleedPx = _bleedPx;
+                bool useBleed = _useBleed;
                 foreach (var path in pathsToLoad)
                 {
                     if (token.IsCancellationRequested) { IsRendering = false; return; }
-                    await Task.Run(() => LoadImageToCache(path, (int)cellW * 2), token);
+                    await Task.Run(() =>
+                    {
+                        // Resolve (and disk-generate) the bled image on the background thread, then
+                        // decode the result into the bitmap cache. Falls back to the raw path.
+                        string disp = _displayPathCache.GetOrAdd(DisplayKey(path, bleedPx, useBleed),
+                            _ => useBleed ? (_bleedProcessor.GetBleedExtendedImage(path, bleedPx) ?? path) : path);
+                        LoadImageToCache(disp, decodeWidth);
+                    }, token);
                     loaded++;
                     RenderProgress = $"Loading images ({loaded}/{total})...";
                     await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
@@ -719,12 +750,22 @@ namespace MTGProxyBuilder.UI.Controls
         {
             bool hasBackArt = !string.IsNullOrEmpty(card.BackArtworkPath);
             string? imagePath = flipped ? (hasBackArt ? card.BackArtworkPath : null) : card.ArtworkPath;
-            var bmp = (flipped && !hasBackArt) ? null : GetCachedImage(imagePath);
+
+            Bitmap? bmp = null;
+            bool bledImage = false;
+            if (!(flipped && !hasBackArt) && !string.IsNullOrEmpty(imagePath))
+            {
+                string disp = _displayPathCache.TryGetValue(DisplayKey(imagePath, _bleedPx, _useBleed), out var d)
+                    ? d : imagePath;
+                bmp = GetCachedImage(disp);
+                // The bled image already contains the bleed margin (display path differs from raw).
+                bledImage = _useBleed && bmp != null && !string.Equals(disp, imagePath, StringComparison.Ordinal);
+            }
 
             CardVisualRenderer.PlaceCard(this, card, bmp,
                 x, y, cellW, cellH, bleed, cardW, cardH,
                 pageTop, pageW, pageH, flipped, selected,
-                ShowCutGuides, PrintSettingsSource);
+                ShowCutGuides, PrintSettingsSource, bledImage);
         }
     }
 }
