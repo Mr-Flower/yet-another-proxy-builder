@@ -18,6 +18,8 @@ namespace MTGProxyBuilder.Core.Models
         private int? _columnsOverride;
         private int? _rowsOverride;
         private bool _isCentering;
+        private float _offsetXmm;
+        private float _offsetYmm;
 
         public PageLayout()
         {
@@ -112,6 +114,24 @@ namespace MTGProxyBuilder.Core.Models
         {
             get => _rowsOverride;
             set { _rowsOverride = value; OnPropertyChanged(); OnGridAffectingChange(); }
+        }
+
+        /// <summary>
+        /// Print-position nudge (mm) applied to the WHOLE grid on the sheet: +X = right, −X = left,
+        /// +Y = down, −Y = up. Compensates for printer offset (e.g. the back not landing exactly on the
+        /// front). It shifts only where the already-centered grid is drawn — card spacing and bleed are
+        /// unaffected — so it does NOT trigger re-centering.
+        /// </summary>
+        public float OffsetXmm
+        {
+            get => _offsetXmm;
+            set { _offsetXmm = value; OnPropertyChanged(); }
+        }
+
+        public float OffsetYmm
+        {
+            get => _offsetYmm;
+            set { _offsetYmm = value; OnPropertyChanged(); }
         }
 
         // --- Computed properties ---

@@ -104,8 +104,10 @@ namespace MTGProxyBuilder.Core.Services
 
             using var gfx = XGraphics.FromPdfPage(page);
 
-            float startX = settings.MarginLeftMm * MmToPt;
-            float startY = settings.MarginTopMm * MmToPt;
+            // Card-position adjustment: nudge the whole centered grid on the sheet (printer offset
+            // compensation). Only the draw origin moves — card spacing and bleed are unchanged.
+            float startX = (settings.MarginLeftMm + settings.OffsetXmm) * MmToPt;
+            float startY = (settings.MarginTopMm + settings.OffsetYmm) * MmToPt;
             // Bleed magnitude locked to the MPC 1/8" standard (BleedWidthMm only toggles it on/off),
             // matching the bled images produced in GeneratePdfAsync so the cut line lands correctly.
             float bleedPt = settings.EffectiveBleedMm * MmToPt;

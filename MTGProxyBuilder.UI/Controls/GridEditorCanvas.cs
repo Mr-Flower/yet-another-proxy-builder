@@ -204,8 +204,10 @@ namespace MTGProxyBuilder.UI.Controls
 
             float pageW  = settings.PageWidthMm  * mmPx;
             float pageH  = settings.PageHeightMm * mmPx;
-            float marginL = settings.MarginLeftMm  * mmPx;
-            float marginT = settings.MarginTopMm   * mmPx;
+            // Card-position adjustment nudges the whole grid on the sheet (printer offset compensation);
+            // only the origin moves, so card spacing and bleed are unaffected. WYSIWYG with the PDF.
+            float marginL = (settings.MarginLeftMm + settings.OffsetXmm) * mmPx;
+            float marginT = (settings.MarginTopMm  + settings.OffsetYmm) * mmPx;
             float marginR = settings.MarginRightMm * mmPx;
             float marginB = settings.MarginBottomMm* mmPx;
             // WYSIWYG bleed (same as the PDF): every image is normalized to "card + 2*bleed" — Scryfall

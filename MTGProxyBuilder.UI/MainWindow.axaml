@@ -571,6 +571,33 @@
                             <TextBlock Text="0 = no bleed · max = 1/8 in (3.05 mm, MakePlayingCards standard)"
                                        Foreground="#666" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,4"/>
 
+                            <!-- Card position adjustment: shift the WHOLE grid on the sheet to compensate
+                                 for printer offset (e.g. backs not landing on fronts). Does not change
+                                 card spacing or bleed — only the centering on the page. -->
+                            <TextBlock Text="CARD POSITION ADJUSTMENT (mm)" Foreground="#7A6FB0" FontSize="10" FontWeight="Bold" Margin="0,12,0,6"/>
+                            <TextBlock Text="Nudges the whole layout on the sheet to compensate for printer offset. Does not change card spacing or bleed."
+                                       Foreground="#666" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Text="Horizontal offset (+ right, − left)"
+                                           Foreground="#999" FontSize="9" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding CurrentProject.PageSettings.OffsetXmm, StringFormat={}{0:0.0} mm}"
+                                           Foreground="#9B8FD4" FontSize="10" FontWeight="SemiBold"/>
+                            </Grid>
+                            <Slider Minimum="-10" Maximum="10"
+                                    Value="{Binding CurrentProject.PageSettings.OffsetXmm}"
+                                    SmallChange="0.1" LargeChange="1" TickFrequency="1" Margin="0,0,0,4"/>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Text="Vertical offset (+ down, − up)"
+                                           Foreground="#999" FontSize="9" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding CurrentProject.PageSettings.OffsetYmm, StringFormat={}{0:0.0} mm}"
+                                           Foreground="#9B8FD4" FontSize="10" FontWeight="SemiBold"/>
+                            </Grid>
+                            <Slider Minimum="-10" Maximum="10"
+                                    Value="{Binding CurrentProject.PageSettings.OffsetYmm}"
+                                    SmallChange="0.1" LargeChange="1" TickFrequency="1" Margin="0,0,0,4"/>
+
                             <TextBlock Text="GRID" Foreground="#7A6FB0" FontSize="10" FontWeight="Bold" Margin="0,12,0,6"/>
                             <TextBlock Text="Leave blank to auto-fit" Foreground="#666" FontSize="9" Margin="0,0,0,4"/>
                             <Grid Margin="0,0,0,8">

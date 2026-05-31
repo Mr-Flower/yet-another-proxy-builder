@@ -177,6 +177,23 @@ public class PageLayoutTests
     }
 
     [Fact]
+    public void Offset_DefaultsToZero_AndDoesNotRecenter()
+    {
+        var layout = new PageLayout();
+        Assert.Equal(0f, layout.OffsetXmm);
+        Assert.Equal(0f, layout.OffsetYmm);
+
+        // A print-position nudge must NOT re-center the grid (margins stay put; only the draw origin
+        // shifts at render time).
+        float marginL = layout.MarginLeftMm;
+        float marginT = layout.MarginTopMm;
+        layout.OffsetXmm = 5f;
+        layout.OffsetYmm = -3f;
+        Assert.Equal(marginL, layout.MarginLeftMm);
+        Assert.Equal(marginT, layout.MarginTopMm);
+    }
+
+    [Fact]
     public void CenterGrid_GridFitsInPage()
     {
         var layout = new PageLayout();
