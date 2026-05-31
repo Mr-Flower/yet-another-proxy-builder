@@ -31,49 +31,15 @@ namespace MTGProxyBuilder.Core.Services
         //  SAVE
         // ================================================================
 
+        /// <summary>Saves the project to a self-contained .mtgproj archive. Returns false on failure
+        /// (the original file is left untouched — the archive is written to a temp file first).</summary>
         public async Task<bool> SaveProjectAsync(ProjectModel project, string filePath)
         {
             try
             {
-                // Work on a temp file so we don't corrupt the original on failure
-                string tempPath = filePath + ".tmp";
-
-                await Task.Run(() =>
-                {
-                    using var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write);
-                    using var zip = new ZipArchive(stream, ZipArchiveMode.Create);
-
-                    // Collect every unique image path and map to archive-relative names
-                    var imageMap = BuildImageMap(project);
-
-                    // Write images into the archive
-                    foreach (var (absolutePath, archiveName) in imageMap)
-                    {
-                        if (!File.Exists(absolutePath)) continue;
-
-                        var entry = zip.CreateEntry(ImageFolder + archiveName, CompressionLevel.Optimal);
-                        using var entryStream = entry.Open();
-                        using var fileStream = File.OpenRead(absolutePath);
-                        fileStream.CopyTo(entryStream);
-                    }
-
-                    // Build a serializable copy with relative paths
-                    var wrapper = new ProjectFileWrapper
-                    {
-                        Version = ProjectFileVersion,
-                        Project = CloneWithRelativePaths(project, imageMap)
-                    };
-
-                    string json = JsonConvert.SerializeObject(wrapper, Formatting.Indented);
-                    var jsonEntry = zip.CreateEntry(ProjectJsonEntry, CompressionLevel.Optimal);
-                    using var jsonStream = new StreamWriter(jsonEntry.Open());
-                    jsonStream.Write(json);
-                });
-
-                // Atomic replace
-                if (File.Exists(filePath)) File.Delete(filePath);
-                File.Move(tempPath, filePath);
-
+                string tempPath = filePath + ".tmp"; // write to temp, then atomically replace
+                await Task.Run(() => WriteArchive(project, tempPath));
+                ReplaceFile(tempPath, filePath);
                 return true;
             }
             catch (Exception ex)
@@ -83,77 +49,136 @@ namespace MTGProxyBuilder.Core.Services
             }
         }
 
+        /// <summary>Writes the project's images and JSON into a fresh .mtgproj ZIP at the given path.</summary>
+        private void WriteArchive(ProjectModel project, string archivePath)
+        {
+            using var stream = new FileStream(archivePath, FileMode.Create, FileAccess.Write);
+            using var zip = new ZipArchive(stream, ZipArchiveMode.Create);
+
+            var imageMap = BuildImageMap(project); // absolute path -> archive-relative name
+            WriteImageEntries(zip, imageMap);
+            WriteProjectJson(zip, project, imageMap);
+        }
+
+        /// <summary>Copies every referenced image file into the archive under its mapped name.</summary>
+        private static void WriteImageEntries(ZipArchive zip, Dictionary<string, string> imageMap)
+        {
+            foreach (var (absolutePath, archiveName) in imageMap)
+            {
+                if (!File.Exists(absolutePath)) continue;
+                var entry = zip.CreateEntry(ImageFolder + archiveName, CompressionLevel.Optimal);
+                using var entryStream = entry.Open();
+                using var fileStream = File.OpenRead(absolutePath);
+                fileStream.CopyTo(entryStream);
+            }
+        }
+
+        /// <summary>Serializes the project (with archive-relative image paths) into project.json.</summary>
+        private void WriteProjectJson(ZipArchive zip, ProjectModel project, Dictionary<string, string> imageMap)
+        {
+            var wrapper = new ProjectFileWrapper
+            {
+                Version = ProjectFileVersion,
+                Project = CloneWithRelativePaths(project, imageMap)
+            };
+            string json = JsonConvert.SerializeObject(wrapper, Formatting.Indented);
+            var jsonEntry = zip.CreateEntry(ProjectJsonEntry, CompressionLevel.Optimal);
+            using var jsonStream = new StreamWriter(jsonEntry.Open());
+            jsonStream.Write(json);
+        }
+
+        private static void ReplaceFile(string tempPath, string finalPath)
+        {
+            if (File.Exists(finalPath)) File.Delete(finalPath);
+            File.Move(tempPath, finalPath);
+        }
+
         // ================================================================
         //  LOAD
         // ================================================================
 
+        /// <summary>Loads a project from a .mtgproj archive. Returns null if the file is invalid.</summary>
         public Task<ProjectModel?> LoadProjectAsync(string filePath)
             => LoadProjectAsync(filePath, null);
 
+        /// <summary>Loads a project, reporting progress through <paramref name="onProgress"/>.</summary>
         public async Task<ProjectModel?> LoadProjectAsync(string filePath, Action<string>? onProgress)
         {
             try
             {
-                return await Task.Run(() =>
-                {
-                    onProgress?.Invoke("Reading project file...");
-                    using var stream = File.OpenRead(filePath);
-                    using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
-
-                    // Read project.json
-                    var jsonEntry = zip.GetEntry(ProjectJsonEntry);
-                    if (jsonEntry == null) return null;
-
-                    string json;
-                    using (var reader = new StreamReader(jsonEntry.Open()))
-                        json = reader.ReadToEnd();
-
-                    onProgress?.Invoke("Parsing project data...");
-                    var wrapper = JsonConvert.DeserializeObject<ProjectFileWrapper>(json);
-                    if (wrapper?.Project == null) return null;
-
-                    var project = wrapper.Project;
-
-                    // Extract images to a temp folder unique to this file. Use a STABLE hash so the
-                    // folder is the same across app launches — otherwise the bleed/image caches (keyed
-                    // by path) miss every restart and all artwork is reprocessed on every reopen.
-                    string projectHash = Path.GetFileNameWithoutExtension(filePath)
-                        + "_" + StableHash.Hex(filePath);
-                    string extractDir = Path.Combine(_extractRoot, projectHash, "images");
-
-                    // Clean previous extraction
-                    if (Directory.Exists(extractDir))
-                        Directory.Delete(extractDir, true);
-                    Directory.CreateDirectory(extractDir);
-
-                    var imageEntries = zip.Entries
-                        .Where(e => e.FullName.StartsWith(ImageFolder) && e.FullName != ImageFolder)
-                        .ToList();
-
-                    int extracted = 0;
-                    foreach (var entry in imageEntries)
-                    {
-                        extracted++;
-                        onProgress?.Invoke($"Extracting images ({extracted}/{imageEntries.Count})...");
-                        string destPath = Path.Combine(extractDir, entry.Name);
-                        entry.ExtractToFile(destPath, overwrite: true);
-                    }
-
-                    // Resolve relative paths back to absolute extracted paths
-                    onProgress?.Invoke("Resolving card artwork...");
-                    foreach (var card in project.Cards)
-                    {
-                        card.ArtworkPath = ResolveImagePath(card.ArtworkPath, extractDir);
-                        card.BackArtworkPath = ResolveImagePath(card.BackArtworkPath, extractDir);
-                    }
-
-                    return project;
-                });
+                return await Task.Run(() => LoadArchive(filePath, onProgress));
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Load project error: {ex.Message}");
                 return null;
+            }
+        }
+
+        /// <summary>Reads the project JSON, extracts the bundled images, and resolves card art paths.</summary>
+        private ProjectModel? LoadArchive(string filePath, Action<string>? onProgress)
+        {
+            onProgress?.Invoke("Reading project file...");
+            using var stream = File.OpenRead(filePath);
+            using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+
+            onProgress?.Invoke("Parsing project data...");
+            var project = ReadProject(zip);
+            if (project == null) return null;
+
+            string extractDir = PrepareExtractDir(filePath);
+            ExtractImages(zip, extractDir, onProgress);
+
+            onProgress?.Invoke("Resolving card artwork...");
+            ResolveCardArtwork(project, extractDir);
+            return project;
+        }
+
+        /// <summary>Deserializes project.json from the archive, or returns null if absent/invalid.</summary>
+        private static ProjectModel? ReadProject(ZipArchive zip)
+        {
+            var jsonEntry = zip.GetEntry(ProjectJsonEntry);
+            if (jsonEntry == null) return null;
+            using var reader = new StreamReader(jsonEntry.Open());
+            var wrapper = JsonConvert.DeserializeObject<ProjectFileWrapper>(reader.ReadToEnd());
+            return wrapper?.Project;
+        }
+
+        /// <summary>
+        /// Returns a clean per-file extraction folder. The folder name uses a STABLE hash so it's the same
+        /// across app launches — otherwise the bleed/image caches (keyed by path) miss every restart and
+        /// all artwork is reprocessed on reopen.
+        /// </summary>
+        private string PrepareExtractDir(string filePath)
+        {
+            string projectHash = Path.GetFileNameWithoutExtension(filePath) + "_" + StableHash.Hex(filePath);
+            string extractDir = Path.Combine(_extractRoot, projectHash, "images");
+            if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true);
+            Directory.CreateDirectory(extractDir);
+            return extractDir;
+        }
+
+        /// <summary>Extracts every "images/..." archive entry into <paramref name="extractDir"/>.</summary>
+        private static void ExtractImages(ZipArchive zip, string extractDir, Action<string>? onProgress)
+        {
+            var imageEntries = zip.Entries
+                .Where(e => e.FullName.StartsWith(ImageFolder) && e.FullName != ImageFolder)
+                .ToList();
+
+            for (int i = 0; i < imageEntries.Count; i++)
+            {
+                onProgress?.Invoke($"Extracting images ({i + 1}/{imageEntries.Count})...");
+                imageEntries[i].ExtractToFile(Path.Combine(extractDir, imageEntries[i].Name), overwrite: true);
+            }
+        }
+
+        /// <summary>Rewrites each card's archive-relative art paths to the extracted absolute paths.</summary>
+        private void ResolveCardArtwork(ProjectModel project, string extractDir)
+        {
+            foreach (var card in project.Cards)
+            {
+                card.ArtworkPath = ResolveImagePath(card.ArtworkPath, extractDir);
+                card.BackArtworkPath = ResolveImagePath(card.BackArtworkPath, extractDir);
             }
         }
 
@@ -203,14 +228,6 @@ namespace MTGProxyBuilder.Core.Services
         private ProjectModel CloneWithRelativePaths(ProjectModel source,
             Dictionary<string, string> imageMap)
         {
-            string Rel(string? absolutePath)
-            {
-                if (string.IsNullOrEmpty(absolutePath)) return string.Empty;
-                return imageMap.TryGetValue(absolutePath, out var archiveName)
-                    ? ImageFolder + archiveName
-                    : string.Empty;
-            }
-
             return new ProjectModel
             {
                 ProjectId = source.ProjectId,
@@ -219,37 +236,51 @@ namespace MTGProxyBuilder.Core.Services
                 PrintSettings = source.PrintSettings,
                 CreatedDate = source.CreatedDate,
                 LastModified = DateTime.Now,
-                Cards = source.Cards.Select(c => new CardModel
-                {
-                    CardId = c.CardId,
-                    Name = c.Name,
-                    ArtworkPath = Rel(c.ArtworkPath),
-                    BackArtworkPath = string.IsNullOrEmpty(c.BackArtworkPath) ? null : Rel(c.BackArtworkPath),
-                    OriginalBackArtworkPath = string.IsNullOrEmpty(c.OriginalBackArtworkPath) ? null : Rel(c.OriginalBackArtworkPath),
-                    Source = c.Source, // preserve MPCFill/Scryfall origin (drives bleed handling) across save/load
-                    FullResFrontUrl = c.FullResFrontUrl,
-                    FullResBackUrl = c.FullResBackUrl,
-                    ScryfallId = c.ScryfallId,
-                    Quantity = c.Quantity,
-                    IncludeBack = c.IncludeBack,
-                    OverlayText = c.OverlayText,
-                    ManaCost = c.ManaCost,
-                    CMC = c.CMC,
-                    TypeLine = c.TypeLine,
-                    OracleText = c.OracleText,
-                    Rarity = c.Rarity,
-                    Colors = c.Colors,
-                    ColorIdentity = c.ColorIdentity,
-                    SetCode = c.SetCode,
-                    SetName = c.SetName,
-                    CollectorNumber = c.CollectorNumber,
-                    Artist = c.Artist,
-                    Power = c.Power,
-                    Toughness = c.Toughness,
-                    Loyalty = c.Loyalty,
-                    Keywords = c.Keywords,
-                    DateAdded = c.DateAdded
-                }).ToList()
+                Cards = source.Cards.Select(c => CloneCardWithRelativePaths(c, imageMap)).ToList()
+            };
+        }
+
+        /// <summary>Copies a card, rewriting its image paths to archive-relative names.</summary>
+        private static CardModel CloneCardWithRelativePaths(CardModel c, Dictionary<string, string> imageMap)
+        {
+            string Rel(string? absolutePath)
+            {
+                if (string.IsNullOrEmpty(absolutePath)) return string.Empty;
+                return imageMap.TryGetValue(absolutePath, out var archiveName)
+                    ? ImageFolder + archiveName
+                    : string.Empty;
+            }
+
+            return new CardModel
+            {
+                CardId = c.CardId,
+                Name = c.Name,
+                ArtworkPath = Rel(c.ArtworkPath),
+                BackArtworkPath = string.IsNullOrEmpty(c.BackArtworkPath) ? null : Rel(c.BackArtworkPath),
+                OriginalBackArtworkPath = string.IsNullOrEmpty(c.OriginalBackArtworkPath) ? null : Rel(c.OriginalBackArtworkPath),
+                Source = c.Source, // preserve MPCFill/Scryfall origin (drives bleed handling) across save/load
+                FullResFrontUrl = c.FullResFrontUrl,
+                FullResBackUrl = c.FullResBackUrl,
+                ScryfallId = c.ScryfallId,
+                Quantity = c.Quantity,
+                IncludeBack = c.IncludeBack,
+                OverlayText = c.OverlayText,
+                ManaCost = c.ManaCost,
+                CMC = c.CMC,
+                TypeLine = c.TypeLine,
+                OracleText = c.OracleText,
+                Rarity = c.Rarity,
+                Colors = c.Colors,
+                ColorIdentity = c.ColorIdentity,
+                SetCode = c.SetCode,
+                SetName = c.SetName,
+                CollectorNumber = c.CollectorNumber,
+                Artist = c.Artist,
+                Power = c.Power,
+                Toughness = c.Toughness,
+                Loyalty = c.Loyalty,
+                Keywords = c.Keywords,
+                DateAdded = c.DateAdded
             };
         }
 
