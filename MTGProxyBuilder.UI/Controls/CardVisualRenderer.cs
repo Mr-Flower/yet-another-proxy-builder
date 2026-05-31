@@ -72,9 +72,8 @@ namespace MTGProxyBuilder.UI.Controls
                 Canvas.SetLeft(selRect, x); Canvas.SetTop(selRect, y); canvas.Children.Add(selRect);
             }
 
-            bool regMarksOn = printSettings?.ShowRegistrationMarks == true;
-            if (showCutGuides && !regMarksOn)
-                DrawCutGuides(canvas, x, y, bleed, cardW, cardH, pageTop, pageW, pageH);
+            // Cut guides are NOT drawn here — they are drawn in a separate pass BEHIND the cards
+            // (see GridEditorCanvas), matching the PDF, so the lines sit under the card art.
 
             if (!flipped && !string.IsNullOrEmpty(card.OverlayText))
                 DrawOverlayText(canvas, card.OverlayText, x + bleed, y + bleed, cardW, cardH);
@@ -133,7 +132,7 @@ namespace MTGProxyBuilder.UI.Controls
             Canvas.SetLeft(nb, x + 5); Canvas.SetTop(nb, y + h / 3); canvas.Children.Add(nb);
         }
 
-        private static void DrawCutGuides(Canvas canvas, float x, float y, float bleed,
+        public static void DrawCutGuides(Canvas canvas, float x, float y, float bleed,
             float cardW, float cardH, float pageTop, float pageW, float pageH)
         {
             float cardLeft = x + bleed, cardTopY = y + bleed;

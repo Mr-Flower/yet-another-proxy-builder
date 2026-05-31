@@ -63,7 +63,8 @@ namespace MTGProxyBuilder.UI.ViewModels
             int minDpi,
             bool fuzzySearch,
             bool useFavoritesOnly,
-            Action<string>? onProgress = null)
+            Action<string>? onProgress = null,
+            CancellationToken ct = default)
         {
             int failed = 0, skippedDupes = 0;
 
@@ -124,7 +125,8 @@ namespace MTGProxyBuilder.UI.ViewModels
             {
                 var entry = toFetch[idx];
                 bool isToken = IsTokenEntry(entry.CardName);
-                await gate.WaitAsync();
+                if (ct.IsCancellationRequested) return;
+                await gate.WaitAsync(ct);
                 try
                 {
                     ScryfallCard? scryfallCard;
@@ -189,7 +191,8 @@ namespace MTGProxyBuilder.UI.ViewModels
                 return colon >= 0 ? t[(colon + 1)..].Trim() : t.Trim();
             }
 
-            await Task.WhenAll(Enumerable.Range(0, toFetch.Count).Select(FetchAsync));
+            try { await Task.WhenAll(Enumerable.Range(0, toFetch.Count).Select(FetchAsync)); }
+            catch (OperationCanceledException) { /* user cancelled — keep whatever was fetched so far */ }
 
             // ---- Phase 4: assemble in deck order. AutoApply touches a shared on-disk store,
             //               so it runs sequentially (and is a no-op unless the user enabled it). ----

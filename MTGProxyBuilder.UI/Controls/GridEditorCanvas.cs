@@ -329,6 +329,23 @@ namespace MTGProxyBuilder.UI.Controls
                 SetLeft(mr, marginL); SetTop(mr, pageTop + marginT); Children.Add(mr);
 
                 int pageStart = page * perPage;
+
+                // Pass 1: cut guides BEHIND the cards (matches the PDF) — drawn before the card art so
+                // the lines sit under the cards, visible only in the gaps/bleed margins.
+                if (ShowCutGuides && !regMarksActive)
+                {
+                    for (int r = 0; r < rows; r++)
+                        for (int c = 0; c < cols; c++)
+                        {
+                            int flat = pageStart + r * cols + c;
+                            if (flat >= slots.Count) continue;
+                            float gx = marginL + c * cellW;
+                            float gy = pageTop + marginT + r * cellH;
+                            CardVisualRenderer.DrawCutGuides(this, gx, gy, bleed, cardW, cardH, pageTop, pageW, pageH);
+                        }
+                }
+
+                // Pass 2: slot backgrounds + card art (on top of the guides).
                 for (int r = 0; r < rows; r++)
                 {
                     for (int c = 0; c < cols; c++)

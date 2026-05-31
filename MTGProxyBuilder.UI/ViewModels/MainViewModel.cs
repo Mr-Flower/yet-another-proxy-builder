@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
@@ -64,6 +65,8 @@ public class MainViewModel : ViewModelBase
     private bool _isSearching;
     private bool _isBusy;
     private string _busyMessage = string.Empty;
+    private bool _busyIsCancellable;
+    private CancellationTokenSource? _busyCts; // active when a cancellable operation (e.g. a fetch) runs
     private bool _hasUnsavedChanges;
 
     // Back art library
@@ -253,6 +256,7 @@ public class MainViewModel : ViewModelBase
         DownloadUpdateCommand = new RelayCommand(_ => DownloadUpdate());
         DismissUpdateCommand = new RelayCommand(_ => UpdateAvailable = false);
         OpenSettingsCommand = new RelayCommand(_ => _ = OpenSettingsAsync());
+        CancelBusyCommand = new RelayCommand(_ => { BusyMessage = "Cancelling…"; _busyCts?.Cancel(); });
 
         _addMpcFillCardCmd = new RelayCommand(_ => _ = AddMpcFillCardAsync(), _ => SelectedMpcFillCard != null);
         AddMpcFillCardCommand = _addMpcFillCardCmd;
@@ -459,6 +463,13 @@ public class MainViewModel : ViewModelBase
         set => SetProperty(ref _busyMessage, value);
     }
 
+    /// <summary>True while the current busy operation can be cancelled (shows the Cancel button).</summary>
+    public bool BusyIsCancellable
+    {
+        get => _busyIsCancellable;
+        set => SetProperty(ref _busyIsCancellable, value);
+    }
+
     public bool HasUnsavedChanges
     {
         get => _hasUnsavedChanges;
@@ -488,6 +499,7 @@ public class MainViewModel : ViewModelBase
     public ICommand DownloadUpdateCommand { get; }
     public ICommand DismissUpdateCommand { get; }
     public ICommand OpenSettingsCommand { get; }
+    public ICommand CancelBusyCommand { get; } // aborts the current cancellable busy operation (fetch)
     public string AppVersion { get; } = GetAppVersion();
 
     public static string GetAppVersion()
@@ -1836,7 +1848,7 @@ public class MainViewModel : ViewModelBase
         }
 
         string sourceName = source.ToString();
-        SetBusy($"Connecting to {sourceName}...");
+        var ct = BeginCancellableBusy($"Connecting to {sourceName}...");
 
         try
         {
@@ -1860,7 +1872,7 @@ public class MainViewModel : ViewModelBase
             var result = await _importCoordinator.ImportDeckCardsAsync(
                 deck, Cards, IgnoreDuplicates, UseMpcFill,
                 MpcAdvMinDpi, MpcFuzzySearch, MpcUseFavoritesOnly,
-                onProgress: msg => BusyMessage = msg);
+                onProgress: msg => BusyMessage = msg, ct: ct);
 
             BusyMessage = $"Adding {result.Cards.Count} cards to project...";
             await Task.Delay(50);
@@ -1872,14 +1884,16 @@ public class MainViewModel : ViewModelBase
 
             _currentProject.PageSettings.CenterGrid();
             ApplyFilterAndSort();
-            ImportDeckUrl = string.Empty;
+            if (!ct.IsCancellationRequested) ImportDeckUrl = string.Empty;
 
             int totalAdded = result.Cards.Sum(c => c.Quantity);
-            string summary = $"Imported {result.Cards.Count} unique card(s) ({totalAdded} total) from \"{deck.Name}\" ({sourceName})";
+            string summary = ct.IsCancellationRequested
+                ? $"Import cancelled — kept {result.Cards.Count} card(s) fetched so far"
+                : $"Imported {result.Cards.Count} unique card(s) ({totalAdded} total) from \"{deck.Name}\" ({sourceName})";
             if (result.SkippedDupes > 0) summary += $"\n{result.SkippedDupes} duplicate(s) skipped";
             if (result.Failed > 0) summary += $"\n{result.Failed} card(s) could not be found on Scryfall";
             StatusText = summary;
-            await _dialogService.ShowInfoAsync(summary, "Import Complete");
+            await _dialogService.ShowInfoAsync(summary, ct.IsCancellationRequested ? "Import cancelled" : "Import Complete");
         }
         catch (Exception ex)
         {
@@ -1902,14 +1916,14 @@ public class MainViewModel : ViewModelBase
             return;
         }
 
-        SetBusy("Importing pasted list...");
+        var ct = BeginCancellableBusy("Importing pasted list...");
         try
         {
             PushUndo();
             var result = await _importCoordinator.ImportDeckCardsAsync(
                 deck, Cards, IgnoreDuplicates, UseMpcFill,
                 MpcAdvMinDpi, MpcFuzzySearch, MpcUseFavoritesOnly,
-                onProgress: msg => BusyMessage = msg);
+                onProgress: msg => BusyMessage = msg, ct: ct);
 
             Cards.CollectionChanged -= OnCardsCollectionChanged;
             foreach (var c in result.Cards) { ApplyDefaultBackArt(c); Cards.Add(c); }
@@ -1918,13 +1932,15 @@ public class MainViewModel : ViewModelBase
 
             _currentProject.PageSettings.CenterGrid();
             ApplyFilterAndSort();
-            ImportDeckText = string.Empty;
+            if (!ct.IsCancellationRequested) ImportDeckText = string.Empty;
 
             int totalAdded = result.Cards.Sum(c => c.Quantity);
-            string summary = $"Imported {result.Cards.Count} card(s) ({totalAdded} total) from the pasted list";
+            string summary = ct.IsCancellationRequested
+                ? $"Import cancelled — kept {result.Cards.Count} card(s) fetched so far"
+                : $"Imported {result.Cards.Count} card(s) ({totalAdded} total) from the pasted list";
             if (result.Failed > 0) summary += $"\n{result.Failed} card(s) not found on Scryfall";
             StatusText = summary;
-            await _dialogService.ShowInfoAsync(summary, "Import complete");
+            await _dialogService.ShowInfoAsync(summary, ct.IsCancellationRequested ? "Import cancelled" : "Import complete");
         }
         catch (Exception ex)
         {
@@ -2134,5 +2150,24 @@ public class MainViewModel : ViewModelBase
     }
 
     private void SetBusy(string message) { BusyMessage = message; StatusText = message; IsBusy = true; }
-    private void ClearBusy() { IsBusy = false; BusyMessage = string.Empty; }
+
+    private void ClearBusy()
+    {
+        IsBusy = false;
+        BusyMessage = string.Empty;
+        BusyIsCancellable = false;
+        _busyCts?.Dispose();
+        _busyCts = null;
+    }
+
+    /// <summary>Starts a busy operation the user can abort (shows a Cancel button). Returns the token
+    /// to thread into the work; CancelBusyCommand cancels it.</summary>
+    private CancellationToken BeginCancellableBusy(string message)
+    {
+        _busyCts?.Dispose();
+        _busyCts = new CancellationTokenSource();
+        BusyIsCancellable = true;
+        SetBusy(message);
+        return _busyCts.Token;
+    }
 }

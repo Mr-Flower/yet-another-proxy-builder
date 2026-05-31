@@ -685,9 +685,14 @@
                 <StackPanel HorizontalAlignment="Center">
                     <ProgressBar IsIndeterminate="True" Width="200" Height="4" Margin="0,0,0,16"/>
                     <TextBlock Text="{Binding BusyMessage}" FontSize="14" FontWeight="SemiBold"
-                               Foreground="White" HorizontalAlignment="Center"/>
+                               Foreground="White" HorizontalAlignment="Center" TextAlignment="Center"
+                               TextWrapping="Wrap" MaxWidth="320"/>
                     <TextBlock Text="Please wait..." Foreground="#888" FontSize="11"
                                HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                    <Button Content="Cancel" Command="{Binding CancelBusyCommand}"
+                            IsVisible="{Binding BusyIsCancellable}"
+                            HorizontalAlignment="Center" Margin="0,16,0,0" Padding="18,6"
+                            Background="#3E3E42" Foreground="White" BorderThickness="0" Cursor="Hand"/>
                 </StackPanel>
             </Border>
         </Border>
