@@ -1470,7 +1470,7 @@ public class MainViewModel : ViewModelBase
     }
 
     // "Apply To" target index for the panel (0=All, 1=Scryfall, 2=MPCFill).
-    private int _darkenTargetIndex;
+    private int _darkenTargetIndex = 1; // default to "Solo Scryfall" on app open (0=All, 1=Scryfall, 2=MPCFill)
     public int DarkenTargetIndex
     {
         get => _darkenTargetIndex;

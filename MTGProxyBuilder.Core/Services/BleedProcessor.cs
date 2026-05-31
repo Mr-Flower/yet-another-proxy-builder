@@ -63,84 +63,7 @@ namespace MTGProxyBuilder.Core.Services
                 using var source = SKBitmap.Decode(sourcePath);
                 if (source == null) return sourcePath;
 
-                int srcW = source.Width;
-                int srcH = source.Height;
-
-                // Square off white corners of Scryfall-style scans: those images show a rounded card
-                // with a WHITE triangle filling each rectangular corner (outside the rounding). Replace
-                // ONLY those near-white corner pixels with the card's border colour, so the corner — and
-                // the bleed stretched from it — matches the border: black border -> black corners, white
-                // border -> left white. Coloured/full-art/MPCFill images (no white corner) are untouched.
-                // This makes Scryfall bleed behave like MPCFill's full-bleed art.
-                SquareOffWhiteCorner(source, srcW, srcH, 0,        0,         1,  1);
-                SquareOffWhiteCorner(source, srcW, srcH, srcW - 1, 0,        -1,  1);
-                SquareOffWhiteCorner(source, srcW, srcH, 0,        srcH - 1,  1, -1);
-                SquareOffWhiteCorner(source, srcW, srcH, srcW - 1, srcH - 1, -1, -1);
-
-                int outW = srcW + 2 * bleedPixels;
-                int outH = srcH + 2 * bleedPixels;
-
-                using var output = new SKBitmap(outW, outH);
-                using var canvas = new SKCanvas(output);
-
-                // Draw original (now squared-off) image centered
-                canvas.DrawBitmap(source, bleedPixels, bleedPixels);
-
-                // Extend edges: take a 1-pixel strip from each edge and stretch it outward
-
-                // Top edge: stretch top row upward
-                using (var topStrip = new SKBitmap(srcW, 1))
-                {
-                    for (int x = 0; x < srcW; x++)
-                        topStrip.SetPixel(x, 0, source.GetPixel(x, 0));
-                    canvas.DrawBitmap(topStrip, new SKRect(0, 0, srcW, 1),
-                        new SKRect(bleedPixels, 0, bleedPixels + srcW, bleedPixels));
-                }
-
-                // Bottom edge: stretch bottom row downward
-                using (var bottomStrip = new SKBitmap(srcW, 1))
-                {
-                    for (int x = 0; x < srcW; x++)
-                        bottomStrip.SetPixel(x, 0, source.GetPixel(x, srcH - 1));
-                    canvas.DrawBitmap(bottomStrip, new SKRect(0, 0, srcW, 1),
-                        new SKRect(bleedPixels, bleedPixels + srcH, bleedPixels + srcW, outH));
-                }
-
-                // Left edge: stretch left column leftward
-                using (var leftStrip = new SKBitmap(1, srcH))
-                {
-                    for (int y = 0; y < srcH; y++)
-                        leftStrip.SetPixel(0, y, source.GetPixel(0, y));
-                    canvas.DrawBitmap(leftStrip, new SKRect(0, 0, 1, srcH),
-                        new SKRect(0, bleedPixels, bleedPixels, bleedPixels + srcH));
-                }
-
-                // Right edge: stretch right column rightward
-                using (var rightStrip = new SKBitmap(1, srcH))
-                {
-                    for (int y = 0; y < srcH; y++)
-                        rightStrip.SetPixel(0, y, source.GetPixel(srcW - 1, y));
-                    canvas.DrawBitmap(rightStrip, new SKRect(0, 0, 1, srcH),
-                        new SKRect(bleedPixels + srcW, bleedPixels, outW, bleedPixels + srcH));
-                }
-
-                // Corners: fill the bleed-region squares with the corner pixel colour. The source
-                // corners were already squared off above, so this is the correct border colour
-                // (black/white/coloured) — never white-on-a-black-border.
-                var topLeft     = source.GetPixel(0, 0);
-                var topRight    = source.GetPixel(srcW - 1, 0);
-                var bottomLeft  = source.GetPixel(0, srcH - 1);
-                var bottomRight = source.GetPixel(srcW - 1, srcH - 1);
-
-                using var paint = new SKPaint();
-                paint.Color = topLeft;
-                canvas.DrawRect(0, 0, bleedPixels, bleedPixels, paint);
-                paint.Color = topRight;
-                canvas.DrawRect(bleedPixels + srcW, 0, bleedPixels, bleedPixels, paint);
-                paint.Color = bottomLeft;
-                canvas.DrawRect(0, bleedPixels + srcH, bleedPixels, bleedPixels, paint);
-                paint.Color = bottomRight;
-                canvas.DrawRect(bleedPixels + srcW, bleedPixels + srcH, bleedPixels, bleedPixels, paint);
+                using var output = RenderBleed(source, bleedPixels);
 
                 // Save as JPEG (much faster than PNG, fine for print)
                 using var stream = File.OpenWrite(outputPath);
@@ -154,6 +77,133 @@ namespace MTGProxyBuilder.Core.Services
                 System.Diagnostics.Debug.WriteLine($"Bleed processing error: {ex.Message}");
                 return sourcePath; // Fall back to original
             }
+        }
+
+        // MakePlayingCards / MPCFill standard bleed per side (the margin baked into MPCFill art).
+        private const double MpcBleedMm = 3.0;
+
+        /// <summary>
+        /// Resolves the image to draw filling a full (card + 2*bleed) cell, matching the PDF output.
+        /// Scryfall scans are bleed-extended (and corner-squared). MPCFill art is authored full-bleed,
+        /// so it's first cropped back to the bare card (removing its built-in ~3 mm MPC bleed) and then
+        /// extended to the USER's bleed — otherwise its larger built-in bleed sits inside the cut line
+        /// and the card looks "under-cut". Returns the original path when no bleed is needed.
+        /// </summary>
+        public string? GetDisplayImage(string sourcePath, int bleedPixels, double cardWmm, double cardHmm)
+        {
+            if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath) || bleedPixels <= 0)
+                return sourcePath;
+            if (!ImageAlreadyHasBleed(sourcePath))
+                return GetBleedExtendedImage(sourcePath, bleedPixels);
+
+            string cacheKey = $"{sourcePath}|{bleedPixels}|{cardWmm}x{cardHmm}|mpc";
+            if (_processedCache.TryGetValue(cacheKey, out var cached) && File.Exists(cached))
+                return cached;
+
+            try
+            {
+                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}" +
+                              $"_b{bleedPixels}_{(int)cardWmm}x{(int)cardHmm}_mpc_v5";
+                string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
+                if (File.Exists(outputPath)) { _processedCache[cacheKey] = outputPath; return outputPath; }
+
+                using var src = SKBitmap.Decode(sourcePath);
+                if (src == null) return sourcePath;
+
+                // Crop the built-in MPC bleed: per-side fraction = mpcBleed / (card + 2*mpcBleed).
+                double fracW = cardWmm > 0 ? MpcBleedMm / (cardWmm + 2 * MpcBleedMm) : 0;
+                double fracH = cardHmm > 0 ? MpcBleedMm / (cardHmm + 2 * MpcBleedMm) : 0;
+                int cropX = (int)Math.Round(src.Width * fracW);
+                int cropY = (int)Math.Round(src.Height * fracH);
+                int bareW = Math.Max(1, src.Width - 2 * cropX);
+                int bareH = Math.Max(1, src.Height - 2 * cropY);
+
+                using var bare = new SKBitmap(bareW, bareH);
+                using (var c = new SKCanvas(bare))
+                    c.DrawBitmap(src,
+                        new SKRect(cropX, cropY, src.Width - cropX, src.Height - cropY),
+                        new SKRect(0, 0, bareW, bareH));
+
+                using var output = RenderBleed(bare, bleedPixels);
+                using var stream = File.OpenWrite(outputPath);
+                output.Encode(stream, SKEncodedImageFormat.Jpeg, 95);
+
+                _processedCache[cacheKey] = outputPath;
+                return outputPath;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"MPC bleed processing error: {ex.Message}");
+                return sourcePath;
+            }
+        }
+
+        /// <summary>
+        /// Builds a bleed-extended bitmap from <paramref name="source"/> (the bare card): squares off any
+        /// white corners, draws the card centered, and stretches the edge pixels outward into the bleed.
+        /// The caller owns and disposes the returned bitmap. NOTE: mutates <paramref name="source"/>'s
+        /// corner pixels (square-off).
+        /// </summary>
+        private static SKBitmap RenderBleed(SKBitmap source, int bleedPixels)
+        {
+            int srcW = source.Width;
+            int srcH = source.Height;
+
+            // Square off white corners of Scryfall-style scans (no-op for full-bleed/MPC art).
+            SquareOffWhiteCorner(source, srcW, srcH, 0,        0,         1,  1);
+            SquareOffWhiteCorner(source, srcW, srcH, srcW - 1, 0,        -1,  1);
+            SquareOffWhiteCorner(source, srcW, srcH, 0,        srcH - 1,  1, -1);
+            SquareOffWhiteCorner(source, srcW, srcH, srcW - 1, srcH - 1, -1, -1);
+
+            int outW = srcW + 2 * bleedPixels;
+            int outH = srcH + 2 * bleedPixels;
+
+            var output = new SKBitmap(outW, outH);
+            using (var canvas = new SKCanvas(output))
+            {
+                canvas.DrawBitmap(source, bleedPixels, bleedPixels);
+
+                // Top edge
+                using (var strip = new SKBitmap(srcW, 1))
+                {
+                    for (int x = 0; x < srcW; x++) strip.SetPixel(x, 0, source.GetPixel(x, 0));
+                    canvas.DrawBitmap(strip, new SKRect(0, 0, srcW, 1),
+                        new SKRect(bleedPixels, 0, bleedPixels + srcW, bleedPixels));
+                }
+                // Bottom edge
+                using (var strip = new SKBitmap(srcW, 1))
+                {
+                    for (int x = 0; x < srcW; x++) strip.SetPixel(x, 0, source.GetPixel(x, srcH - 1));
+                    canvas.DrawBitmap(strip, new SKRect(0, 0, srcW, 1),
+                        new SKRect(bleedPixels, bleedPixels + srcH, bleedPixels + srcW, outH));
+                }
+                // Left edge
+                using (var strip = new SKBitmap(1, srcH))
+                {
+                    for (int y = 0; y < srcH; y++) strip.SetPixel(0, y, source.GetPixel(0, y));
+                    canvas.DrawBitmap(strip, new SKRect(0, 0, 1, srcH),
+                        new SKRect(0, bleedPixels, bleedPixels, bleedPixels + srcH));
+                }
+                // Right edge
+                using (var strip = new SKBitmap(1, srcH))
+                {
+                    for (int y = 0; y < srcH; y++) strip.SetPixel(0, y, source.GetPixel(srcW - 1, y));
+                    canvas.DrawBitmap(strip, new SKRect(0, 0, 1, srcH),
+                        new SKRect(bleedPixels + srcW, bleedPixels, outW, bleedPixels + srcH));
+                }
+
+                // Corners: fill the bleed squares with the (squared-off) corner colour.
+                using var paint = new SKPaint();
+                paint.Color = source.GetPixel(0, 0);
+                canvas.DrawRect(0, 0, bleedPixels, bleedPixels, paint);
+                paint.Color = source.GetPixel(srcW - 1, 0);
+                canvas.DrawRect(bleedPixels + srcW, 0, bleedPixels, bleedPixels, paint);
+                paint.Color = source.GetPixel(0, srcH - 1);
+                canvas.DrawRect(0, bleedPixels + srcH, bleedPixels, bleedPixels, paint);
+                paint.Color = source.GetPixel(srcW - 1, srcH - 1);
+                canvas.DrawRect(bleedPixels + srcW, bleedPixels + srcH, bleedPixels, bleedPixels, paint);
+            }
+            return output;
         }
 
         private static bool IsNearWhite(SKColor c) => c.Red >= 235 && c.Green >= 235 && c.Blue >= 235;

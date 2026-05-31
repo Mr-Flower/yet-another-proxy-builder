@@ -63,7 +63,9 @@ namespace MTGProxyBuilder.UI.Controls
         private static readonly ConcurrentDictionary<string, string> _displayPathCache = new();
         private int _bleedPx;
         private bool _useBleed;
-        private static string DisplayKey(string raw, int bleedPx, bool useBleed) => $"{raw}|{bleedPx}|{useBleed}";
+        private double _cardWmm, _cardHmm;
+        private static string DisplayKey(string raw, int bleedPx, bool useBleed, double cardWmm)
+            => $"{raw}|{bleedPx}|{useBleed}|{cardWmm}";
 
         // Debounce + async redraw
         private DispatcherTimer? _redrawTimer;
@@ -76,6 +78,9 @@ namespace MTGProxyBuilder.UI.Controls
             Background = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
             ClipToBounds = true;
             Focusable = true;
+            // Stop the parent ScrollViewer from scrolling the (huge) canvas to its top when it gains
+            // keyboard focus on click — that was the "scroll, then click jumps back to the start" bug.
+            ScrollViewer.SetBringIntoViewOnFocusChange(this, false);
 
             _redrawTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
             _redrawTimer.Tick += (_, _) => { _redrawTimer.Stop(); _ = RedrawAsync(); };
@@ -213,6 +218,8 @@ namespace MTGProxyBuilder.UI.Controls
             _bleedPx = settings.BleedWidthMm > 0
                 ? Math.Max(1, (int)(settings.BleedWidthMm / settings.CardWidthMm * 600)) : 0;
             _useBleed = _bleedPx > 0 && !regMarksActive;
+            _cardWmm = settings.CardWidthMm;
+            _cardHmm = settings.CardHeightMm;
 
             int cols = settings.CardsPerRow;
             int rows = settings.CardsPerColumn;
@@ -234,7 +241,7 @@ namespace MTGProxyBuilder.UI.Controls
                 string? path = showBack ? (s.Card.BackArtworkPath ?? s.Card.ArtworkPath) : s.Card.ArtworkPath;
                 if (string.IsNullOrEmpty(path)) continue;
                 // Skip only if the display (possibly bled) image is already decoded in the cache.
-                if (_displayPathCache.TryGetValue(DisplayKey(path, _bleedPx, _useBleed), out var disp)
+                if (_displayPathCache.TryGetValue(DisplayKey(path, _bleedPx, _useBleed, _cardWmm), out var disp)
                     && _imageCache.ContainsKey(disp))
                     continue;
                 pathsToLoad.Add(path);
@@ -247,18 +254,18 @@ namespace MTGProxyBuilder.UI.Controls
                 int decodeWidth = (int)cellW * 2;
                 int bleedPx = _bleedPx;
                 bool useBleed = _useBleed;
+                double cardWmm = _cardWmm, cardHmm = _cardHmm;
                 foreach (var path in pathsToLoad)
                 {
                     if (token.IsCancellationRequested) { IsRendering = false; return; }
                     await Task.Run(() =>
                     {
-                        // Resolve (and disk-generate) the bled image on the background thread, then
-                        // decode the result into the bitmap cache. Falls back to the raw path.
-                        // MPCFill art already has bleed -> use it as-is (drawn full-cell). Scryfall
-                        // scans get bleed-extended. Bleed off -> raw path.
-                        string disp = _displayPathCache.GetOrAdd(DisplayKey(path, bleedPx, useBleed),
-                            _ => (useBleed && !BleedProcessor.ImageAlreadyHasBleed(path))
-                                ? (_bleedProcessor.GetBleedExtendedImage(path, bleedPx) ?? path)
+                        // Resolve (and disk-generate) the display image on the background thread, then
+                        // decode the result into the bitmap cache. Scryfall -> bleed-extend; MPCFill ->
+                        // crop built-in bleed then extend; both fill the cell. Bleed off -> raw path.
+                        string disp = _displayPathCache.GetOrAdd(DisplayKey(path, bleedPx, useBleed, cardWmm),
+                            _ => useBleed
+                                ? (_bleedProcessor.GetDisplayImage(path, bleedPx, cardWmm, cardHmm) ?? path)
                                 : path);
                         LoadImageToCache(disp, decodeWidth);
                     }, token);
@@ -759,14 +766,12 @@ namespace MTGProxyBuilder.UI.Controls
             bool bledImage = false;
             if (!(flipped && !hasBackArt) && !string.IsNullOrEmpty(imagePath))
             {
-                string disp = _displayPathCache.TryGetValue(DisplayKey(imagePath, _bleedPx, _useBleed), out var d)
+                string disp = _displayPathCache.TryGetValue(DisplayKey(imagePath, _bleedPx, _useBleed, _cardWmm), out var d)
                     ? d : imagePath;
                 bmp = GetCachedImage(disp);
-                // Fill the whole cell when the drawn image carries the bleed: either we extended a
-                // Scryfall scan (disp != raw) or it's MPCFill art that already includes its bleed.
-                bledImage = _useBleed && bmp != null
-                    && (!string.Equals(disp, imagePath, StringComparison.Ordinal)
-                        || BleedProcessor.ImageAlreadyHasBleed(imagePath));
+                // The display image carries the bleed and fills the whole cell whenever it was
+                // processed (Scryfall extended OR MPCFill cropped+extended) -> display path != raw.
+                bledImage = _useBleed && bmp != null && !string.Equals(disp, imagePath, StringComparison.Ordinal);
             }
 
             CardVisualRenderer.PlaceCard(this, card, bmp,

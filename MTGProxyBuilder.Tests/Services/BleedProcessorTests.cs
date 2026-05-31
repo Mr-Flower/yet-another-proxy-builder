@@ -111,6 +111,47 @@ public class BleedProcessorTests
     public void ImageAlreadyHasBleed_DetectsMpcFillByPrefix(string path, bool expected)
         => Assert.Equal(expected, BleedProcessor.ImageAlreadyHasBleed(path));
 
+    [Fact]
+    public void GetDisplayImage_MpcFillArt_CropsAndExtendsToJpg()
+    {
+        var proc = new BleedProcessor();
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"disp_mpc_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            string input = Path.Combine(tmpDir, "mpc_full.png"); // mpc_ prefix => already full-bleed
+            CreateTestImage(input, 80, 112);
+            var result = proc.GetDisplayImage(input, 6, 63, 88);
+            Assert.NotNull(result);
+            Assert.NotEqual(input, result);
+            Assert.True(File.Exists(result), "processed MPC image should exist");
+            Assert.EndsWith(".jpg", result!);
+        }
+        finally { try { Directory.Delete(tmpDir, true); } catch { } proc.ClearCache(); }
+    }
+
+    [Fact]
+    public void GetDisplayImage_ScryfallScan_DelegatesToBleedExtend()
+    {
+        var proc = new BleedProcessor();
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"disp_scry_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            string input = Path.Combine(tmpDir, "scryfall_card.png"); // no mpc_ prefix
+            CreateTestImage(input, 80, 112);
+            var result = proc.GetDisplayImage(input, 6, 63, 88);
+            Assert.NotNull(result);
+            Assert.NotEqual(input, result);
+            Assert.True(File.Exists(result));
+        }
+        finally { try { Directory.Delete(tmpDir, true); } catch { } proc.ClearCache(); }
+    }
+
+    [Fact]
+    public void GetDisplayImage_ZeroBleed_ReturnsOriginal()
+        => Assert.Equal("/x/mpc_a.jpg", new BleedProcessor().GetDisplayImage("/x/mpc_a.jpg", 0, 63, 88));
+
     // ---- corner square-off (white triangle removal) ----
 
     [Fact]

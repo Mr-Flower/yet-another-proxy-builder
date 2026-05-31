@@ -35,14 +35,10 @@ namespace MTGProxyBuilder.Core.Services
 
                         foreach (var path in uniquePaths)
                         {
-                            // MPCFill art already includes its own bleed — don't add more. Map it to
-                            // itself so it's drawn straight into the full cell (no double border).
-                            if (BleedProcessor.ImageAlreadyHasBleed(path))
-                            {
-                                bleedCache[path!] = path!;
-                                continue;
-                            }
-                            var result = _bleedProcessor.GetBleedExtendedImage(path!, bleedPx);
+                            // Scryfall scans are bleed-extended; MPCFill art (already full-bleed) is
+                            // cropped back to the bare card then extended to the user's bleed.
+                            var result = _bleedProcessor.GetDisplayImage(
+                                path!, bleedPx, settings.CardWidthMm, settings.CardHeightMm);
                             if (result != null)
                                 bleedCache[path!] = result;
                         }
