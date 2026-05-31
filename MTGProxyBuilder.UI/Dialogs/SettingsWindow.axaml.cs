@@ -31,8 +31,6 @@ public partial class SettingsWindow : Window
     {
         var s = _settingsService.Settings;
 
-        TokenTextBox.Text = s.DefaultTokenText;
-        BleedBox.Text = s.DefaultBleedMm.ToString();
         UpdateCheckBox.IsChecked = s.CheckForUpdates;
         AutoSaveLibraryBox.IsChecked = s.AutoSaveDownloadedToLibrary;
         UseFavoritesCheckBox.IsChecked = s.MpcFillUseFavoritesOnly;
@@ -124,13 +122,11 @@ public partial class SettingsWindow : Window
     private void OnSave(object? sender, RoutedEventArgs e)
     {
         var s = _settingsService.Settings;
-        s.DefaultTokenText = TokenTextBox.Text ?? "";
         s.DefaultPagePreset = GetComboContent(PagePresetBox) ?? "A4";
         s.CheckForUpdates = UpdateCheckBox.IsChecked == true;
         s.AutoSaveDownloadedToLibrary = AutoSaveLibraryBox.IsChecked == true;
         s.MpcFillUseFavoritesOnly = UseFavoritesCheckBox.IsChecked == true;
 
-        if (float.TryParse(BleedBox.Text, out var bleed)) s.DefaultBleedMm = bleed;
         if (int.TryParse(MaxSizeBox.Text, out var maxSize) && maxSize > 0) s.MpcFillMaximumSize = maxSize;
 
         s.MpcFillDefaultSortBy = GetComboTag(SortByBox) ?? "nameAscending";

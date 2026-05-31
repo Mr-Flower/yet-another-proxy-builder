@@ -116,12 +116,21 @@ namespace MTGProxyBuilder.Core.Models
 
         // --- Computed properties ---
 
+        /// <summary>
+        /// The bleed actually used for layout AND rendering. Bleed is the fixed MakePlayingCards 1/8"
+        /// standard (so MPCFill art fits whole and Scryfall scans are extended to match); BleedWidthMm
+        /// only toggles it on/off. Grid math MUST use this — not the raw BleedWidthMm — so the page
+        /// layout matches the cell size BleedProcessor/PdfGenerator draw (otherwise the grid was sized
+        /// for a smaller bleed and the cards overflowed the page edge).
+        /// </summary>
+        public float EffectiveBleedMm => BleedWidthMm > 0 ? Constants.MpcBleedMm : 0f;
+
         /// <summary>Max columns that fit using the full page width (ignoring margins).</summary>
         public int AutoCardsPerRow
         {
             get
             {
-                float cellW = CardWidthMm + 2 * BleedWidthMm;
+                float cellW = CardWidthMm + 2 * EffectiveBleedMm;
                 return cellW > 0 ? Math.Max(1, (int)(PageWidthMm / cellW)) : 0;
             }
         }
@@ -131,7 +140,7 @@ namespace MTGProxyBuilder.Core.Models
         {
             get
             {
-                float cellH = CardHeightMm + 2 * BleedWidthMm;
+                float cellH = CardHeightMm + 2 * EffectiveBleedMm;
                 return cellH > 0 ? Math.Max(1, (int)(PageHeightMm / cellH)) : 0;
             }
         }
@@ -184,8 +193,8 @@ namespace MTGProxyBuilder.Core.Models
             if (cols <= 0) cols = 1;
             if (rows <= 0) rows = 1;
 
-            float gridWidth = cols * (CardWidthMm + 2 * BleedWidthMm);
-            float gridHeight = rows * (CardHeightMm + 2 * BleedWidthMm);
+            float gridWidth = cols * (CardWidthMm + 2 * EffectiveBleedMm);
+            float gridHeight = rows * (CardHeightMm + 2 * EffectiveBleedMm);
 
             float hSpace = PageWidthMm - gridWidth;
             float vSpace = PageHeightMm - gridHeight;

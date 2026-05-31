@@ -210,7 +210,7 @@ namespace MTGProxyBuilder.UI.Controls
             // WYSIWYG bleed locked to the MPC 1/8" standard (same as the PDF): MPCFill art is drawn
             // whole and Scryfall scans extend to match, so both render at identical zoom.
             // BleedWidthMm only toggles bleed on/off. Registration-marks mode suppresses it.
-            float effectiveBleedMm = settings.BleedWidthMm > 0 ? Constants.MpcBleedMm : 0f;
+            float effectiveBleedMm = settings.EffectiveBleedMm;
             float cellW   = (settings.CardWidthMm  + 2 * effectiveBleedMm) * mmPx;
             float cellH   = (settings.CardHeightMm + 2 * effectiveBleedMm) * mmPx;
             float bleed   = effectiveBleedMm * mmPx;

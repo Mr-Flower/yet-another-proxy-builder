@@ -40,7 +40,7 @@ namespace MTGProxyBuilder.Core.Services
         public string MpcFillDefaultSortBy { get; set; } = "nameAscending";
 
         [JsonProperty("mpcFillCardTypes")]
-        public List<string> MpcFillCardTypes { get; set; } = new() { "CARD" };
+        public List<string> MpcFillCardTypes { get; set; } = new() { "CARD", "TOKEN" };
 
         [JsonProperty("mpcFillFilterCardbacks")]
         public bool MpcFillFilterCardbacks { get; set; }

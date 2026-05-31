@@ -138,6 +138,10 @@
                                         <ComboBoxItem Content="200" Tag="200"/>
                                         <ComboBoxItem Content="300" Tag="300"/>
                                         <ComboBoxItem Content="400" Tag="400"/>
+                                        <ComboBoxItem Content="500" Tag="500"/>
+                                        <ComboBoxItem Content="600" Tag="600"/>
+                                        <ComboBoxItem Content="700" Tag="700"/>
+                                        <ComboBoxItem Content="800" Tag="800"/>
                                     </ComboBox>
                                 </StackPanel>
                                 <StackPanel Grid.Column="4">
