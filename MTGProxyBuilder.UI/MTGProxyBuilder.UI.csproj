@@ -27,31 +27,10 @@
     <PackageReference Include="SkiaSharp" Version="2.88.9" />
   </ItemGroup>
 
-  <!-- Exclude all legacy WPF files (replaced by .axaml.cs counterparts) -->
+  <!-- Legacy WPF AssemblyInfo (kept on disk, excluded so the SDK auto-generates assembly attributes
+       instead). The rest of the old WPF *.xaml / *.xaml.cs set has been deleted. -->
   <ItemGroup>
     <Compile Remove="AssemblyInfo.cs" />
-    <Compile Remove="App.xaml.cs" />
-    <Compile Remove="MainWindow.xaml.cs" />
-    <Compile Remove="Controls\ImagePreviewPanel.xaml.cs" />
-    <Compile Remove="Controls\LayerListPanel.xaml.cs" />
-    <Compile Remove="Controls\PropertyPanel.xaml.cs" />
-    <Compile Remove="Controls\SearchBar.xaml.cs" />
-    <Compile Remove="Dialogs\ArtSelectorDialog.xaml.cs" />
-    <Compile Remove="Dialogs\BackArtLibraryDialog.xaml.cs" />
-    <Compile Remove="Dialogs\BackArtSelectorDialog.xaml.cs" />
-    <Compile Remove="Dialogs\ColorPickerDialog.xaml.cs" />
-    <Compile Remove="Dialogs\FrontArtLibraryDialog.xaml.cs" />
-    <Compile Remove="Dialogs\ImagePreviewDialog.xaml.cs" />
-    <Compile Remove="Dialogs\MpcSourceManagerDialog.xaml.cs" />
-    <Compile Remove="Dialogs\SettingsDialog.xaml.cs" />
-  </ItemGroup>
-
-
-  <!-- Prevent old WPF XAML from being processed as resources -->
-  <ItemGroup>
-    <None Include="**\*.xaml" />
-    <EmbeddedResource Remove="**\*.xaml" />
-    <Page Remove="**\*.xaml" />
   </ItemGroup>
 
 </Project>

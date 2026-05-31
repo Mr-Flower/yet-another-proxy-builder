@@ -294,29 +294,5 @@ namespace MTGProxyBuilder.UI.ViewModels
             };
             return (card, null);
         }
-
-        public async Task<(int Updated, int Failed)> UpdateAllArtFromMpcFillAsync(
-            IList<CardModel> cards, int minDpi, bool fuzzySearch, bool useFavoritesOnly,
-            Action<string>? onProgress = null)
-        {
-            int updated = 0, failed = 0;
-            for (int i = 0; i < cards.Count; i++)
-            {
-                var card = cards[i];
-                onProgress?.Invoke($"Searching MPCFill {i + 1}/{cards.Count}: {card.Name}...");
-
-                var (results, error) = await _search.SearchMpcFillForCard(
-                    card.Name, minDpi, fuzzySearch, useFavoritesOnly);
-                if (error != null || results.Count == 0) { failed++; continue; }
-
-                onProgress?.Invoke($"Downloading art {i + 1}/{cards.Count}: {card.Name}...");
-                var path = await _search.DownloadMpcFillArtAsync(results[0]);
-                if (path != null) { card.ArtworkPath = path; updated++; }
-                else { failed++; }
-
-                await Task.Delay(50);
-            }
-            return (updated, failed);
-        }
     }
 }

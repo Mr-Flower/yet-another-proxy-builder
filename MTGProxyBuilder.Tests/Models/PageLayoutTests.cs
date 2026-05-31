@@ -13,8 +13,8 @@ public class PageLayoutTests
         Assert.Equal(297f, layout.PageHeightMm);
         Assert.Equal(Constants.DefaultCardWidthMm, layout.CardWidthMm);
         Assert.Equal(Constants.DefaultCardHeightMm, layout.CardHeightMm);
-        // New layouts default to the full MPC 1/8" bleed (user can trim it down per-project).
-        Assert.Equal(Constants.MpcBleedMm, layout.BleedWidthMm);
+        // New layouts default to a 1 mm trim margin (user can adjust it per-project, 0 .. 1/8").
+        Assert.Equal(Constants.DefaultBleedMm, layout.BleedWidthMm);
         Assert.False(layout.IsLandscape);
     }
 

@@ -7,7 +7,7 @@ namespace MTGProxyBuilder.Core.Models
     {
         private float _pageWidthMm = 210; // A4
         private float _pageHeightMm = 297; // A4
-        private float _bleedWidthMm = Constants.MpcBleedMm; // default to the full MPC 1/8" bleed
+        private float _bleedWidthMm = Constants.DefaultBleedMm; // default trim margin (1 mm)
         private float _marginLeftMm;
         private float _marginTopMm;
         private float _marginRightMm;

@@ -292,26 +292,6 @@ public class MainViewModel : ViewModelBase
         catch { }
     }
 
-    private async void OpenSettings_Impl()
-    {
-        string? oldFrontPath = _appSettings.Settings.FrontArtLibraryPath;
-        string? oldBackPath = _appSettings.Settings.BackArtLibraryPath;
-
-        await _dialogService.ShowSettingsAsync(_appSettings, MpcSourceManager, _mpcFillService);
-
-        MpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
-        MpcAdvMinDpi = _appSettings.Settings.MpcFillDefaultMinDpi;
-        MpcFuzzySearch = _appSettings.Settings.MpcFillDefaultFuzzySearch;
-
-        if (_appSettings.Settings.FrontArtLibraryPath != oldFrontPath)
-            _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
-        if (_appSettings.Settings.BackArtLibraryPath != oldBackPath)
-        {
-            _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
-            RefreshBackArtLibrary();
-        }
-    }
-
     private void DownloadUpdate()
     {
         if (!string.IsNullOrEmpty(UpdateDownloadUrl))

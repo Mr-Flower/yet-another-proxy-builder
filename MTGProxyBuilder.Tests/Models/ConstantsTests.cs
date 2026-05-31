@@ -17,9 +17,9 @@ public class ConstantsTests
     }
 
     [Fact]
-    public void DefaultBleedMm_Is1Point5()
+    public void DefaultBleedMm_Is1Mm()
     {
-        Assert.Equal(1.5f, Constants.DefaultBleedMm);
+        Assert.Equal(1f, Constants.DefaultBleedMm);
     }
 
     [Fact]

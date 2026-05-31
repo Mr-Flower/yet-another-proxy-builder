@@ -4,7 +4,9 @@ namespace MTGProxyBuilder.Core
     {
         public const float DefaultCardWidthMm = 63f;
         public const float DefaultCardHeightMm = 88f;
-        public const float DefaultBleedMm = 1.5f;
+        // Default trim margin for new projects. The cut line sits on the card edge; this is just how
+        // much bleed is kept around it (0 .. MpcBleedMm). Tunable per-project from the Layout panel.
+        public const float DefaultBleedMm = 1f;
         public const int DefaultDpi = 300;
 
         /// <summary>
@@ -16,7 +18,5 @@ namespace MTGProxyBuilder.Core
         /// user-tunable) because it must equal MPCFill's baked-in margin.
         /// </summary>
         public const float MpcBleedMm = 3.048f;
-
-        public const int MmToDpiConversion = 25; // Approximate conversion for DPI
     }
 }

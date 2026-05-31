@@ -1,9 +1,0 @@
-<Window x:Class="MTGProxyBuilder.UI.Dialogs.ImagePreviewDialog"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="clr-namespace:MTGProxyBuilder.UI.Controls"
-        Title="Image Preview" Height="700" Width="550"
-        WindowStartupLocation="CenterOwner" ResizeMode="CanResize" MinWidth="300" MinHeight="300"
-        Background="#111" ShowInTaskbar="False">
-    <controls:ImagePreviewPanel x:Name="PreviewPanel"/>
-</Window>
