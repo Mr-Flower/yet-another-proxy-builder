@@ -41,6 +41,65 @@ public class DeckImportTests
         Assert.Equal(DeckSource.Unknown, DeckImportService.DetectSource("   "));
     }
 
+    // --- DeckImportService.ParseTextList ---
+
+    [Fact]
+    public void ParseTextList_BasicQuantitiesAndNames()
+    {
+        var deck = DeckImportService.ParseTextList("2 Sol Ring\n1 Counterspell\nLightning Bolt");
+        Assert.Equal(3, deck.Entries.Count);
+        Assert.Equal("Sol Ring", deck.Entries[0].CardName);
+        Assert.Equal(2, deck.Entries[0].Quantity);
+        Assert.Equal("Counterspell", deck.Entries[1].CardName);
+        Assert.Equal(1, deck.Entries[1].Quantity);
+        Assert.Equal("Lightning Bolt", deck.Entries[2].CardName);
+        Assert.Equal(1, deck.Entries[2].Quantity);
+    }
+
+    [Theory]
+    [InlineData("3x Forest")]
+    [InlineData("3X Forest")]
+    [InlineData("3 Forest")]
+    public void ParseTextList_AcceptsXQuantityForms(string line)
+    {
+        var deck = DeckImportService.ParseTextList(line);
+        Assert.Single(deck.Entries);
+        Assert.Equal("Forest", deck.Entries[0].CardName);
+        Assert.Equal(3, deck.Entries[0].Quantity);
+    }
+
+    [Fact]
+    public void ParseTextList_StripsSetAndCollectorHint()
+    {
+        var deck = DeckImportService.ParseTextList("1 Sol Ring (C21) 263");
+        Assert.Single(deck.Entries);
+        Assert.Equal("Sol Ring", deck.Entries[0].CardName);
+    }
+
+    [Fact]
+    public void ParseTextList_IgnoresHeadersBlanksAndComments()
+    {
+        var deck = DeckImportService.ParseTextList("Deck\n\n# comment\n// note\n2 Island\nSideboard:\n1 Negate");
+        Assert.Equal(2, deck.Entries.Count);
+        Assert.Equal("Island", deck.Entries[0].CardName);
+        Assert.Equal("Negate", deck.Entries[1].CardName);
+    }
+
+    [Fact]
+    public void ParseTextList_SumsDuplicateNames()
+    {
+        var deck = DeckImportService.ParseTextList("2 Forest\n3 Forest");
+        Assert.Single(deck.Entries);
+        Assert.Equal(5, deck.Entries[0].Quantity);
+    }
+
+    [Fact]
+    public void ParseTextList_EmptyReturnsNoEntries()
+    {
+        Assert.Empty(DeckImportService.ParseTextList("").Entries);
+        Assert.Empty(DeckImportService.ParseTextList("   \n  \n").Entries);
+    }
+
     // --- MoxfieldService.ParseDeckId ---
 
     [Theory]

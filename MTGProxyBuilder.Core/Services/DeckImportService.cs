@@ -43,6 +43,65 @@ namespace MTGProxyBuilder.Core.Services
             return DeckSource.Unknown;
         }
 
+        /// <summary>
+        /// Parses a pasted text decklist into entries. Accepts common formats, one card
+        /// per line:
+        ///   "2 Sol Ring", "2x Sol Ring", "Sol Ring", "1 Sol Ring (C21) 263"
+        /// Section headers ("Deck", "Sidebar:", "Commander", etc.), blank lines and lines
+        /// starting with '#' or '//' are ignored. The trailing set/collector hint
+        /// "(SET) 123" is stripped from the name. Quantities are summed for duplicate names.
+        /// </summary>
+        public static ImportedDeck ParseTextList(string text)
+        {
+            var deck = new ImportedDeck { Name = "Pasted list", Source = DeckSource.Unknown };
+            if (string.IsNullOrWhiteSpace(text)) return deck;
+
+            var byName = new Dictionary<string, DeckImportEntry>(StringComparer.OrdinalIgnoreCase);
+            var order = new List<string>();
+
+            foreach (var raw in text.Replace("\r", "").Split('\n'))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0) continue;
+                if (line.StartsWith("#") || line.StartsWith("//")) continue;
+
+                // Skip common section headers (no quantity, ends with ':' or known words).
+                var lower = line.ToLowerInvariant().TrimEnd(':');
+                if (lower is "deck" or "sideboard" or "sideboar" or "commander"
+                    or "maybeboard" or "companion" or "tokens") continue;
+
+                int qty = 1;
+                string name = line;
+
+                // Leading quantity: "2 ", "2x ", "2X "
+                var m = System.Text.RegularExpressions.Regex.Match(line, @"^(\d+)\s*[xX]?\s+(.+)$");
+                if (m.Success)
+                {
+                    qty = int.TryParse(m.Groups[1].Value, out var q) && q > 0 ? q : 1;
+                    name = m.Groups[2].Value.Trim();
+                }
+
+                // Strip trailing set/collector hint: "(C21) 263", "(C21)", " 263"
+                name = System.Text.RegularExpressions.Regex.Replace(
+                    name, @"\s*\([A-Za-z0-9]{2,5}\)\s*[A-Za-z0-9\-]*\s*$", "").Trim();
+                // Strip a bare trailing collector number left over (e.g. "Sol Ring 263")
+                // only if preceded by more than one word, to avoid eating real names.
+
+                if (name.Length == 0) continue;
+
+                if (byName.TryGetValue(name, out var existing))
+                    existing.Quantity += qty;
+                else
+                {
+                    byName[name] = new DeckImportEntry { CardName = name, Quantity = qty };
+                    order.Add(name);
+                }
+            }
+
+            deck.Entries = order.Select(n => byName[n]).ToList();
+            return deck;
+        }
+
         public async Task<(ImportedDeck? Deck, string? Error)> ImportAsync(string url)
         {
             var source = DetectSource(url);

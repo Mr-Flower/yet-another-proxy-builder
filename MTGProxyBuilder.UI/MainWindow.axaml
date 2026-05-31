@@ -393,6 +393,20 @@
                                           Content="Skip cards already in project (merge basics)"
                                           Foreground="#999" FontSize="10" Margin="0,2,0,0"/>
 
+                                <TextBlock Text="Paste Card List" FontWeight="SemiBold" Foreground="#CCC"
+                                           Margin="0,16,0,6" FontSize="12"/>
+                                <TextBlock Text="One card per line, e.g. &quot;2 Sol Ring&quot; or &quot;Lightning Bolt&quot;"
+                                           Foreground="#666" FontSize="10" Margin="0,0,0,4"/>
+                                <TextBox Text="{Binding ImportDeckText}"
+                                         AcceptsReturn="True" TextWrapping="Wrap"
+                                         Height="110" Padding="6,5" FontSize="11"
+                                         VerticalContentAlignment="Top"
+                                         Background="#3E3E42" Foreground="White"
+                                         BorderBrush="#555" BorderThickness="1" CaretBrush="White"/>
+                                <Button Theme="{StaticResource AccentBtn}"
+                                        Command="{Binding ImportTextListCommand}" Content="Add Cards from List"
+                                        HorizontalAlignment="Stretch" Padding="8,6" Margin="0,4,0,0"/>
+
                                 <TextBlock Text="Import MPCFill Project" FontWeight="SemiBold" Foreground="#CCC"
                                            Margin="0,16,0,6" FontSize="12"/>
                                 <Button Theme="{StaticResource AccentBtn}" Command="{Binding ImportMpcFillXmlCommand}"

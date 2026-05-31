@@ -237,6 +237,7 @@ public class MainViewModel : ViewModelBase
         ClearFilterCommand = new RelayCommand(_ => ClearFilter());
 
         ImportDeckCommand = new RelayCommand(_ => _ = ImportDeckAsync(), _ => !string.IsNullOrWhiteSpace(ImportDeckUrl));
+        ImportTextListCommand = new RelayCommand(_ => _ = ImportTextListAsync(), _ => !string.IsNullOrWhiteSpace(ImportDeckText));
         BuildAdvancedQueryCommand = new RelayCommand(_ => ApplyAdvancedQuery());
         ClearAdvancedSearchCommand = new RelayCommand(_ => ClearAdvancedSearch());
 
@@ -602,6 +603,7 @@ public class MainViewModel : ViewModelBase
     public ICommand ApplySortToProjectCommand { get; }
     public ICommand ClearFilterCommand { get; }
     public ICommand ImportDeckCommand { get; }
+    public ICommand ImportTextListCommand { get; } // fork-specific: paste a decklist
     public ICommand AddMpcFillCardCommand { get; }
     public ICommand ClearAllCardsCommand { get; }
     public ICommand UpdateAllArtFromMpcFillCommand { get; }
@@ -610,6 +612,13 @@ public class MainViewModel : ViewModelBase
     {
         get => _importDeckUrl;
         set => SetProperty(ref _importDeckUrl, value);
+    }
+
+    private string _importDeckText = string.Empty;
+    public string ImportDeckText
+    {
+        get => _importDeckText;
+        set => SetProperty(ref _importDeckText, value);
     }
 
     public bool IgnoreDuplicates
@@ -1761,6 +1770,50 @@ public class MainViewModel : ViewModelBase
         {
             StatusText = $"Import failed: {ex.Message}";
             await _dialogService.ShowErrorAsync($"Import error:\n{ex.Message}", "Error");
+        }
+        finally { ClearBusy(); }
+    }
+
+    // fork-specific: import a pasted text decklist (resolves each name via Scryfall/MPCFill).
+    private async Task ImportTextListAsync()
+    {
+        var deck = DeckImportService.ParseTextList(ImportDeckText);
+        if (deck.Entries.Count == 0)
+        {
+            await _dialogService.ShowWarningAsync(
+                "Nessuna carta riconosciuta. Incolla una lista con una carta per riga, es.:\n\n" +
+                "2 Sol Ring\n1 Counterspell\nLightning Bolt",
+                "Lista vuota");
+            return;
+        }
+
+        SetBusy("Importazione lista incollata...");
+        try
+        {
+            PushUndo();
+            var result = await _importCoordinator.ImportDeckCardsAsync(
+                deck, Cards, IgnoreDuplicates, UseMpcFill,
+                MpcAdvMinDpi, MpcFuzzySearch, MpcUseFavoritesOnly,
+                onProgress: msg => BusyMessage = msg);
+
+            Cards.CollectionChanged -= OnCardsCollectionChanged;
+            foreach (var c in result.Cards) { ApplyDefaultBackArt(c); Cards.Add(c); }
+            Cards.CollectionChanged += OnCardsCollectionChanged;
+
+            _currentProject.PageSettings.CenterGrid();
+            ApplyFilterAndSort();
+            ImportDeckText = string.Empty;
+
+            int totalAdded = result.Cards.Sum(c => c.Quantity);
+            string summary = $"Importate {result.Cards.Count} carte ({totalAdded} totali) dalla lista incollata";
+            if (result.Failed > 0) summary += $"\n{result.Failed} carta/e non trovata/e su Scryfall";
+            StatusText = summary;
+            await _dialogService.ShowInfoAsync(summary, "Import completato");
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Import fallito: {ex.Message}";
+            await _dialogService.ShowErrorAsync($"Errore import:\n{ex.Message}", "Errore");
         }
         finally { ClearBusy(); }
     }
