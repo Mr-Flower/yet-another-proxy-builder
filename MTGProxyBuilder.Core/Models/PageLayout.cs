@@ -7,7 +7,7 @@ namespace MTGProxyBuilder.Core.Models
     {
         private float _pageWidthMm = 210; // A4
         private float _pageHeightMm = 297; // A4
-        private float _bleedWidthMm = Constants.DefaultBleedMm;
+        private float _bleedWidthMm = Constants.MpcBleedMm; // default to the full MPC 1/8" bleed
         private float _marginLeftMm;
         private float _marginTopMm;
         private float _marginRightMm;
@@ -117,13 +117,15 @@ namespace MTGProxyBuilder.Core.Models
         // --- Computed properties ---
 
         /// <summary>
-        /// The bleed actually used for layout AND rendering. Bleed is the fixed MakePlayingCards 1/8"
-        /// standard (so MPCFill art fits whole and Scryfall scans are extended to match); BleedWidthMm
-        /// only toggles it on/off. Grid math MUST use this — not the raw BleedWidthMm — so the page
-        /// layout matches the cell size BleedProcessor/PdfGenerator draw (otherwise the grid was sized
-        /// for a smaller bleed and the cards overflowed the page edge).
+        /// The bleed actually used for layout AND rendering. The cut line always sits on the card edge;
+        /// the bleed is just the trim margin around it. It is user-configurable from 0 up to the
+        /// MakePlayingCards 1/8" standard (the max, since that is all the bleed MPCFill art carries):
+        /// MPCFill art has its native 1/8" bleed CROPPED down to this amount, and Scryfall scans are
+        /// edge-extended up to it — so the card stays the same size for both sources at any setting.
+        /// Grid math MUST use this (not the raw BleedWidthMm) so the page layout matches the cell size
+        /// BleedProcessor/PdfGenerator draw.
         /// </summary>
-        public float EffectiveBleedMm => BleedWidthMm > 0 ? Constants.MpcBleedMm : 0f;
+        public float EffectiveBleedMm => Math.Clamp(BleedWidthMm, 0f, Constants.MpcBleedMm);
 
         /// <summary>Max columns that fit using the full page width (ignoring margins).</summary>
         public int AutoCardsPerRow

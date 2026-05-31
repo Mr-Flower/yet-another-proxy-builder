@@ -10,7 +10,7 @@ public class AppSettingsServiceTests
         // Test the AppSettings class defaults (not the file on disk which may have been modified)
         var settings = new MTGProxyBuilder.Core.Services.AppSettings();
         Assert.Equal("TOKEN", settings.DefaultTokenText);
-        Assert.Equal(1.5f, settings.DefaultBleedMm);
+        Assert.Equal(MTGProxyBuilder.Core.Constants.MpcBleedMm, settings.DefaultBleedMm);
         Assert.Equal("Magic: The Gathering", settings.DefaultCardSizePreset);
         Assert.Equal("A4", settings.DefaultPagePreset);
         Assert.True(settings.CheckForUpdates);

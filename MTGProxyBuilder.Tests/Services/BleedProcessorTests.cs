@@ -152,6 +152,46 @@ public class BleedProcessorTests
     public void GetDisplayImage_ZeroBleed_ReturnsOriginal()
         => Assert.Equal("/x/mpc_a.jpg", new BleedProcessor().GetDisplayImage("/x/mpc_a.jpg", 0, 63));
 
+    [Fact]
+    public void GetDisplayImage_MpcFillReducedBleed_CropsTowardCard()
+    {
+        // Reducing the bleed below 1/8" trims MPCFill's native bleed: the output is smaller than the
+        // full image (outer margin removed) but still larger than the bare card.
+        var proc = new BleedProcessor();
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"mpccrop_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            string input = Path.Combine(tmpDir, "mpc_full.png");
+            CreateTestImage(input, 822, 1122); // MPC poker template (card 750x1050 + 36px bleed/side)
+            var result = proc.GetDisplayImage(input, Constants.MpcBleedMm / 2, 63);
+            Assert.NotNull(result);
+            Assert.NotEqual(input, result);
+            using var bmp = SKBitmap.Decode(result);
+            Assert.InRange(bmp.Width, 751, 821); // between card (750) and full (822)
+        }
+        finally { try { Directory.Delete(tmpDir, true); } catch { } proc.ClearCache(); }
+    }
+
+    [Fact]
+    public void GetDisplayImage_MpcFillZeroBleed_CropsToCard()
+    {
+        // At bleed 0 the native 1/8" bleed is fully trimmed, leaving just the ~750x1050 card region.
+        var proc = new BleedProcessor();
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"mpccrop0_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            string input = Path.Combine(tmpDir, "mpc_full.png");
+            CreateTestImage(input, 822, 1122);
+            var result = proc.GetDisplayImage(input, 0, 63);
+            using var bmp = SKBitmap.Decode(result);
+            Assert.InRange(bmp.Width, 748, 752);
+            Assert.InRange(bmp.Height, 1048, 1052);
+        }
+        finally { try { Directory.Delete(tmpDir, true); } catch { } proc.ClearCache(); }
+    }
+
     [Theory]
     [InlineData(630)]
     [InlineData(1260)]

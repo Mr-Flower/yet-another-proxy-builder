@@ -21,12 +21,14 @@ namespace MTGProxyBuilder.Core.Services
                     var settings = project.PageSettings;
                     var printSettings = project.PrintSettings;
 
-                    // Pre-process all unique images for bleed (avoids re-processing duplicates).
-                    // Bleed magnitude is locked to the MPCFill standard (1/8") so MPCFill art fits whole
-                    // and Scryfall scans extend to match; settings.BleedWidthMm is only an on/off toggle.
+                    // Pre-process all unique images so each becomes exactly "card + 2*bleed": Scryfall
+                    // scans are edge-extended up to the chosen bleed; MPCFill art has its baked 1/8"
+                    // bleed cropped down to it. The card region is unchanged either way, so both sources
+                    // print at the same size. Skipped only in registration-marks mode (cards drawn bare).
+                    // Always run (even at bleed 0) so MPCFill's native bleed is still trimmed off.
                     float effectiveBleedMm = settings.EffectiveBleedMm;
                     var bleedCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    if (effectiveBleedMm > 0)
+                    if (!printSettings.ShowRegistrationMarks)
                     {
                         var uniquePaths = project.Cards
                             .SelectMany(c => new[] { c.ArtworkPath, c.BackArtworkPath })
@@ -35,8 +37,6 @@ namespace MTGProxyBuilder.Core.Services
 
                         foreach (var path in uniquePaths)
                         {
-                            // Scryfall scans are edge-extended to 1/8"; MPCFill art (already full-bleed)
-                            // is returned whole. Bleed px is sized from each image's own resolution.
                             var result = _bleedProcessor.GetDisplayImage(
                                 path!, effectiveBleedMm, settings.CardWidthMm);
                             if (result != null)

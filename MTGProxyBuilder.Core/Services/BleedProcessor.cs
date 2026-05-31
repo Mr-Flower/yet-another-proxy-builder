@@ -81,25 +81,84 @@ namespace MTGProxyBuilder.Core.Services
 
         /// <summary>
         /// Resolves the image to draw filling a full (card + 2*bleed) cell, matching the PDF output.
-        /// Both sources end up with the SAME 1/8" MPC-standard bleed, so the same card renders at the
-        /// same zoom whether it came from Scryfall or MPCFill:
-        /// - MPCFill art is authored full-bleed (already includes its own 1/8" margin), so it is drawn
-        ///   WHOLE, filling the cell as-is — no crop, no extension. The cut line trims that 1/8".
-        /// - Scryfall scans are the bare card, so 1/8" of bleed is added by duplicating the edge pixels
-        ///   outward (and squaring off white corners). The bleed is sized as a fraction of THIS image's
-        ///   pixels, so any scan resolution gets the correct border.
-        /// <paramref name="bleedMm"/> is the physical bleed per side (use <see cref="Constants.MpcBleedMm"/>);
-        /// <paramref name="cardWmm"/> is the card width the bare scan represents. Returns the original
-        /// path when no bleed is wanted or for MPCFill (drawn directly).
+        /// The cut line always sits on the card edge; <paramref name="bleedMm"/> is just the trim margin
+        /// around it (0 .. <see cref="Constants.MpcBleedMm"/>, the 1/8" MPC max). The card region ends up
+        /// the SAME size for both sources at any setting, so the same card never changes zoom:
+        /// - MPCFill art carries a baked 1/8" bleed; it is CROPPED down to <paramref name="bleedMm"/>
+        ///   (lossless — only the outer bleed is trimmed, the card is untouched). At the full 1/8" it is
+        ///   used whole.
+        /// - Scryfall scans are the bare card, so <paramref name="bleedMm"/> of bleed is ADDED by
+        ///   duplicating the edge pixels outward (sized as a fraction of this image's own pixels, so any
+        ///   scan resolution gets the right border).
+        /// <paramref name="cardWmm"/> is the card width the bare scan represents.
         /// </summary>
         public string? GetDisplayImage(string sourcePath, double bleedMm, double cardWmm)
         {
-            if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath) || bleedMm <= 0 || cardWmm <= 0)
+            if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath) || cardWmm <= 0)
                 return sourcePath;
+
+            bleedMm = Math.Clamp(bleedMm, 0, Constants.MpcBleedMm);
+
             if (ImageAlreadyHasBleed(sourcePath))
-                return sourcePath; // MPCFill: draw whole image, fill the cell
+            {
+                // MPCFill: at the full 1/8" there's nothing to trim; otherwise crop the native bleed down.
+                if (bleedMm >= Constants.MpcBleedMm - 0.005) return sourcePath;
+                return GetMpcCroppedImage(sourcePath, bleedMm) ?? sourcePath;
+            }
+
+            // Scryfall: extend the bare card by the requested bleed.
+            if (bleedMm <= 0) return sourcePath;
             int bleedPx = ScryfallBleedPixels(sourcePath, bleedMm, cardWmm);
-            return bleedPx > 0 ? GetBleedExtendedImage(sourcePath, bleedPx) : sourcePath; // Scryfall: extend edges
+            return bleedPx > 0 ? GetBleedExtendedImage(sourcePath, bleedPx) : sourcePath;
+        }
+
+        /// <summary>
+        /// Crops an MPCFill image's baked 1/8" bleed down to <paramref name="bleedMm"/> per side (0..1/8"),
+        /// keeping the card centered and untouched. The trim is derived from the MPC poker template
+        /// (full 822x1122, trimmed card 750x1050 => 36 px/side bleed) as a fraction of the image, so it is
+        /// resolution-independent. Cached on disk.
+        /// </summary>
+        private string? GetMpcCroppedImage(string sourcePath, double bleedMm)
+        {
+            double keep = Math.Clamp(bleedMm / Constants.MpcBleedMm, 0, 1); // fraction of native bleed kept
+            double cropFracW = (36.0 / 822.0) * (1 - keep);                 // trim per side (of width)
+            double cropFracH = (36.0 / 1122.0) * (1 - keep);                // trim per side (of height)
+
+            int bleedKey = (int)Math.Round(bleedMm * 1000);
+            string cacheKey = $"{sourcePath}|mpccrop|{bleedKey}";
+            if (_processedCache.TryGetValue(cacheKey, out var cached) && File.Exists(cached)) return cached;
+
+            try
+            {
+                string hash = $"crop_{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedKey}_v6";
+                string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
+                if (File.Exists(outputPath)) { _processedCache[cacheKey] = outputPath; return outputPath; }
+
+                using var source = SKBitmap.Decode(sourcePath);
+                if (source == null) return null;
+
+                int cropX = (int)Math.Round(source.Width * cropFracW);
+                int cropY = (int)Math.Round(source.Height * cropFracH);
+                int w = source.Width - 2 * cropX;
+                int h = source.Height - 2 * cropY;
+                if (w <= 0 || h <= 0) return null;
+
+                using var output = new SKBitmap(w, h);
+                using (var canvas = new SKCanvas(output))
+                    canvas.DrawBitmap(source,
+                        new SKRect(cropX, cropY, cropX + w, cropY + h),
+                        new SKRect(0, 0, w, h));
+
+                using var stream = File.OpenWrite(outputPath);
+                output.Encode(stream, SKEncodedImageFormat.Jpeg, 95);
+                _processedCache[cacheKey] = outputPath;
+                return outputPath;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"MPCFill crop error: {ex.Message}");
+                return null;
+            }
         }
 
         /// <summary>

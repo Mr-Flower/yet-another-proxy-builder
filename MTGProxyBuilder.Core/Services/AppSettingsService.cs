@@ -7,8 +7,10 @@ namespace MTGProxyBuilder.Core.Services
         [JsonProperty("defaultTokenText")]
         public string DefaultTokenText { get; set; } = "TOKEN";
 
+        // New projects start at the full MakePlayingCards 1/8" bleed; reduce it per-project from the
+        // Layout panel. (No longer surfaced in General settings — it is the fixed max, only trimmed.)
         [JsonProperty("defaultBleedMm")]
-        public float DefaultBleedMm { get; set; } = 1.5f;
+        public float DefaultBleedMm { get; set; } = Constants.MpcBleedMm;
 
         [JsonProperty("defaultCardSizePreset")]
         public string DefaultCardSizePreset { get; set; } = "Magic: The Gathering";

@@ -64,6 +64,7 @@ namespace MTGProxyBuilder.UI.Controls
         private static readonly ConcurrentDictionary<string, string> _displayPathCache = new();
         private double _bleedMm;
         private bool _useBleed;
+        private bool _processBleed;
         private double _cardWmm;
         private static string DisplayKey(string raw, double bleedMm, bool useBleed, double cardWmm)
             => $"{raw}|{bleedMm}|{useBleed}|{cardWmm}";
@@ -207,9 +208,10 @@ namespace MTGProxyBuilder.UI.Controls
             float marginT = settings.MarginTopMm   * mmPx;
             float marginR = settings.MarginRightMm * mmPx;
             float marginB = settings.MarginBottomMm* mmPx;
-            // WYSIWYG bleed locked to the MPC 1/8" standard (same as the PDF): MPCFill art is drawn
-            // whole and Scryfall scans extend to match, so both render at identical zoom.
-            // BleedWidthMm only toggles bleed on/off. Registration-marks mode suppresses it.
+            // WYSIWYG bleed (same as the PDF): every image is normalized to "card + 2*bleed" — Scryfall
+            // scans extended up to the chosen bleed, MPCFill art cropped from its native 1/8" down to it
+            // — so the card stays the same size for both sources. The cut line sits on the card edge.
+            // Registration-marks mode draws cards bare (no bleed processing).
             float effectiveBleedMm = settings.EffectiveBleedMm;
             float cellW   = (settings.CardWidthMm  + 2 * effectiveBleedMm) * mmPx;
             float cellH   = (settings.CardHeightMm + 2 * effectiveBleedMm) * mmPx;
@@ -219,6 +221,9 @@ namespace MTGProxyBuilder.UI.Controls
 
             bool regMarksActive = PrintSettingsSource?.ShowRegistrationMarks == true;
             _bleedMm = effectiveBleedMm;
+            // Process (GetDisplayImage) whenever not in reg-marks mode, even at bleed 0 — MPCFill still
+            // needs its native bleed trimmed. _useBleed only governs whether the bled image fills the cell.
+            _processBleed = !regMarksActive;
             _useBleed = effectiveBleedMm > 0 && !regMarksActive;
             _cardWmm = settings.CardWidthMm;
 
@@ -242,7 +247,7 @@ namespace MTGProxyBuilder.UI.Controls
                 string? path = showBack ? (s.Card.BackArtworkPath ?? s.Card.ArtworkPath) : s.Card.ArtworkPath;
                 if (string.IsNullOrEmpty(path)) continue;
                 // Skip only if the display (possibly bled) image is already decoded in the cache.
-                if (_displayPathCache.TryGetValue(DisplayKey(path, _bleedMm, _useBleed, _cardWmm), out var disp)
+                if (_displayPathCache.TryGetValue(DisplayKey(path, _bleedMm, _processBleed, _cardWmm), out var disp)
                     && _imageCache.ContainsKey(disp))
                     continue;
                 pathsToLoad.Add(path);
@@ -254,7 +259,7 @@ namespace MTGProxyBuilder.UI.Controls
                 int loaded = 0, total = pathsToLoad.Count;
                 int decodeWidth = (int)cellW * 2;
                 double bleedMm = _bleedMm;
-                bool useBleed = _useBleed;
+                bool processBleed = _processBleed;
                 double cardWmm = _cardWmm;
                 foreach (var path in pathsToLoad)
                 {
@@ -262,10 +267,10 @@ namespace MTGProxyBuilder.UI.Controls
                     await Task.Run(() =>
                     {
                         // Resolve (and disk-generate) the display image on the background thread, then
-                        // decode the result into the bitmap cache. Scryfall -> edge-extend to 1/8";
-                        // MPCFill -> drawn whole; both fill the cell. Bleed off -> raw path.
-                        string disp = _displayPathCache.GetOrAdd(DisplayKey(path, bleedMm, useBleed, cardWmm),
-                            _ => useBleed
+                        // decode the result into the bitmap cache. Scryfall -> edge-extend to the chosen
+                        // bleed; MPCFill -> crop its native 1/8" down to it. Reg-marks -> raw path.
+                        string disp = _displayPathCache.GetOrAdd(DisplayKey(path, bleedMm, processBleed, cardWmm),
+                            _ => processBleed
                                 ? (_bleedProcessor.GetDisplayImage(path, bleedMm, cardWmm) ?? path)
                                 : path);
                         LoadImageToCache(disp, decodeWidth);
@@ -767,7 +772,7 @@ namespace MTGProxyBuilder.UI.Controls
             bool bledImage = false;
             if (!(flipped && !hasBackArt) && !string.IsNullOrEmpty(imagePath))
             {
-                string disp = _displayPathCache.TryGetValue(DisplayKey(imagePath, _bleedMm, _useBleed, _cardWmm), out var d)
+                string disp = _displayPathCache.TryGetValue(DisplayKey(imagePath, _bleedMm, _processBleed, _cardWmm), out var d)
                     ? d : imagePath;
                 bmp = GetCachedImage(disp);
                 // Fill the whole cell when the drawn image carries the bleed: either a Scryfall scan was
