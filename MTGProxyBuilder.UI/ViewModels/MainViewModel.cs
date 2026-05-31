@@ -101,7 +101,16 @@ public class MainViewModel : ViewModelBase
     private readonly UpdateCheckService _updateService = new();
     private readonly AppSettingsService _appSettings = new();
     private readonly ImageAdjustmentService _imageAdjust = new(); // fork-specific
-    private ImageAdjustmentSettings _darken = new ImageAdjustmentStore().Default; // fork-specific: right-side panel state
+    // fork-specific: right-side Darken panel state. Force Enabled=true so the sliders
+    // actually take effect (the stored default may be disabled on first run, which made
+    // "Apply to all" a silent no-op).
+    private ImageAdjustmentSettings _darken = WithEnabled(new ImageAdjustmentStore().Default);
+
+    private static ImageAdjustmentSettings WithEnabled(ImageAdjustmentSettings s)
+    {
+        s.Enabled = true;
+        return s;
+    }
     private bool _updateAvailable;
     private string _updateMessage = string.Empty;
     private string _updateDownloadUrl = string.Empty;

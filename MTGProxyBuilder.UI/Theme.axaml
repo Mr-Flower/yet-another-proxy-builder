@@ -13,7 +13,7 @@
     <SolidColorBrush x:Key="TextMutedBrush"   Color="#888888"/>
     <SolidColorBrush x:Key="TextDimBrush"     Color="#666666"/>
     <SolidColorBrush x:Key="LabelBrush"       Color="#AAAAAA"/>
-    <SolidColorBrush x:Key="AccentBlueBrush"  Color="#0078D4"/>
+    <SolidColorBrush x:Key="AccentBlueBrush"  Color="#7A6FB0"/>
     <SolidColorBrush x:Key="AccentGreenBrush" Color="#4CAF50"/>
     <SolidColorBrush x:Key="AccentRedBrush"   Color="#E06060"/>
     <SolidColorBrush x:Key="BorderBrush"      Color="#555555"/>
@@ -45,19 +45,19 @@
             </ControlTemplate>
         </Setter>
         <Style Selector="^:pointerover">
-            <Setter Property="Background" Value="#243352"/>
+            <Setter Property="Background" Value="#3E3E42"/>
         </Style>
         <Style Selector="^:pressed">
-            <Setter Property="Background" Value="#2E4068"/>
+            <Setter Property="Background" Value="#4E4E52"/>
         </Style>
         <Style Selector="^:disabled">
             <Setter Property="Opacity" Value="0.4"/>
         </Style>
     </ControlTheme>
 
-    <!-- AccentBtn: blue bg, white bold text -->
+    <!-- AccentBtn: ultra-violet bg, white bold text -->
     <ControlTheme x:Key="AccentBtn" TargetType="Button">
-        <Setter Property="Background" Value="#0078D4"/>
+        <Setter Property="Background" Value="#7A6FB0"/>
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="BorderThickness" Value="0"/>
@@ -78,10 +78,10 @@
             </ControlTemplate>
         </Setter>
         <Style Selector="^:pointerover">
-            <Setter Property="Background" Value="#005A9E"/>
+            <Setter Property="Background" Value="#8A7FC0"/>
         </Style>
         <Style Selector="^:pressed">
-            <Setter Property="Background" Value="#004578"/>
+            <Setter Property="Background" Value="#665C96"/>
         </Style>
         <Style Selector="^:disabled">
             <Setter Property="Opacity" Value="0.4"/>
