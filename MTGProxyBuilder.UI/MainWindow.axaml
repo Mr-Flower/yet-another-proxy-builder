@@ -158,13 +158,256 @@
         <Grid Grid.Row="3" DataContext="{Binding ActiveProject.Inner}"
               IsVisible="{Binding #Root.DataContext.HasActiveProject}">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320" MinWidth="240"/>
+                <ColumnDefinition Width="5"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="5"/>
-                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="300" MinWidth="240"/>
             </Grid.ColumnDefinitions>
 
+            <!-- ===== LEFT: Input panel (search / import / add cards) ===== -->
+            <TabControl Grid.Column="0" Background="#2D2D30" Padding="0">
+                    <!-- ===== SEARCH PANEL ===== -->
+                    <TabItem Header="Search" Foreground="#AAA">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#2D2D30">
+                            <StackPanel Margin="10,8">
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="ScryfallSearchBox"
+                                             Text="{Binding ScryfallSearchQuery}"
+                                             Padding="6,5" FontSize="12"
+                                             Background="#3E3E42" Foreground="White"
+                                             BorderBrush="#555" BorderThickness="1" CaretBrush="White"/>
+                                    <Button Grid.Column="1" Theme="{StaticResource AccentBtn}"
+                                            Command="{Binding ScryfallSearchCommand}"
+                                            Content="Search" Margin="4,0,0,0" Padding="10,5"/>
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <CheckBox IsChecked="{Binding ShowAdvancedSearch}" Foreground="#AAA"
+                                              FontSize="10" Content="Advanced Search"/>
+                                    <TextBlock Text="  Scryfall syntax" Foreground="#555" FontSize="9"
+                                               VerticalAlignment="Center"
+                                               IsVisible="{Binding ShowAdvancedSearch}"/>
+                                </StackPanel>
+
+                                <Border Background="#252526" CornerRadius="4" Padding="8" Margin="0,0,0,6"
+                                        IsVisible="{Binding ShowAdvancedSearch}">
+                                    <StackPanel>
+                                        <TextBlock Text="Name" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
+                                        <TextBox Text="{Binding AdvName}" Padding="4,3" FontSize="11"
+                                                 Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+
+                                        <TextBlock Text="Type (e.g. creature, instant, legendary)" Foreground="#999" FontSize="9.5" Margin="0,4,0,1"/>
+                                        <TextBox Text="{Binding AdvType}" Padding="4,3" FontSize="11"
+                                                 Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+
+                                        <TextBlock Text="Rules text contains" Foreground="#999" FontSize="9.5" Margin="0,4,0,1"/>
+                                        <TextBox Text="{Binding AdvOracle}" Padding="4,3" FontSize="11"
+                                                 Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="6"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Colors (WUBRG)" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
+                                                <TextBox Text="{Binding AdvColors}" Padding="4,3" FontSize="11"
+                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Identity (WUBRG)" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
+                                                <TextBox Text="{Binding AdvIdentity}" Padding="4,3" FontSize="11"
+                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="50"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="6"/>
+                                                <ColumnDefinition Width="50"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
+                                                <TextBlock Text="Mana Value" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="50"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <ComboBox ItemsSource="{Binding ComparisonOps}" SelectedItem="{Binding AdvCmcOp}" Padding="2" FontSize="10"/>
+                                                    <TextBox Grid.Column="1" Text="{Binding AdvCmcValue}" Padding="4,3" FontSize="11"
+                                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
+                                                </Grid>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="3" Grid.ColumnSpan="2">
+                                                <TextBlock Text="Rarity" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
+                                                <ComboBox ItemsSource="{Binding RarityAdvOptions}" SelectedItem="{Binding AdvRarity}" Padding="2" FontSize="10"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="6"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Power" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                    <ComboBox ItemsSource="{Binding ComparisonOps}" SelectedItem="{Binding AdvPowOp}" Padding="2" FontSize="10"/>
+                                                    <TextBox Grid.Column="1" Text="{Binding AdvPowValue}" Padding="4,3" FontSize="11"
+                                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
+                                                </Grid>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Toughness" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                    <ComboBox ItemsSource="{Binding ComparisonOps}" SelectedItem="{Binding AdvTouOp}" Padding="2" FontSize="10"/>
+                                                    <TextBox Grid.Column="1" Text="{Binding AdvTouValue}" Padding="4,3" FontSize="11"
+                                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="6"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Set code" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
+                                                <TextBox Text="{Binding AdvSet}" Padding="4,3" FontSize="11"
+                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Format" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
+                                                <ComboBox ItemsSource="{Binding FormatOptions}" SelectedItem="{Binding AdvFormat}" Padding="2" FontSize="10"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="6"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Artist" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
+                                                <TextBox Text="{Binding AdvArtist}" Padding="4,3" FontSize="11"
+                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Keyword" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
+                                                <TextBox Text="{Binding AdvKeyword}" Padding="4,3" FontSize="11"
+                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <TextBlock Text="Card is..." Foreground="#999" FontSize="9.5" Margin="0,4,0,1"/>
+                                        <ComboBox ItemsSource="{Binding IsOptions}" SelectedItem="{Binding AdvIs}"
+                                                  Padding="2" FontSize="10" Margin="0,0,0,6"/>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="4"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0" Theme="{StaticResource AccentBtn}"
+                                                    Command="{Binding BuildAdvancedQueryCommand}"
+                                                    Content="Build &amp; Search" Padding="6,5"/>
+                                            <Button Grid.Column="2" Theme="{StaticResource ToolBtn}"
+                                                    Command="{Binding ClearAdvancedSearchCommand}"
+                                                    Content="Clear" Padding="6,5"/>
+                                        </Grid>
+
+                                        <TextBlock Text="Query:" Foreground="#666" FontSize="9" Margin="0,6,0,1"/>
+                                        <TextBlock Text="{Binding ScryfallSearchQuery}" Foreground="#0078D4"
+                                                   FontSize="10" TextWrapping="Wrap" MaxHeight="40"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Scryfall results -->
+                                <ListBox x:Name="ScryfallResultsList"
+                                         ItemsSource="{Binding ScryfallResults}"
+                                         SelectedItem="{Binding SelectedScryfallCard}"
+                                         Height="180" BorderThickness="1" BorderBrush="#444"
+                                         Background="#252526" FontSize="11"
+                                         DoubleTapped="OnScryfallDoubleTapped">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" Margin="2">
+                                                <Border Width="36" Height="50" Background="#111"
+                                                        CornerRadius="3" Margin="0,0,6,0"/>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="10.5" Foreground="#DDD"
+                                                               TextTrimming="CharacterEllipsis" MaxWidth="180"/>
+                                                    <TextBlock FontSize="9" Foreground="#888">
+                                                        <Run Text="{Binding SetName, Mode=OneWay}"/>
+                                                        <Run Text=" #"/><Run Text="{Binding CollectorNumber, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <Border Height="200" Background="#111" CornerRadius="4" Margin="0,6,0,0"
+                                        IsVisible="{Binding SearchPreviewUrl, Converter={StaticResource NullToCollapsed}}"/>
+
+                                <Button Theme="{StaticResource AccentBtn}" Command="{Binding AddScryfallCardCommand}"
+                                        Content="Add Selected Card" Margin="0,6,0,0" HorizontalAlignment="Stretch"/>
+                                <Button Theme="{StaticResource ToolBtn}" Command="{Binding UpdateAllArtFromMpcFillCommand}"
+                                        Content="Update All Art from MPCFill" Margin="0,6,0,0" HorizontalAlignment="Stretch"/>
+
+                                <TextBlock Text="Import Deck" FontWeight="SemiBold" Foreground="#CCC"
+                                           Margin="0,16,0,6" FontSize="12"/>
+                                <TextBlock Text="Paste a URL from Moxfield or Archidekt"
+                                           Foreground="#666" FontSize="10" Margin="0,0,0,4"/>
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="DeckImportUrlBox" Text="{Binding ImportDeckUrl}"
+                                             Padding="6,5" FontSize="11"
+                                             Background="#3E3E42" Foreground="White"
+                                             BorderBrush="#555" BorderThickness="1" CaretBrush="White"/>
+                                    <Button Grid.Column="1" Theme="{StaticResource AccentBtn}"
+                                            Command="{Binding ImportDeckCommand}" Content="Import"
+                                            Margin="4,0,0,0" Padding="10,5"/>
+                                </Grid>
+                                <CheckBox IsChecked="{Binding IgnoreDuplicates}"
+                                          Content="Skip cards already in project (merge basics)"
+                                          Foreground="#999" FontSize="10" Margin="0,2,0,0"/>
+
+                                <TextBlock Text="Import MPCFill Project" FontWeight="SemiBold" Foreground="#CCC"
+                                           Margin="0,16,0,6" FontSize="12"/>
+                                <Button Theme="{StaticResource AccentBtn}" Command="{Binding ImportMpcFillXmlCommand}"
+                                        Content="Import cards.xml..." HorizontalAlignment="Stretch" Padding="8,6"/>
+                                <TextBlock Text="Import a cards.xml file exported from MPCFill"
+                                           Foreground="#666" FontSize="10" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+            </TabControl>
+
+            <!-- ===== SPLITTER (left) ===== -->
+            <GridSplitter Grid.Column="1" Background="#3E3E42" ResizeDirection="Columns"/>
+
             <!-- ===== LEFT: Canvas / Page Preview ===== -->
-            <Grid Grid.Column="0">
+            <Grid Grid.Column="2">
                 <ScrollViewer x:Name="CanvasScrollViewer"
                               HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Auto"
@@ -209,245 +452,12 @@
             </Grid>
 
             <!-- ===== SPLITTER ===== -->
-            <GridSplitter Grid.Column="1" Background="#3E3E42" ResizeDirection="Columns"/>
+            <!-- ===== SPLITTER (right) ===== -->
+            <GridSplitter Grid.Column="3" Background="#3E3E42" ResizeDirection="Columns"/>
 
             <!-- ===== RIGHT: Tool panels as tabs ===== -->
-            <TabControl Grid.Column="2" Background="#2D2D30" Padding="0">
+            <TabControl Grid.Column="4" Background="#2D2D30" Padding="0">
 
-                <!-- ===== SEARCH PANEL ===== -->
-                <TabItem Header="Search" Foreground="#AAA">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#2D2D30">
-                        <StackPanel Margin="10,8">
-                            <Grid Margin="0,0,0,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox x:Name="ScryfallSearchBox"
-                                         Text="{Binding ScryfallSearchQuery}"
-                                         Padding="6,5" FontSize="12"
-                                         Background="#3E3E42" Foreground="White"
-                                         BorderBrush="#555" BorderThickness="1" CaretBrush="White"/>
-                                <Button Grid.Column="1" Theme="{StaticResource AccentBtn}"
-                                        Command="{Binding ScryfallSearchCommand}"
-                                        Content="Search" Margin="4,0,0,0" Padding="10,5"/>
-                            </Grid>
-
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <CheckBox IsChecked="{Binding ShowAdvancedSearch}" Foreground="#AAA"
-                                          FontSize="10" Content="Advanced Search"/>
-                                <TextBlock Text="  Scryfall syntax" Foreground="#555" FontSize="9"
-                                           VerticalAlignment="Center"
-                                           IsVisible="{Binding ShowAdvancedSearch}"/>
-                            </StackPanel>
-
-                            <Border Background="#252526" CornerRadius="4" Padding="8" Margin="0,0,0,6"
-                                    IsVisible="{Binding ShowAdvancedSearch}">
-                                <StackPanel>
-                                    <TextBlock Text="Name" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
-                                    <TextBox Text="{Binding AdvName}" Padding="4,3" FontSize="11"
-                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
-
-                                    <TextBlock Text="Type (e.g. creature, instant, legendary)" Foreground="#999" FontSize="9.5" Margin="0,4,0,1"/>
-                                    <TextBox Text="{Binding AdvType}" Padding="4,3" FontSize="11"
-                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
-
-                                    <TextBlock Text="Rules text contains" Foreground="#999" FontSize="9.5" Margin="0,4,0,1"/>
-                                    <TextBox Text="{Binding AdvOracle}" Padding="4,3" FontSize="11"
-                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
-
-                                    <Grid Margin="0,4,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="6"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Colors (WUBRG)" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
-                                            <TextBox Text="{Binding AdvColors}" Padding="4,3" FontSize="11"
-                                                     Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Identity (WUBRG)" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
-                                            <TextBox Text="{Binding AdvIdentity}" Padding="4,3" FontSize="11"
-                                                     Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <Grid Margin="0,4,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="50"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="6"/>
-                                            <ColumnDefinition Width="50"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
-                                            <TextBlock Text="Mana Value" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="50"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <ComboBox ItemsSource="{Binding ComparisonOps}" SelectedItem="{Binding AdvCmcOp}" Padding="2" FontSize="10"/>
-                                                <TextBox Grid.Column="1" Text="{Binding AdvCmcValue}" Padding="4,3" FontSize="11"
-                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
-                                            </Grid>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="3" Grid.ColumnSpan="2">
-                                            <TextBlock Text="Rarity" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
-                                            <ComboBox ItemsSource="{Binding RarityAdvOptions}" SelectedItem="{Binding AdvRarity}" Padding="2" FontSize="10"/>
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <Grid Margin="0,4,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="6"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Power" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                                <ComboBox ItemsSource="{Binding ComparisonOps}" SelectedItem="{Binding AdvPowOp}" Padding="2" FontSize="10"/>
-                                                <TextBox Grid.Column="1" Text="{Binding AdvPowValue}" Padding="4,3" FontSize="11"
-                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
-                                            </Grid>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Toughness" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                                <ComboBox ItemsSource="{Binding ComparisonOps}" SelectedItem="{Binding AdvTouOp}" Padding="2" FontSize="10"/>
-                                                <TextBox Grid.Column="1" Text="{Binding AdvTouValue}" Padding="4,3" FontSize="11"
-                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
-                                            </Grid>
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <Grid Margin="0,4,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="6"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Set code" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
-                                            <TextBox Text="{Binding AdvSet}" Padding="4,3" FontSize="11"
-                                                     Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Format" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
-                                            <ComboBox ItemsSource="{Binding FormatOptions}" SelectedItem="{Binding AdvFormat}" Padding="2" FontSize="10"/>
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <Grid Margin="0,4,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="6"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Artist" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
-                                            <TextBox Text="{Binding AdvArtist}" Padding="4,3" FontSize="11"
-                                                     Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Keyword" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
-                                            <TextBox Text="{Binding AdvKeyword}" Padding="4,3" FontSize="11"
-                                                     Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <TextBlock Text="Card is..." Foreground="#999" FontSize="9.5" Margin="0,4,0,1"/>
-                                    <ComboBox ItemsSource="{Binding IsOptions}" SelectedItem="{Binding AdvIs}"
-                                              Padding="2" FontSize="10" Margin="0,0,0,6"/>
-
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="4"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Button Grid.Column="0" Theme="{StaticResource AccentBtn}"
-                                                Command="{Binding BuildAdvancedQueryCommand}"
-                                                Content="Build &amp; Search" Padding="6,5"/>
-                                        <Button Grid.Column="2" Theme="{StaticResource ToolBtn}"
-                                                Command="{Binding ClearAdvancedSearchCommand}"
-                                                Content="Clear" Padding="6,5"/>
-                                    </Grid>
-
-                                    <TextBlock Text="Query:" Foreground="#666" FontSize="9" Margin="0,6,0,1"/>
-                                    <TextBlock Text="{Binding ScryfallSearchQuery}" Foreground="#0078D4"
-                                               FontSize="10" TextWrapping="Wrap" MaxHeight="40"/>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Scryfall results -->
-                            <ListBox x:Name="ScryfallResultsList"
-                                     ItemsSource="{Binding ScryfallResults}"
-                                     SelectedItem="{Binding SelectedScryfallCard}"
-                                     Height="180" BorderThickness="1" BorderBrush="#444"
-                                     Background="#252526" FontSize="11"
-                                     DoubleTapped="OnScryfallDoubleTapped">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" Margin="2">
-                                            <Border Width="36" Height="50" Background="#111"
-                                                    CornerRadius="3" Margin="0,0,6,0"/>
-                                            <StackPanel VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Name}" FontSize="10.5" Foreground="#DDD"
-                                                           TextTrimming="CharacterEllipsis" MaxWidth="180"/>
-                                                <TextBlock FontSize="9" Foreground="#888">
-                                                    <Run Text="{Binding SetName, Mode=OneWay}"/>
-                                                    <Run Text=" #"/><Run Text="{Binding CollectorNumber, Mode=OneWay}"/>
-                                                </TextBlock>
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-
-                            <Border Height="200" Background="#111" CornerRadius="4" Margin="0,6,0,0"
-                                    IsVisible="{Binding SearchPreviewUrl, Converter={StaticResource NullToCollapsed}}"/>
-
-                            <Button Theme="{StaticResource AccentBtn}" Command="{Binding AddScryfallCardCommand}"
-                                    Content="Add Selected Card" Margin="0,6,0,0" HorizontalAlignment="Stretch"/>
-                            <Button Theme="{StaticResource ToolBtn}" Command="{Binding UpdateAllArtFromMpcFillCommand}"
-                                    Content="Update All Art from MPCFill" Margin="0,6,0,0" HorizontalAlignment="Stretch"/>
-
-                            <TextBlock Text="Import Deck" FontWeight="SemiBold" Foreground="#CCC"
-                                       Margin="0,16,0,6" FontSize="12"/>
-                            <TextBlock Text="Paste a URL from Moxfield or Archidekt"
-                                       Foreground="#666" FontSize="10" Margin="0,0,0,4"/>
-                            <Grid Margin="0,0,0,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox x:Name="DeckImportUrlBox" Text="{Binding ImportDeckUrl}"
-                                         Padding="6,5" FontSize="11"
-                                         Background="#3E3E42" Foreground="White"
-                                         BorderBrush="#555" BorderThickness="1" CaretBrush="White"/>
-                                <Button Grid.Column="1" Theme="{StaticResource AccentBtn}"
-                                        Command="{Binding ImportDeckCommand}" Content="Import"
-                                        Margin="4,0,0,0" Padding="10,5"/>
-                            </Grid>
-                            <CheckBox IsChecked="{Binding IgnoreDuplicates}"
-                                      Content="Skip cards already in project (merge basics)"
-                                      Foreground="#999" FontSize="10" Margin="0,2,0,0"/>
-
-                            <TextBlock Text="Import MPCFill Project" FontWeight="SemiBold" Foreground="#CCC"
-                                       Margin="0,16,0,6" FontSize="12"/>
-                            <Button Theme="{StaticResource AccentBtn}" Command="{Binding ImportMpcFillXmlCommand}"
-                                    Content="Import cards.xml..." HorizontalAlignment="Stretch" Padding="8,6"/>
-                            <TextBlock Text="Import a cards.xml file exported from MPCFill"
-                                       Foreground="#666" FontSize="10" Margin="0,4,0,0"/>
-                        </StackPanel>
-                    </ScrollViewer>
-                </TabItem>
 
                 <!-- ===== CARD PANEL ===== -->
                 <TabItem Header="Card" Foreground="#AAA">
