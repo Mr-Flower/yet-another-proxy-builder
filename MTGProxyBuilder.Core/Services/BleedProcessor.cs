@@ -186,64 +186,78 @@ namespace MTGProxyBuilder.Core.Services
         /// </summary>
         private static SKBitmap RenderBleed(SKBitmap source, int bleedPixels)
         {
-            int srcW = source.Width;
-            int srcH = source.Height;
+            SquareOffAllWhiteCorners(source);
 
-            // Square off white corners of Scryfall-style scans (no-op for full-bleed/MPC art).
-            SquareOffWhiteCorner(source, srcW, srcH, 0,        0,         1,  1);
-            SquareOffWhiteCorner(source, srcW, srcH, srcW - 1, 0,        -1,  1);
-            SquareOffWhiteCorner(source, srcW, srcH, 0,        srcH - 1,  1, -1);
-            SquareOffWhiteCorner(source, srcW, srcH, srcW - 1, srcH - 1, -1, -1);
-
-            int outW = srcW + 2 * bleedPixels;
-            int outH = srcH + 2 * bleedPixels;
-
-            var output = new SKBitmap(outW, outH);
+            var output = new SKBitmap(source.Width + 2 * bleedPixels, source.Height + 2 * bleedPixels);
             using (var canvas = new SKCanvas(output))
             {
                 canvas.DrawBitmap(source, bleedPixels, bleedPixels);
-
-                // Top edge
-                using (var strip = new SKBitmap(srcW, 1))
-                {
-                    for (int x = 0; x < srcW; x++) strip.SetPixel(x, 0, source.GetPixel(x, 0));
-                    canvas.DrawBitmap(strip, new SKRect(0, 0, srcW, 1),
-                        new SKRect(bleedPixels, 0, bleedPixels + srcW, bleedPixels));
-                }
-                // Bottom edge
-                using (var strip = new SKBitmap(srcW, 1))
-                {
-                    for (int x = 0; x < srcW; x++) strip.SetPixel(x, 0, source.GetPixel(x, srcH - 1));
-                    canvas.DrawBitmap(strip, new SKRect(0, 0, srcW, 1),
-                        new SKRect(bleedPixels, bleedPixels + srcH, bleedPixels + srcW, outH));
-                }
-                // Left edge
-                using (var strip = new SKBitmap(1, srcH))
-                {
-                    for (int y = 0; y < srcH; y++) strip.SetPixel(0, y, source.GetPixel(0, y));
-                    canvas.DrawBitmap(strip, new SKRect(0, 0, 1, srcH),
-                        new SKRect(0, bleedPixels, bleedPixels, bleedPixels + srcH));
-                }
-                // Right edge
-                using (var strip = new SKBitmap(1, srcH))
-                {
-                    for (int y = 0; y < srcH; y++) strip.SetPixel(0, y, source.GetPixel(srcW - 1, y));
-                    canvas.DrawBitmap(strip, new SKRect(0, 0, 1, srcH),
-                        new SKRect(bleedPixels + srcW, bleedPixels, outW, bleedPixels + srcH));
-                }
-
-                // Corners: fill the bleed squares with the (squared-off) corner colour.
-                using var paint = new SKPaint();
-                paint.Color = source.GetPixel(0, 0);
-                canvas.DrawRect(0, 0, bleedPixels, bleedPixels, paint);
-                paint.Color = source.GetPixel(srcW - 1, 0);
-                canvas.DrawRect(bleedPixels + srcW, 0, bleedPixels, bleedPixels, paint);
-                paint.Color = source.GetPixel(0, srcH - 1);
-                canvas.DrawRect(0, bleedPixels + srcH, bleedPixels, bleedPixels, paint);
-                paint.Color = source.GetPixel(srcW - 1, srcH - 1);
-                canvas.DrawRect(bleedPixels + srcW, bleedPixels + srcH, bleedPixels, bleedPixels, paint);
+                StretchEdgesOutward(canvas, source, bleedPixels);
+                FillCornerSquares(canvas, source, bleedPixels);
             }
             return output;
+        }
+
+        /// <summary>Squares off all four white corners of a (rounded) Scryfall-style scan. No-op for
+        /// coloured/full-art corners and for full-bleed MPCFill art.</summary>
+        private static void SquareOffAllWhiteCorners(SKBitmap source)
+        {
+            int w = source.Width, h = source.Height;
+            SquareOffWhiteCorner(source, w, h, 0,     0,      1,  1);
+            SquareOffWhiteCorner(source, w, h, w - 1, 0,     -1,  1);
+            SquareOffWhiteCorner(source, w, h, 0,     h - 1,  1, -1);
+            SquareOffWhiteCorner(source, w, h, w - 1, h - 1, -1, -1);
+        }
+
+        /// <summary>Fills the four bleed margins by stretching the card's outermost edge pixels outward.</summary>
+        private static void StretchEdgesOutward(SKCanvas canvas, SKBitmap source, int bleed)
+        {
+            int w = source.Width, h = source.Height;
+
+            using var topStrip = RowStrip(source, 0);
+            canvas.DrawBitmap(topStrip, new SKRect(0, 0, w, 1), new SKRect(bleed, 0, bleed + w, bleed));
+
+            using var bottomStrip = RowStrip(source, h - 1);
+            canvas.DrawBitmap(bottomStrip, new SKRect(0, 0, w, 1), new SKRect(bleed, bleed + h, bleed + w, h + 2 * bleed));
+
+            using var leftStrip = ColumnStrip(source, 0);
+            canvas.DrawBitmap(leftStrip, new SKRect(0, 0, 1, h), new SKRect(0, bleed, bleed, bleed + h));
+
+            using var rightStrip = ColumnStrip(source, w - 1);
+            canvas.DrawBitmap(rightStrip, new SKRect(0, 0, 1, h), new SKRect(bleed + w, bleed, w + 2 * bleed, bleed + h));
+        }
+
+        /// <summary>Copies row <paramref name="y"/> of <paramref name="src"/> into a 1px-tall strip bitmap.</summary>
+        private static SKBitmap RowStrip(SKBitmap src, int y)
+        {
+            var strip = new SKBitmap(src.Width, 1);
+            for (int x = 0; x < src.Width; x++) strip.SetPixel(x, 0, src.GetPixel(x, y));
+            return strip;
+        }
+
+        /// <summary>Copies column <paramref name="x"/> of <paramref name="src"/> into a 1px-wide strip bitmap.</summary>
+        private static SKBitmap ColumnStrip(SKBitmap src, int x)
+        {
+            var strip = new SKBitmap(1, src.Height);
+            for (int y = 0; y < src.Height; y++) strip.SetPixel(0, y, src.GetPixel(x, y));
+            return strip;
+        }
+
+        /// <summary>Fills the four corner bleed squares with the (squared-off) corner pixel colour.</summary>
+        private static void FillCornerSquares(SKCanvas canvas, SKBitmap source, int bleed)
+        {
+            int w = source.Width, h = source.Height;
+            using var paint = new SKPaint();
+            FillSquare(canvas, paint, 0,         0,         bleed, source.GetPixel(0,     0));
+            FillSquare(canvas, paint, bleed + w, 0,         bleed, source.GetPixel(w - 1, 0));
+            FillSquare(canvas, paint, 0,         bleed + h, bleed, source.GetPixel(0,     h - 1));
+            FillSquare(canvas, paint, bleed + w, bleed + h, bleed, source.GetPixel(w - 1, h - 1));
+        }
+
+        private static void FillSquare(SKCanvas canvas, SKPaint paint, float x, float y, int size, SKColor color)
+        {
+            paint.Color = color;
+            canvas.DrawRect(x, y, size, size, paint);
         }
 
         private static bool IsNearWhite(SKColor c) => c.Red >= 235 && c.Green >= 235 && c.Blue >= 235;
@@ -266,30 +280,46 @@ namespace MTGProxyBuilder.Core.Services
             // shorter side covers it comfortably regardless of image resolution.
             int band = Math.Max(4, Math.Min(w, h) / 6);
 
-            // Find the border colour: scan diagonally inward to where the white ends, then take the
-            // DARKEST pixel in the next few (the card's black edge), skipping the anti-aliased fringe.
-            // If the diagonal stays white across the whole band, it's a white/light border -> leave it.
-            SKColor? border = null;
-            int bestLuma = int.MaxValue;
+            var border = FindCornerBorderColor(bmp, cx, cy, dx, dy, band, out int borderLuma);
+            if (border == null) return; // diagonal stayed white -> white/light border, leave it
+
+            FillCornerFringe(bmp, w, h, cx, cy, dx, dy, band, border.Value, borderLuma);
+        }
+
+        /// <summary>
+        /// Scans diagonally inward from a corner to where the white ends, then returns the DARKEST pixel
+        /// in the next few (the card's black edge, skipping the anti-aliased fringe). Returns null if the
+        /// diagonal stays near-white across the whole band (a white/light-bordered card).
+        /// </summary>
+        private static SKColor? FindCornerBorderColor(SKBitmap bmp, int cx, int cy, int dx, int dy,
+            int band, out int borderLuma)
+        {
+            borderLuma = int.MaxValue;
             for (int d = 1; d <= band; d++)
             {
-                if (!IsNearWhite(bmp.GetPixel(cx + dx * d, cy + dy * d)))
-                {
-                    for (int e = 0; e <= 4 && d + e <= band; e++)
-                    {
-                        var q = bmp.GetPixel(cx + dx * (d + e), cy + dy * (d + e));
-                        int lu = Luma(q);
-                        if (lu < bestLuma) { bestLuma = lu; border = q; }
-                    }
-                    break;
-                }
-            }
-            if (border == null) return;
+                if (IsNearWhite(bmp.GetPixel(cx + dx * d, cy + dy * d))) continue;
 
-            // Fill, per row, from the edge inward while the pixel is clearly LIGHTER than the border —
-            // this swallows the white triangle AND the grey anti-alias fringe along the rounding, and
-            // stops once it reaches the dark border, so the card art is never touched.
-            int fillAbove = Math.Min(bestLuma + 50, 200);
+                SKColor? darkest = null;
+                for (int e = 0; e <= 4 && d + e <= band; e++)
+                {
+                    var q = bmp.GetPixel(cx + dx * (d + e), cy + dy * (d + e));
+                    int lu = Luma(q);
+                    if (lu < borderLuma) { borderLuma = lu; darkest = q; }
+                }
+                return darkest;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Fills each row from the corner inward with the border colour while pixels are clearly LIGHTER
+        /// than the border — swallowing the white triangle and the grey anti-alias fringe — stopping at
+        /// the dark border so the card art is never touched.
+        /// </summary>
+        private static void FillCornerFringe(SKBitmap bmp, int w, int h, int cx, int cy, int dx, int dy,
+            int band, SKColor border, int borderLuma)
+        {
+            int fillAbove = Math.Min(borderLuma + 50, 200);
             for (int iy = 0; iy <= band; iy++)
             {
                 int y = cy + dy * iy;
@@ -299,7 +329,7 @@ namespace MTGProxyBuilder.Core.Services
                     int x = cx + dx * ix;
                     if (x < 0 || x >= w) break;
                     if (Luma(bmp.GetPixel(x, y)) <= fillAbove) break; // reached the dark border
-                    bmp.SetPixel(x, y, border.Value);
+                    bmp.SetPixel(x, y, border);
                 }
             }
         }
