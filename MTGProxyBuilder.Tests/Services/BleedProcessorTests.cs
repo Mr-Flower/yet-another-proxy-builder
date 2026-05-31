@@ -128,6 +128,38 @@ public class BleedProcessorTests
     }
 
     [Fact]
+    public void GetBleedExtendedImage_AntiAliasedBlackBorder_NoLightFringeNearCorner()
+    {
+        // Anti-aliased rounded black card on white: the white->black arc has grey fringe pixels.
+        // After square-off the whole corner region (bleed + the former white triangle) must be dark,
+        // with no light/grey fringe left (the "white artefacts near the corner" the user reported).
+        var proc = new BleedProcessor();
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_aa_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            string input = Path.Combine(tmpDir, "aacard.png");
+            CreateRoundedCardImage(input, 120, 168, radius: 12, card: SKColors.Black, bg: SKColors.White, antiAlias: true);
+
+            int bleed = 8;
+            var result = proc.GetBleedExtendedImage(input, bleed);
+            using var outBmp = SKBitmap.Decode(result);
+
+            // Scan the top-left corner region of the output (bleed + ~the rounding radius).
+            int region = bleed + 16;
+            for (int y = 0; y < region; y++)
+                for (int x = 0; x < region; x++)
+                {
+                    var c = outBmp.GetPixel(x, y);
+                    int luma = (c.Red * 30 + c.Green * 59 + c.Blue * 11) / 100;
+                    Assert.True(luma < 140,
+                        $"light fringe left at ({x},{y}) = ({c.Red},{c.Green},{c.Blue})");
+                }
+        }
+        finally { try { Directory.Delete(tmpDir, true); } catch { } proc.ClearCache(); }
+    }
+
+    [Fact]
     public void GetBleedExtendedImage_WhiteCard_KeepsCornersWhite()
     {
         // An all-white card: a white border must stay white (no recolouring to art).
@@ -182,12 +214,12 @@ public class BleedProcessorTests
         Assert.True(c.Red >= 230 && c.Green >= 230 && c.Blue >= 230,
             $"expected white corner, was ({c.Red},{c.Green},{c.Blue})");
 
-    private static void CreateRoundedCardImage(string path, int w, int h, float radius, SKColor card, SKColor bg)
+    private static void CreateRoundedCardImage(string path, int w, int h, float radius, SKColor card, SKColor bg, bool antiAlias = false)
     {
         using var bitmap = new SKBitmap(w, h);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(bg);
-        using var paint = new SKPaint { Color = card, IsAntialias = false, Style = SKPaintStyle.Fill };
+        using var paint = new SKPaint { Color = card, IsAntialias = antiAlias, Style = SKPaintStyle.Fill };
         canvas.DrawRoundRect(new SKRect(0, 0, w, h), radius, radius, paint);
         canvas.Flush();
         using var stream = File.OpenWrite(path);

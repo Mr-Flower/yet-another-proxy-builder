@@ -39,8 +39,9 @@ namespace MTGProxyBuilder.Core.Services
             {
                 // The trailing _vN is a processing-logic version: bump it whenever the bleed
                 // algorithm changes so stale cached results (e.g. the broken coloured corners) are
-                // regenerated instead of reused. v4 = per-row square-off of white corners then bleed.
-                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedPixels}_v4";
+                // regenerated instead of reused. v5 = corner square-off that also swallows the
+                // anti-aliased grey fringe (luma-based fill to the dark border).
+                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedPixels}_v5";
                 string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
 
                 if (File.Exists(outputPath))
@@ -147,12 +148,15 @@ namespace MTGProxyBuilder.Core.Services
 
         private static bool IsNearWhite(SKColor c) => c.Red >= 235 && c.Green >= 235 && c.Blue >= 235;
 
+        private static int Luma(SKColor c) => (c.Red * 30 + c.Green * 59 + c.Blue * 11) / 100;
+
         /// <summary>
-        /// Squares off one rectangular corner of a (rounded) card scan by replacing the near-white
-        /// triangle outside the rounding with the card's border colour, so the border extends all the
-        /// way to the corner — exactly like the straight edges do. (cx,cy) is the extreme corner pixel;
-        /// (dx,dy) point inward (±1). No-op when the corner isn't near-white (coloured/full-art) or when
-        /// the border itself is white/light (white-bordered cards keep their white corners).
+        /// Squares off one rectangular corner of a (rounded) card scan by replacing the white triangle
+        /// (and the anti-aliased grey fringe along the rounding) outside the card with the card's border
+        /// colour, so the border extends all the way to the corner — exactly like the straight edges do.
+        /// (cx,cy) is the extreme corner pixel; (dx,dy) point inward (±1). No-op when the corner isn't
+        /// near-white (coloured/full-art) or when the border itself is white/light (white-bordered cards
+        /// keep their white corners).
         /// </summary>
         private static void SquareOffWhiteCorner(SKBitmap bmp, int w, int h, int cx, int cy, int dx, int dy)
         {
@@ -162,23 +166,30 @@ namespace MTGProxyBuilder.Core.Services
             // shorter side covers it comfortably regardless of image resolution.
             int band = Math.Max(4, Math.Min(w, h) / 6);
 
-            // Border colour = first non-near-white pixel scanning diagonally inward, sampled a couple
-            // of pixels deeper to skip the anti-aliased white->border fringe. If the diagonal stays
-            // white across the whole band, this is a white/light-bordered card -> leave it white.
+            // Find the border colour: scan diagonally inward to where the white ends, then take the
+            // DARKEST pixel in the next few (the card's black edge), skipping the anti-aliased fringe.
+            // If the diagonal stays white across the whole band, it's a white/light border -> leave it.
             SKColor? border = null;
+            int bestLuma = int.MaxValue;
             for (int d = 1; d <= band; d++)
             {
                 if (!IsNearWhite(bmp.GetPixel(cx + dx * d, cy + dy * d)))
                 {
-                    int dd = Math.Min(d + 2, band);
-                    border = bmp.GetPixel(cx + dx * dd, cy + dy * dd);
+                    for (int e = 0; e <= 4 && d + e <= band; e++)
+                    {
+                        var q = bmp.GetPixel(cx + dx * (d + e), cy + dy * (d + e));
+                        int lu = Luma(q);
+                        if (lu < bestLuma) { bestLuma = lu; border = q; }
+                    }
                     break;
                 }
             }
             if (border == null) return;
 
-            // For each row in the corner band, fill the contiguous near-white run from the edge inward
-            // until the border. This follows the rounding exactly and never crosses into the card.
+            // Fill, per row, from the edge inward while the pixel is clearly LIGHTER than the border —
+            // this swallows the white triangle AND the grey anti-alias fringe along the rounding, and
+            // stops once it reaches the dark border, so the card art is never touched.
+            int fillAbove = Math.Min(bestLuma + 50, 200);
             for (int iy = 0; iy <= band; iy++)
             {
                 int y = cy + dy * iy;
@@ -187,7 +198,7 @@ namespace MTGProxyBuilder.Core.Services
                 {
                     int x = cx + dx * ix;
                     if (x < 0 || x >= w) break;
-                    if (!IsNearWhite(bmp.GetPixel(x, y))) break;
+                    if (Luma(bmp.GetPixel(x, y)) <= fillAbove) break; // reached the dark border
                     bmp.SetPixel(x, y, border.Value);
                 }
             }
