@@ -61,7 +61,7 @@ namespace MTGProxyBuilder.Core.Services
         //  CRUD
         // ================================================================
 
-        public BackArtEntry? AddFromFile(string sourceFilePath, string? displayName = null, string? contributor = null)
+        public BackArtEntry? AddFromFile(string sourceFilePath, string? displayName = null, string? contributor = null, bool markAsBled = false)
         {
             if (!File.Exists(sourceFilePath))
                 return null;
@@ -84,9 +84,11 @@ namespace MTGProxyBuilder.Core.Services
 
             string id = Guid.NewGuid().ToString("N")[..12];
             string ext = Path.GetExtension(sourceFilePath);
-            // Preserve the "mpc_" marker so MPCFill art (already full-bleed) keeps being recognised
-            // as such after it's copied into the library (drives bleed handling at render/PDF time).
-            string prefix = Path.GetFileName(sourceFilePath).StartsWith("mpc_", StringComparison.OrdinalIgnoreCase)
+            // Preserve/apply the "mpc_" marker so full-bleed art (MPCFill, or a local image the user
+            // tagged as MPCFill via markAsBled) keeps being recognised as such after it's copied into
+            // the library (drives bleed handling at render/PDF time).
+            string prefix = (markAsBled ||
+                             Path.GetFileName(sourceFilePath).StartsWith("mpc_", StringComparison.OrdinalIgnoreCase))
                 ? "mpc_" : "";
             string destFileName = $"{prefix}{id}{ext}";
             string destPath = Path.Combine(_libraryDirectory, destFileName);

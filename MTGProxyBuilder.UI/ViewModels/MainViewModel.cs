@@ -983,6 +983,15 @@ public class MainViewModel : ViewModelBase
             "Select Card Artwork", "Image Files (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp|All Files (*.*)|*.*");
         if (paths.Length == 0) return;
 
+        // Ask how to treat these local images for bleed (and what source they count as).
+        var choice = await _dialogService.ConfirmCancelAsync(
+            "Come trattare queste immagini per il bleed?\n\n" +
+            "• Sì = stile MPCFill: hanno già 1/8\" di bordo per il bleed (verrà ritagliato)\n" +
+            "• No = stile Scryfall: carta intera, il bleed verrà aggiunto io",
+            "Bleed immagini locali");
+        if (choice == MessageResult.Cancel) return;
+        bool asMpc = choice == MessageResult.Yes;
+
         PushUndo();
         SetBusy($"Loading {paths.Length} image(s)...");
         await Task.Delay(50);
@@ -990,10 +999,20 @@ public class MainViewModel : ViewModelBase
         Cards.CollectionChanged -= OnCardsCollectionChanged;
         foreach (var filePath in paths)
         {
+            string name = Path.GetFileNameWithoutExtension(filePath);
+
+            // Persist the image in the front art library (named, so it's reusable as artwork by name
+            // later), tagging it MPCFill when asMpc so its built-in bleed is cropped correctly. Fall
+            // back to the original path if the library copy fails.
+            var entry = _frontArtLibraryService.AddFromFile(
+                filePath, name, asMpc ? "Local MPCFill" : "Local", markAsBled: asMpc);
+            string artPath = entry?.FilePath ?? filePath;
+
             var card = new CardModel
             {
-                Name = Path.GetFileNameWithoutExtension(filePath),
-                ArtworkPath = filePath
+                Name = name,
+                ArtworkPath = artPath,
+                Source = asMpc ? CardSource.MpcFill : CardSource.Scryfall
             };
             ApplyDefaultBackArt(card);
             Cards.Add(card);
@@ -1001,7 +1020,8 @@ public class MainViewModel : ViewModelBase
         Cards.CollectionChanged += OnCardsCollectionChanged;
         _currentProject.PageSettings.CenterGrid();
         ApplyFilterAndSort();
-        StatusText = $"Added {paths.Length} card(s)";
+        RefreshCanvas();
+        StatusText = $"Added {paths.Length} card(s) ({(asMpc ? "MPCFill" : "Scryfall")} bleed)";
         ClearBusy();
     }
 
