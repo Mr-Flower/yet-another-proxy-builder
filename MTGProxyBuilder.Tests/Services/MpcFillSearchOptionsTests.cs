@@ -26,7 +26,7 @@ public class MpcFillSearchOptionsTests
         var settings = new AppSettings();
         var opts = MpcFillSearchOptions.FromSettings(settings);
 
-        Assert.Equal(new[] { "CARD" }, opts.CardTypes);
+        Assert.Equal(new[] { "CARD", "TOKEN" }, opts.CardTypes);
         Assert.Equal("nameAscending", opts.SortBy);
         Assert.Equal(0, opts.MinimumDpi);
         Assert.Equal(1500, opts.MaximumDpi);

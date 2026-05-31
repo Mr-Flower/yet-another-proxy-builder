@@ -181,8 +181,10 @@ public class PageLayoutTests
         var layout = new PageLayout();
         layout.CenterGrid();
 
-        float gridW = layout.CardsPerRow * (layout.CardWidthMm + 2 * layout.BleedWidthMm);
-        float gridH = layout.CardsPerColumn * (layout.CardHeightMm + 2 * layout.BleedWidthMm);
+        // Grid math uses the effective (MPC-standard) bleed — the same value the renderer draws —
+        // not the raw BleedWidthMm toggle, so the centered grid lines up with the page.
+        float gridW = layout.CardsPerRow * (layout.CardWidthMm + 2 * layout.EffectiveBleedMm);
+        float gridH = layout.CardsPerColumn * (layout.CardHeightMm + 2 * layout.EffectiveBleedMm);
         float totalW = gridW + layout.MarginLeftMm + layout.MarginRightMm;
         float totalH = gridH + layout.MarginTopMm + layout.MarginBottomMm;
 

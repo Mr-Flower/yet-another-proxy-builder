@@ -49,7 +49,7 @@ public class AppSettingsServiceTests
         Assert.Equal(1500, settings.MpcFillDefaultMaxDpi);
         Assert.True(settings.MpcFillDefaultFuzzySearch);
         Assert.Equal("nameAscending", settings.MpcFillDefaultSortBy);
-        Assert.Equal(new List<string> { "CARD" }, settings.MpcFillCardTypes);
+        Assert.Equal(new List<string> { "CARD", "TOKEN" }, settings.MpcFillCardTypes);
         Assert.False(settings.MpcFillFilterCardbacks);
         Assert.Equal(30, settings.MpcFillMaximumSize);
         Assert.Empty(settings.MpcFillLanguages);
