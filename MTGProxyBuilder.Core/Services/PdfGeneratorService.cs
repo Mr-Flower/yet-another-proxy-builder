@@ -21,12 +21,12 @@ namespace MTGProxyBuilder.Core.Services
                     var settings = project.PageSettings;
                     var printSettings = project.PrintSettings;
 
-                    // Pre-process all unique images for bleed (avoids re-processing duplicates)
-                    int bleedPx = settings.BleedWidthMm > 0
-                        ? Math.Max(1, (int)(settings.BleedWidthMm / settings.CardWidthMm * 600))
-                        : 0;
+                    // Pre-process all unique images for bleed (avoids re-processing duplicates).
+                    // Bleed magnitude is locked to the MPCFill standard (1/8") so MPCFill art fits whole
+                    // and Scryfall scans extend to match; settings.BleedWidthMm is only an on/off toggle.
+                    float effectiveBleedMm = settings.BleedWidthMm > 0 ? Constants.MpcBleedMm : 0f;
                     var bleedCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    if (bleedPx > 0)
+                    if (effectiveBleedMm > 0)
                     {
                         var uniquePaths = project.Cards
                             .SelectMany(c => new[] { c.ArtworkPath, c.BackArtworkPath })
@@ -35,10 +35,10 @@ namespace MTGProxyBuilder.Core.Services
 
                         foreach (var path in uniquePaths)
                         {
-                            // Scryfall scans are bleed-extended; MPCFill art (already full-bleed) is
-                            // cropped back to the bare card then extended to the user's bleed.
+                            // Scryfall scans are edge-extended to 1/8"; MPCFill art (already full-bleed)
+                            // is returned whole. Bleed px is sized from each image's own resolution.
                             var result = _bleedProcessor.GetDisplayImage(
-                                path!, bleedPx, settings.CardWidthMm, settings.CardHeightMm);
+                                path!, effectiveBleedMm, settings.CardWidthMm);
                             if (result != null)
                                 bleedCache[path!] = result;
                         }
@@ -106,7 +106,9 @@ namespace MTGProxyBuilder.Core.Services
 
             float startX = settings.MarginLeftMm * MmToPt;
             float startY = settings.MarginTopMm * MmToPt;
-            float bleedPt = settings.BleedWidthMm * MmToPt;
+            // Bleed magnitude locked to the MPC 1/8" standard (BleedWidthMm only toggles it on/off),
+            // matching the bled images produced in GeneratePdfAsync so the cut line lands correctly.
+            float bleedPt = (settings.BleedWidthMm > 0 ? Constants.MpcBleedMm : 0f) * MmToPt;
             float cardWPt = settings.CardWidthMm * MmToPt;
             float cardHPt = settings.CardHeightMm * MmToPt;
             float cellW = cardWPt + 2 * bleedPt;

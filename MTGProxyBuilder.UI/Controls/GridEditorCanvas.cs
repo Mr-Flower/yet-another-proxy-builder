@@ -17,6 +17,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using MTGProxyBuilder.Core;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
 
@@ -58,14 +59,14 @@ namespace MTGProxyBuilder.UI.Controls
 
         // Bleed-extended images for a WYSIWYG preview matching the PDF. The bled JPEGs are produced
         // and disk-cached by BleedProcessor (shared with PDF export); here we additionally map
-        // (sourcePath|bleedPx|useBleed) -> display path so PlaceCardVisual can look them up cheaply.
+        // (sourcePath|bleedMm|useBleed) -> display path so PlaceCardVisual can look them up cheaply.
         private static readonly BleedProcessor _bleedProcessor = new();
         private static readonly ConcurrentDictionary<string, string> _displayPathCache = new();
-        private int _bleedPx;
+        private double _bleedMm;
         private bool _useBleed;
-        private double _cardWmm, _cardHmm;
-        private static string DisplayKey(string raw, int bleedPx, bool useBleed, double cardWmm)
-            => $"{raw}|{bleedPx}|{useBleed}|{cardWmm}";
+        private double _cardWmm;
+        private static string DisplayKey(string raw, double bleedMm, bool useBleed, double cardWmm)
+            => $"{raw}|{bleedMm}|{useBleed}|{cardWmm}";
 
         // Debounce + async redraw
         private DispatcherTimer? _redrawTimer;
@@ -206,20 +207,20 @@ namespace MTGProxyBuilder.UI.Controls
             float marginT = settings.MarginTopMm   * mmPx;
             float marginR = settings.MarginRightMm * mmPx;
             float marginB = settings.MarginBottomMm* mmPx;
-            float cellW   = (settings.CardWidthMm  + 2 * settings.BleedWidthMm) * mmPx;
-            float cellH   = (settings.CardHeightMm + 2 * settings.BleedWidthMm) * mmPx;
-            float bleed   = settings.BleedWidthMm  * mmPx;
+            // WYSIWYG bleed locked to the MPC 1/8" standard (same as the PDF): MPCFill art is drawn
+            // whole and Scryfall scans extend to match, so both render at identical zoom.
+            // BleedWidthMm only toggles bleed on/off. Registration-marks mode suppresses it.
+            float effectiveBleedMm = settings.BleedWidthMm > 0 ? Constants.MpcBleedMm : 0f;
+            float cellW   = (settings.CardWidthMm  + 2 * effectiveBleedMm) * mmPx;
+            float cellH   = (settings.CardHeightMm + 2 * effectiveBleedMm) * mmPx;
+            float bleed   = effectiveBleedMm * mmPx;
             float cardW   = settings.CardWidthMm   * mmPx;
             float cardH   = settings.CardHeightMm  * mmPx;
 
-            // WYSIWYG bleed: use the SAME bleed-pixel formula as PdfGeneratorService so the preview
-            // shows the exact bled image the PDF will. Registration-marks mode suppresses bleed.
             bool regMarksActive = PrintSettingsSource?.ShowRegistrationMarks == true;
-            _bleedPx = settings.BleedWidthMm > 0
-                ? Math.Max(1, (int)(settings.BleedWidthMm / settings.CardWidthMm * 600)) : 0;
-            _useBleed = _bleedPx > 0 && !regMarksActive;
+            _bleedMm = effectiveBleedMm;
+            _useBleed = effectiveBleedMm > 0 && !regMarksActive;
             _cardWmm = settings.CardWidthMm;
-            _cardHmm = settings.CardHeightMm;
 
             int cols = settings.CardsPerRow;
             int rows = settings.CardsPerColumn;
@@ -241,7 +242,7 @@ namespace MTGProxyBuilder.UI.Controls
                 string? path = showBack ? (s.Card.BackArtworkPath ?? s.Card.ArtworkPath) : s.Card.ArtworkPath;
                 if (string.IsNullOrEmpty(path)) continue;
                 // Skip only if the display (possibly bled) image is already decoded in the cache.
-                if (_displayPathCache.TryGetValue(DisplayKey(path, _bleedPx, _useBleed, _cardWmm), out var disp)
+                if (_displayPathCache.TryGetValue(DisplayKey(path, _bleedMm, _useBleed, _cardWmm), out var disp)
                     && _imageCache.ContainsKey(disp))
                     continue;
                 pathsToLoad.Add(path);
@@ -252,20 +253,20 @@ namespace MTGProxyBuilder.UI.Controls
                 IsRendering = true;
                 int loaded = 0, total = pathsToLoad.Count;
                 int decodeWidth = (int)cellW * 2;
-                int bleedPx = _bleedPx;
+                double bleedMm = _bleedMm;
                 bool useBleed = _useBleed;
-                double cardWmm = _cardWmm, cardHmm = _cardHmm;
+                double cardWmm = _cardWmm;
                 foreach (var path in pathsToLoad)
                 {
                     if (token.IsCancellationRequested) { IsRendering = false; return; }
                     await Task.Run(() =>
                     {
                         // Resolve (and disk-generate) the display image on the background thread, then
-                        // decode the result into the bitmap cache. Scryfall -> bleed-extend; MPCFill ->
-                        // crop built-in bleed then extend; both fill the cell. Bleed off -> raw path.
-                        string disp = _displayPathCache.GetOrAdd(DisplayKey(path, bleedPx, useBleed, cardWmm),
+                        // decode the result into the bitmap cache. Scryfall -> edge-extend to 1/8";
+                        // MPCFill -> drawn whole; both fill the cell. Bleed off -> raw path.
+                        string disp = _displayPathCache.GetOrAdd(DisplayKey(path, bleedMm, useBleed, cardWmm),
                             _ => useBleed
-                                ? (_bleedProcessor.GetDisplayImage(path, bleedPx, cardWmm, cardHmm) ?? path)
+                                ? (_bleedProcessor.GetDisplayImage(path, bleedMm, cardWmm) ?? path)
                                 : path);
                         LoadImageToCache(disp, decodeWidth);
                     }, token);
@@ -766,7 +767,7 @@ namespace MTGProxyBuilder.UI.Controls
             bool bledImage = false;
             if (!(flipped && !hasBackArt) && !string.IsNullOrEmpty(imagePath))
             {
-                string disp = _displayPathCache.TryGetValue(DisplayKey(imagePath, _bleedPx, _useBleed, _cardWmm), out var d)
+                string disp = _displayPathCache.TryGetValue(DisplayKey(imagePath, _bleedMm, _useBleed, _cardWmm), out var d)
                     ? d : imagePath;
                 bmp = GetCachedImage(disp);
                 // Fill the whole cell when the drawn image carries the bleed: either a Scryfall scan was

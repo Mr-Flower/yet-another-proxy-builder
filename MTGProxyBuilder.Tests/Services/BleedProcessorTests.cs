@@ -1,3 +1,4 @@
+using MTGProxyBuilder.Core;
 using MTGProxyBuilder.Core.Services;
 using SkiaSharp;
 
@@ -123,7 +124,7 @@ public class BleedProcessorTests
         {
             string input = Path.Combine(tmpDir, "mpc_full.png"); // mpc_ prefix => already full-bleed
             CreateTestImage(input, 80, 112);
-            var result = proc.GetDisplayImage(input, 6, 63, 88);
+            var result = proc.GetDisplayImage(input, Constants.MpcBleedMm, 63);
             Assert.Equal(input, result);
         }
         finally { try { Directory.Delete(tmpDir, true); } catch { } proc.ClearCache(); }
@@ -138,8 +139,8 @@ public class BleedProcessorTests
         try
         {
             string input = Path.Combine(tmpDir, "scryfall_card.png"); // no mpc_ prefix
-            CreateTestImage(input, 80, 112);
-            var result = proc.GetDisplayImage(input, 6, 63, 88);
+            CreateTestImage(input, 400, 560); // realistic-ish scan; 1/8" => a multi-px border
+            var result = proc.GetDisplayImage(input, Constants.MpcBleedMm, 63);
             Assert.NotNull(result);
             Assert.NotEqual(input, result);
             Assert.True(File.Exists(result));
@@ -149,7 +150,33 @@ public class BleedProcessorTests
 
     [Fact]
     public void GetDisplayImage_ZeroBleed_ReturnsOriginal()
-        => Assert.Equal("/x/mpc_a.jpg", new BleedProcessor().GetDisplayImage("/x/mpc_a.jpg", 0, 63, 88));
+        => Assert.Equal("/x/mpc_a.jpg", new BleedProcessor().GetDisplayImage("/x/mpc_a.jpg", 0, 63));
+
+    [Theory]
+    [InlineData(630)]
+    [InlineData(1260)]
+    public void GetDisplayImage_ScryfallBleed_ScalesWithResolution(int srcW)
+    {
+        // The added bleed must be a fixed FRACTION of the card (≈ MpcBleedMm/cardWmm per side),
+        // independent of scan resolution — so a low- and a high-res scan of the same card get the same
+        // proportional 1/8" border, matching MPCFill. (The old code added a fixed 14 px regardless of
+        // resolution, so the bleed was far too thin on high-res scans and the zoom diverged.)
+        var proc = new BleedProcessor();
+        int srcH = (int)(srcW * 88.0 / 63.0);
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"disp_res_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            string input = Path.Combine(tmpDir, "scryfall_card.png"); // no mpc_ prefix
+            CreateTestImage(input, srcW, srcH);
+            var result = proc.GetDisplayImage(input, Constants.MpcBleedMm, 63);
+            using var bmp = SKBitmap.Decode(result);
+            double bleedFractionPerSide = (bmp.Width - srcW) / 2.0 / srcW;
+            double expected = Constants.MpcBleedMm / 63.0; // ≈ 0.0484 of the card width per side
+            Assert.InRange(bleedFractionPerSide, expected - 0.005, expected + 0.005);
+        }
+        finally { try { Directory.Delete(tmpDir, true); } catch { } proc.ClearCache(); }
+    }
 
     // ---- corner square-off (white triangle removal) ----
 

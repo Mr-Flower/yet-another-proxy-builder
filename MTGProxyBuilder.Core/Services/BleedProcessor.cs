@@ -51,7 +51,7 @@ namespace MTGProxyBuilder.Core.Services
                 // algorithm changes so stale cached results (e.g. the broken coloured corners) are
                 // regenerated instead of reused. v5 = corner square-off that also swallows the
                 // anti-aliased grey fringe (luma-based fill to the dark border).
-                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedPixels}_v5";
+                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedPixels}_v6";
                 string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
 
                 if (File.Exists(outputPath))
@@ -79,23 +79,44 @@ namespace MTGProxyBuilder.Core.Services
             }
         }
 
-        // MakePlayingCards / MPCFill standard bleed per side (the margin baked into MPCFill art):
         /// <summary>
         /// Resolves the image to draw filling a full (card + 2*bleed) cell, matching the PDF output.
-        /// - MPCFill art is authored full-bleed (it already includes its own 1/8" margin), so it is drawn
-        ///   WHOLE, filling the cell as-is — no crop, no extension. The cut line at the corners is
-        ///   positioned to trim that extra 1/8".
-        /// - Scryfall scans are the bare card, so the bleed is added by duplicating the edge pixels
-        ///   outward (and squaring off white corners). The card itself ends at the cut line.
-        /// Returns the original path when no bleed is needed or for MPCFill (drawn directly).
+        /// Both sources end up with the SAME 1/8" MPC-standard bleed, so the same card renders at the
+        /// same zoom whether it came from Scryfall or MPCFill:
+        /// - MPCFill art is authored full-bleed (already includes its own 1/8" margin), so it is drawn
+        ///   WHOLE, filling the cell as-is — no crop, no extension. The cut line trims that 1/8".
+        /// - Scryfall scans are the bare card, so 1/8" of bleed is added by duplicating the edge pixels
+        ///   outward (and squaring off white corners). The bleed is sized as a fraction of THIS image's
+        ///   pixels, so any scan resolution gets the correct border.
+        /// <paramref name="bleedMm"/> is the physical bleed per side (use <see cref="Constants.MpcBleedMm"/>);
+        /// <paramref name="cardWmm"/> is the card width the bare scan represents. Returns the original
+        /// path when no bleed is wanted or for MPCFill (drawn directly).
         /// </summary>
-        public string? GetDisplayImage(string sourcePath, int bleedPixels, double cardWmm, double cardHmm)
+        public string? GetDisplayImage(string sourcePath, double bleedMm, double cardWmm)
         {
-            if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath) || bleedPixels <= 0)
+            if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath) || bleedMm <= 0 || cardWmm <= 0)
                 return sourcePath;
             if (ImageAlreadyHasBleed(sourcePath))
                 return sourcePath; // MPCFill: draw whole image, fill the cell
-            return GetBleedExtendedImage(sourcePath, bleedPixels); // Scryfall: extend edges
+            int bleedPx = ScryfallBleedPixels(sourcePath, bleedMm, cardWmm);
+            return bleedPx > 0 ? GetBleedExtendedImage(sourcePath, bleedPx) : sourcePath; // Scryfall: extend edges
+        }
+
+        /// <summary>
+        /// Bleed width in SOURCE-image pixels for a bare Scryfall scan: the physical bleed (mm) is the
+        /// same fraction of the card as it is of the image's pixels (square pixels), so a 700 px and a
+        /// 1500 px scan both get a correct ~1/8" border. (The old code added a fixed 14 px regardless
+        /// of resolution, so the bleed was far too thin on real scans.) Reads only the image header.
+        /// </summary>
+        private static int ScryfallBleedPixels(string sourcePath, double bleedMm, double cardWmm)
+        {
+            try
+            {
+                using var codec = SKCodec.Create(sourcePath);
+                int w = codec?.Info.Width ?? 0;
+                return w > 0 ? Math.Max(1, (int)Math.Round(w * bleedMm / cardWmm)) : 0;
+            }
+            catch { return 0; }
         }
 
         /// <summary>
