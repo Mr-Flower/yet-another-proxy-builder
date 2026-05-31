@@ -16,8 +16,10 @@ namespace MTGProxyBuilder.UI.Controls
     public static class ArtTileBuilder
     {
         public const double TileWidth = 200;
-        public const double TileHeight = 295;
-        public const double ImageHeight = 235;
+        // Image area matches the card aspect ratio (63:88) at the tile content width (~196 px) so card
+        // thumbnails aren't squashed/cropped: 196 * 88/63 ≈ 274. TileHeight leaves room for the labels.
+        public const double ImageHeight = 274;
+        public const double TileHeight = 334;
         public const double LabelFontSize = 11;
         public const double DetailFontSize = 9;
 

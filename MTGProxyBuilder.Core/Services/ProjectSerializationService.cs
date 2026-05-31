@@ -114,9 +114,11 @@ namespace MTGProxyBuilder.Core.Services
 
                     var project = wrapper.Project;
 
-                    // Extract images to a temp folder unique to this file
+                    // Extract images to a temp folder unique to this file. Use a STABLE hash so the
+                    // folder is the same across app launches — otherwise the bleed/image caches (keyed
+                    // by path) miss every restart and all artwork is reprocessed on every reopen.
                     string projectHash = Path.GetFileNameWithoutExtension(filePath)
-                        + "_" + filePath.GetHashCode().ToString("X8");
+                        + "_" + StableHash.Hex(filePath);
                     string extractDir = Path.Combine(_extractRoot, projectHash, "images");
 
                     // Clean previous extraction
@@ -172,7 +174,13 @@ namespace MTGProxyBuilder.Core.Services
             {
                 if (string.IsNullOrEmpty(path) || map.ContainsKey(path)) return;
                 string ext = Path.GetExtension(path);
-                string archiveName = $"{counter++:D4}_{SanitizeFileName(Path.GetFileName(path))}";
+                string fileName = SanitizeFileName(Path.GetFileName(path));
+                // Keep the "mpc_" bleed marker at the FRONT of the archive name so MPCFill art is still
+                // recognized as full-bleed after the project is reopened (BleedProcessor checks the
+                // filename prefix). Without this the prefix was buried behind the counter and lost.
+                string archiveName = fileName.StartsWith("mpc_", StringComparison.OrdinalIgnoreCase)
+                    ? $"mpc_{counter++:D4}_{fileName[4..]}"
+                    : $"{counter++:D4}_{fileName}";
                 // Ensure uniqueness even if file names collide
                 if (map.Values.Contains(archiveName))
                     archiveName = $"{counter++:D4}_{Guid.NewGuid():N}{ext}";
@@ -218,6 +226,9 @@ namespace MTGProxyBuilder.Core.Services
                     ArtworkPath = Rel(c.ArtworkPath),
                     BackArtworkPath = string.IsNullOrEmpty(c.BackArtworkPath) ? null : Rel(c.BackArtworkPath),
                     OriginalBackArtworkPath = string.IsNullOrEmpty(c.OriginalBackArtworkPath) ? null : Rel(c.OriginalBackArtworkPath),
+                    Source = c.Source, // preserve MPCFill/Scryfall origin (drives bleed handling) across save/load
+                    FullResFrontUrl = c.FullResFrontUrl,
+                    FullResBackUrl = c.FullResBackUrl,
                     ScryfallId = c.ScryfallId,
                     Quantity = c.Quantity,
                     IncludeBack = c.IncludeBack,

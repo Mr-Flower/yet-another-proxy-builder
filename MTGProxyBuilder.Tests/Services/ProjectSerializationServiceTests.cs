@@ -83,6 +83,34 @@ public class ProjectSerializationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveAndLoad_PreservesMpcFillBleedMarker()
+    {
+        // MPCFill art must still be recognized as full-bleed after a save/load round-trip:
+        // the "mpc_" filename prefix and the card Source must both survive.
+        var svc = new ProjectSerializationService();
+        string mpcImage = Path.Combine(_testDir, "mpc_token123.png");
+        File.WriteAllBytes(mpcImage, new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A });
+
+        var project = new ProjectModel { ProjectName = "MPC Test" };
+        project.Cards.Add(new CardModel
+        {
+            Name = "Goblin",
+            ArtworkPath = mpcImage,
+            Source = CardSource.MpcFill
+        });
+        string filePath = Path.Combine(_testDir, "mpc.mtgproj");
+
+        await svc.SaveProjectAsync(project, filePath);
+        var loaded = await svc.LoadProjectAsync(filePath);
+
+        Assert.NotNull(loaded);
+        var card = loaded!.Cards[0];
+        Assert.Equal(CardSource.MpcFill, card.Source);
+        Assert.StartsWith("mpc_", Path.GetFileName(card.ArtworkPath));
+        Assert.True(BleedProcessor.ImageAlreadyHasBleed(card.ArtworkPath));
+    }
+
+    [Fact]
     public async Task Save_CreatesValidZipFile()
     {
         var svc = new ProjectSerializationService();

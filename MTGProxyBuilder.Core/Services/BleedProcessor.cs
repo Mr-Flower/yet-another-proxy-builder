@@ -51,7 +51,7 @@ namespace MTGProxyBuilder.Core.Services
                 // algorithm changes so stale cached results (e.g. the broken coloured corners) are
                 // regenerated instead of reused. v5 = corner square-off that also swallows the
                 // anti-aliased grey fringe (luma-based fill to the dark border).
-                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedPixels}_v6";
+                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{StableHash.Hex(sourcePath)}_b{bleedPixels}_v6";
                 string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
 
                 if (File.Exists(outputPath))
@@ -130,7 +130,7 @@ namespace MTGProxyBuilder.Core.Services
 
             try
             {
-                string hash = $"crop_{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedKey}_v6";
+                string hash = $"crop_{Path.GetFileNameWithoutExtension(sourcePath)}_{StableHash.Hex(sourcePath)}_b{bleedKey}_v6";
                 string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
                 if (File.Exists(outputPath)) { _processedCache[cacheKey] = outputPath; return outputPath; }
 

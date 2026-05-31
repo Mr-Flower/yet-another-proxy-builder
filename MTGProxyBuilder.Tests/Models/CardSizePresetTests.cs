@@ -20,21 +20,11 @@ public class CardSizePresetTests
     }
 
     [Fact]
-    public void BuiltInPresets_ContainsYugioh()
+    public void BuiltInPresets_OnlyMtg()
     {
-        var ygo = CardSizePreset.BuiltInPresets.FirstOrDefault(p => p.Name == "Yu-Gi-Oh!");
-        Assert.NotNull(ygo);
-        Assert.Equal(59f, ygo.WidthMm);
-        Assert.Equal(86f, ygo.HeightMm);
-    }
-
-    [Fact]
-    public void BuiltInPresets_ContainsPokemon()
-    {
-        var poke = CardSizePreset.BuiltInPresets.FirstOrDefault(p => p.Name == "Pokemon TCG");
-        Assert.NotNull(poke);
-        Assert.Equal(63f, poke.WidthMm);
-        Assert.Equal(88f, poke.HeightMm);
+        // This is an MTG-only proxy builder; other-game presets were removed.
+        Assert.Single(CardSizePreset.BuiltInPresets);
+        Assert.Equal("Magic: The Gathering", CardSizePreset.BuiltInPresets[0].Name);
     }
 
     [Fact]
