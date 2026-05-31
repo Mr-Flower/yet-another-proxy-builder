@@ -1087,7 +1087,7 @@ public class MainViewModel : ViewModelBase
         if (result != null)
         {
             PushUndo();
-            foreach (var c in targets) c.ArtworkPath = result.ResultPath;
+            foreach (var c in targets) { c.ArtworkPath = result.ResultPath; c.FullResFrontUrl = null; }
             StatusText = $"Front art updated for {targets.Count} card(s)";
             RefreshCanvas();
         }
@@ -1114,6 +1114,7 @@ public class MainViewModel : ViewModelBase
             foreach (var c in targets)
             {
                 c.BackArtworkPath = result.ResultPath;
+                c.FullResBackUrl = null;
                 c.IncludeBack = true;
             }
             StatusText = $"Back art applied to {targets.Count} card(s)";
@@ -1235,12 +1236,14 @@ public class MainViewModel : ViewModelBase
         if (result == null) return;
 
         PushUndo();
+        // The selector result is already full-resolution, so clear any stale full-res URL — otherwise
+        // the export pre-pass would re-download the original printing over the user's choice.
         if (mode == ArtSelectorMode.Front)
         {
             if (result.ApplyToThisCopyOnly && card.Quantity > 1)
             {
                 var copy = SplitCardCopy(card);
-                if (copy != null) { copy.ArtworkPath = result.ResultPath; SelectedCard = copy; }
+                if (copy != null) { copy.ArtworkPath = result.ResultPath; copy.FullResFrontUrl = null; SelectedCard = copy; }
                 StatusText = $"Front art updated for one copy of {card.Name}";
             }
             else if (result.ApplyToSameName)
@@ -1249,6 +1252,7 @@ public class MainViewModel : ViewModelBase
                 foreach (var c in Cards.Where(c => c.Name == card.Name))
                 {
                     c.ArtworkPath = result.ResultPath;
+                    c.FullResFrontUrl = null;
                     count++;
                 }
                 StatusText = $"Front art updated for {count} \"{card.Name}\" card(s)";
@@ -1256,6 +1260,7 @@ public class MainViewModel : ViewModelBase
             else
             {
                 card.ArtworkPath = result.ResultPath;
+                card.FullResFrontUrl = null;
                 StatusText = $"Front art updated for {card.Name}";
             }
         }
@@ -1264,7 +1269,7 @@ public class MainViewModel : ViewModelBase
             if (result.ApplyToThisCopyOnly && card.Quantity > 1)
             {
                 var copy = SplitCardCopy(card);
-                if (copy != null) { copy.BackArtworkPath = result.ResultPath; copy.IncludeBack = true; SelectedCard = copy; }
+                if (copy != null) { copy.BackArtworkPath = result.ResultPath; copy.FullResBackUrl = null; copy.IncludeBack = true; SelectedCard = copy; }
                 StatusText = $"Back art updated for one copy of {card.Name}";
             }
             else if (result.ApplyToNoBack)
@@ -1273,6 +1278,7 @@ public class MainViewModel : ViewModelBase
                 foreach (var c in Cards.Where(c => string.IsNullOrEmpty(c.BackArtworkPath)))
                 {
                     c.BackArtworkPath = result.ResultPath;
+                    c.FullResBackUrl = null;
                     c.IncludeBack = true;
                     count++;
                 }
@@ -1281,6 +1287,7 @@ public class MainViewModel : ViewModelBase
             else
             {
                 card.BackArtworkPath = result.ResultPath;
+                card.FullResBackUrl = null;
                 card.IncludeBack = true;
                 StatusText = $"Back art updated for {card.Name}";
             }
@@ -1588,6 +1595,11 @@ public class MainViewModel : ViewModelBase
         if (path == null) return;
 
         SyncCardsToProject();
+        SetBusy("Downloading full-resolution art...");
+
+        // Upgrade each card to its full-resolution art for the export only; restored afterwards so
+        // the app keeps using the lightweight cached copies. Failures fall back to the cached image.
+        var fullResSwaps = await UpgradeToFullResForExportAsync();
         SetBusy("Generating PDF...");
         try
         {
@@ -1623,7 +1635,53 @@ public class MainViewModel : ViewModelBase
             StatusText = $"PDF export failed: {ex.Message}";
             await _dialogService.ShowErrorAsync($"PDF generation error:\n{ex.Message}", "Export Failed");
         }
-        finally { ClearBusy(); }
+        finally
+        {
+            // Restore the compressed cached paths so the canvas/app stays lightweight.
+            foreach (var (card, front, back) in fullResSwaps)
+            {
+                card.ArtworkPath = front;
+                card.BackArtworkPath = back;
+            }
+            if (fullResSwaps.Count > 0) RefreshCanvas();
+            ClearBusy();
+        }
+    }
+
+    /// <summary>
+    /// Downloads the full-resolution art for each card (from CardModel.FullResFrontUrl/BackUrl) and
+    /// temporarily points the card at it for the export. Returns the list of (card, originalFront,
+    /// originalBack) so the caller can restore the compressed paths afterwards. Cards without a
+    /// full-res URL, or whose download fails, are left on their cached image (graceful fallback).
+    /// The full-res cache key preserves the MPCFill "mpc_" marker so bleed handling stays correct.
+    /// </summary>
+    private async Task<List<(CardModel Card, string Front, string? Back)>> UpgradeToFullResForExportAsync()
+    {
+        var swaps = new List<(CardModel, string, string?)>();
+        foreach (var card in Cards)
+        {
+            bool changed = false;
+            string origFront = card.ArtworkPath;
+            string? origBack = card.BackArtworkPath;
+
+            if (!string.IsNullOrEmpty(card.FullResFrontUrl))
+            {
+                bool isMpc = BleedProcessor.ImageAlreadyHasBleed(origFront);
+                string key = (isMpc ? "mpc_full_" : "full_") + (card.ScryfallId ?? card.CardId);
+                var full = await _scryfallService.DownloadUrlToCacheAsync(card.FullResFrontUrl, key);
+                if (!string.IsNullOrEmpty(full) && File.Exists(full)) { card.ArtworkPath = full; changed = true; }
+            }
+            if (!string.IsNullOrEmpty(card.FullResBackUrl) && !string.IsNullOrEmpty(origBack))
+            {
+                bool isMpc = BleedProcessor.ImageAlreadyHasBleed(origBack);
+                string key = (isMpc ? "mpc_full_" : "full_") + (card.ScryfallId ?? card.CardId) + "_back";
+                var full = await _scryfallService.DownloadUrlToCacheAsync(card.FullResBackUrl, key);
+                if (!string.IsNullOrEmpty(full) && File.Exists(full)) { card.BackArtworkPath = full; changed = true; }
+            }
+
+            if (changed) swaps.Add((card, origFront, origBack));
+        }
+        return swaps;
     }
 
     private async Task ExportSvgOnlyAsync()

@@ -39,6 +39,9 @@ public class ImageAdjustmentService
         string result = _processor.GetAdjustedImage(original, settings) ?? original;
         store.Record(original, result, settings);
         card.ArtworkPath = result;
+        // The adjustment is baked into this (cached-resolution) image; drop the full-res URL so the
+        // PDF export uses the baked result instead of re-downloading the un-adjusted original.
+        card.FullResFrontUrl = null;
         return result;
     }
 

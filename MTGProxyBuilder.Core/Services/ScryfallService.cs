@@ -128,6 +128,9 @@ namespace MTGProxyBuilder.Core.Services
                 ArtworkPath = artworkPath,
                 BackArtworkPath = backArtworkPath,
                 OriginalBackArtworkPath = backArtworkPath,
+                // Full-res URLs for on-demand download at PDF export (ArtworkPath holds a compressed copy).
+                FullResFrontUrl = GetImageUrl("large"),
+                FullResBackUrl = GetBackImageUrl("large"),
                 IncludeBack = hasBack,
                 ManaCost = manaCost,
                 CMC = CMC,
@@ -300,6 +303,17 @@ namespace MTGProxyBuilder.Core.Services
                 catch { /* cache write is best-effort */ }
             }
             return cards;
+        }
+
+        /// <summary>Downloads an arbitrary image URL into the shared image cache under the given key
+        /// (reusing the configured HttpClient). Returns the cached path, or null on failure. Used to
+        /// fetch full-resolution art on demand at PDF export.</summary>
+        public async Task<string?> DownloadUrlToCacheAsync(string? url, string cacheKey)
+        {
+            if (string.IsNullOrEmpty(url)) return null;
+            var cached = _imageCache.GetCachedImagePath(cacheKey);
+            if (cached != null) return cached;
+            return await _imageCache.CacheImageFromUrlAsync(_httpClient, url, cacheKey);
         }
 
         public async Task<string?> DownloadAndCacheImageAsync(ScryfallCard card, bool back = false, string size = "large")

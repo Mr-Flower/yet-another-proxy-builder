@@ -73,7 +73,9 @@ namespace MTGProxyBuilder.UI.ViewModels
 
         public async Task<string?> DownloadScryfallArtAsync(ScryfallCard card, bool back = false)
         {
-            return await _scryfall.DownloadAndCacheImageAsync(card, back: back);
+            // Cache a compressed ("normal") copy for fast browsing/preview; the full-resolution
+            // "large" image is fetched on demand at PDF export (via CardModel.FullResFrontUrl).
+            return await _scryfall.DownloadAndCacheImageAsync(card, back: back, size: "normal");
         }
 
         public async Task<string?> DownloadMpcFillArtAsync(MpcFillCard card)

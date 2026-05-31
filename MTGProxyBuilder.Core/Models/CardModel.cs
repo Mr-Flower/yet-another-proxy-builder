@@ -202,6 +202,14 @@ namespace MTGProxyBuilder.Core.Models
             set { _source = value; OnPropertyChanged(); }
         }
 
+        /// <summary>Full-resolution source URL for the FRONT art. The cached ArtworkPath may be a
+        /// compressed copy (fast browsing); this is downloaded on demand at PDF export. Null once the
+        /// art is user-chosen or baked (ArtworkPath is then already the definitive image).</summary>
+        public string? FullResFrontUrl { get; set; }
+
+        /// <summary>Full-resolution source URL for the BACK art (downloaded on demand at PDF export).</summary>
+        public string? FullResBackUrl { get; set; }
+
         /// <summary>Helper: primary card type (Creature, Instant, Sorcery, etc.)</summary>
         public string PrimaryType =>
             TypeLine.Split("—")[0].Trim().Split(' ').LastOrDefault() ?? string.Empty;
@@ -219,6 +227,8 @@ namespace MTGProxyBuilder.Core.Models
             BackArtworkPath = BackArtworkPath,
             OriginalBackArtworkPath = OriginalBackArtworkPath,
             ScryfallId = ScryfallId,
+            FullResFrontUrl = FullResFrontUrl,
+            FullResBackUrl = FullResBackUrl,
             Quantity = Quantity,
             IncludeBack = IncludeBack,
             ManaCost = ManaCost,
