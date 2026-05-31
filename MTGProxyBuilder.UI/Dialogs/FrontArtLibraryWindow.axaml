@@ -3,7 +3,7 @@
         xmlns:controls="clr-namespace:MTGProxyBuilder.UI.Controls"
         x:Class="MTGProxyBuilder.UI.Dialogs.FrontArtLibraryWindow"
         Title="Front Art Library"
-        Width="900" Height="640" MinWidth="700" MinHeight="500"
+        Width="1150" Height="700" MinWidth="820" MinHeight="540"
         Background="#1E1E1E"
         WindowStartupLocation="CenterOwner">
 
@@ -75,33 +75,32 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="4"/>
-                <ColumnDefinition Width="240"/>
+                <ColumnDefinition Width="400" MinWidth="340"/>
             </Grid.ColumnDefinitions>
 
+            <!-- Card tiles laid out in a grid, sized like the Select Artwork selector. -->
             <ListBox Grid.Column="0" x:Name="LibraryListBox"
                      Background="#1E1E1E" BorderThickness="1" BorderBrush="#333"
                      SelectionMode="Multiple"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      SelectionChanged="OnListBoxSelectionChanged"
                      DoubleTapped="OnListBoxDoubleClick">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <Grid Height="32">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="40"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="80"/>
-                            </Grid.ColumnDefinitions>
-                            <Image Grid.Column="0" Width="36" Height="28" Stretch="UniformToFill"
-                                   Source="{Binding FilePath}"/>
-                            <StackPanel Grid.Column="1" Margin="6,0" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Name}" FontSize="11" Foreground="#DDD"
-                                           TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="{Binding Source}" FontSize="9.5" Foreground="#888"
-                                           TextTrimming="CharacterEllipsis"/>
-                            </StackPanel>
-                            <TextBlock Grid.Column="2" Text="{Binding Source}" FontSize="9.5"
-                                       Foreground="#666" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                        </Grid>
+                        <StackPanel Width="146">
+                            <Border Height="204" Background="Black" CornerRadius="3" ClipToBounds="True">
+                                <Image Stretch="UniformToFill" Source="{Binding FilePath}"/>
+                            </Border>
+                            <TextBlock Text="{Binding Name}" FontSize="10" Foreground="#DDD"
+                                       TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                            <TextBlock Text="{Binding Source}" FontSize="9" Foreground="#888"
+                                       TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" Margin="0,0,0,2"/>
+                        </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

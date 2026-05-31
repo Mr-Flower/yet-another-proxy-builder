@@ -201,6 +201,13 @@ public class MainViewModel : ViewModelBase
         UndoCommand = _undoCmd;
         _redoCmd = new RelayCommand(_ => Redo(), _ => _undoService.CanRedo);
         RedoCommand = _redoCmd;
+        // RelayCommand has no auto-requery, so the Undo/Redo buttons stayed disabled after PushUndo.
+        // Re-evaluate them whenever the undo/redo stacks change (SaveState/Undo/Redo/Clear).
+        _undoService.StateChanged += () =>
+        {
+            _undoCmd.RaiseCanExecuteChanged();
+            _redoCmd.RaiseCanExecuteChanged();
+        };
         ExitCommand = new RelayCommand(_ => _dialogService.Shutdown());
 
         _removeCardCmd = new RelayCommand(_ => RemoveCard(), _ => SelectedCard != null);
