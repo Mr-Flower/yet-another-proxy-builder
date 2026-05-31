@@ -6,8 +6,10 @@ namespace MTGProxyBuilder.Core.Services
     {
         private readonly string _cacheDirectory;
         private readonly string _metadataPath;
-        // cardId -> full path; avoids Directory.GetFiles per lookup
+        // cardId -> full path; avoids Directory.GetFiles per lookup.
+        // Guarded by _indexLock so parallel image downloads (deck import) can't corrupt it.
         private readonly Dictionary<string, string> _fileIndex = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _indexLock = new();
         // cardId -> (displayName, source) for resolving cache entries back to meaningful names
         private Dictionary<string, CachedImageMeta> _metaIndex = new(StringComparer.OrdinalIgnoreCase);
 
@@ -25,17 +27,23 @@ namespace MTGProxyBuilder.Core.Services
 
         private void RebuildIndex()
         {
-            _fileIndex.Clear();
-            foreach (var file in Directory.GetFiles(_cacheDirectory))
-                _fileIndex[Path.GetFileNameWithoutExtension(file)] = file;
+            lock (_indexLock)
+            {
+                _fileIndex.Clear();
+                foreach (var file in Directory.GetFiles(_cacheDirectory))
+                    _fileIndex[Path.GetFileNameWithoutExtension(file)] = file;
+            }
         }
 
         public async Task<string?> CacheImageFromUrlAsync(HttpClient httpClient, string imageUrl, string cardId)
         {
             try
             {
-                if (_fileIndex.TryGetValue(cardId, out var existing))
-                    return existing;
+                lock (_indexLock)
+                {
+                    if (_fileIndex.TryGetValue(cardId, out var existing))
+                        return existing;
+                }
 
                 string extension = Path.GetExtension(new Uri(imageUrl).AbsolutePath);
                 if (string.IsNullOrEmpty(extension)) extension = ".jpg";
@@ -43,9 +51,11 @@ namespace MTGProxyBuilder.Core.Services
                 string fileName = $"{cardId}{extension}";
                 string filePath = Path.Combine(_cacheDirectory, fileName);
 
+                // Network + disk I/O happen outside the lock so concurrent downloads run in parallel.
                 var imageData = await httpClient.GetByteArrayAsync(imageUrl);
                 await File.WriteAllBytesAsync(filePath, imageData);
-                _fileIndex[cardId] = filePath;
+
+                lock (_indexLock) { _fileIndex[cardId] = filePath; }
                 return filePath;
             }
             catch (Exception ex)
@@ -57,12 +67,15 @@ namespace MTGProxyBuilder.Core.Services
 
         public bool IsImageCached(string cardId)
         {
-            return _fileIndex.ContainsKey(cardId);
+            lock (_indexLock) { return _fileIndex.ContainsKey(cardId); }
         }
 
         public string? GetCachedImagePath(string cardId)
         {
-            return _fileIndex.TryGetValue(cardId, out var path) ? path : null;
+            lock (_indexLock)
+            {
+                return _fileIndex.TryGetValue(cardId, out var path) ? path : null;
+            }
         }
 
         /// <summary>Store display metadata for a cached image.</summary>
@@ -75,8 +88,11 @@ namespace MTGProxyBuilder.Core.Services
         /// <summary>Returns all cached file paths whose key starts with the given prefix, with metadata.</summary>
         public List<(string Key, string Path, string Name, string Source)> GetCachedByPrefix(string prefix)
         {
-            return _fileIndex
-                .Where(kv => kv.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            List<KeyValuePair<string, string>> snapshot;
+            lock (_indexLock)
+                snapshot = _fileIndex.Where(kv => kv.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            return snapshot
                 .Select(kv =>
                 {
                     _metaIndex.TryGetValue(kv.Key, out var meta);
@@ -114,8 +130,12 @@ namespace MTGProxyBuilder.Core.Services
         /// <summary>Removes a single cached image by its card ID key.</summary>
         public bool Remove(string cardId)
         {
-            if (!_fileIndex.TryGetValue(cardId, out var path))
-                return false;
+            string? path;
+            lock (_indexLock)
+            {
+                if (!_fileIndex.TryGetValue(cardId, out path))
+                    return false;
+            }
 
             if (File.Exists(path))
             {
@@ -123,7 +143,7 @@ namespace MTGProxyBuilder.Core.Services
                 catch { return false; }
             }
 
-            _fileIndex.Remove(cardId);
+            lock (_indexLock) { _fileIndex.Remove(cardId); }
             if (_metaIndex.Remove(cardId))
                 SaveMetadata();
             return true;
@@ -139,7 +159,7 @@ namespace MTGProxyBuilder.Core.Services
                     catch { /* skip locked files */ }
                 }
             }
-            _fileIndex.Clear();
+            lock (_indexLock) { _fileIndex.Clear(); }
             _metaIndex.Clear();
             SaveMetadata();
         }

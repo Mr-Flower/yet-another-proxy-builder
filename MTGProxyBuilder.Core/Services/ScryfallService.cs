@@ -18,6 +18,16 @@ namespace MTGProxyBuilder.Core.Services
         public int TotalCards { get; set; }
     }
 
+    /// <summary>Response shape of the /cards/collection batch endpoint.</summary>
+    public class ScryfallCollectionResult
+    {
+        [JsonProperty("data")]
+        public List<ScryfallCard>? Data { get; set; }
+    }
+
+    /// <summary>One identifier for a batch (/cards/collection) lookup: a Scryfall id or an exact name.</summary>
+    public record CardIdentifier(string? ScryfallId, string Name);
+
     public class ScryfallCard
     {
         [JsonProperty("id")]
@@ -328,6 +338,46 @@ namespace MTGProxyBuilder.Core.Services
             if (imageUrl == null) return null;
 
             return await _imageCache.CacheImageFromUrlAsync(_httpClient, imageUrl, cacheKey);
+        }
+
+        /// <summary>
+        /// Resolves many cards in one round-trip via Scryfall's /cards/collection endpoint
+        /// (up to 75 identifiers per request), instead of one /cards/named call per card.
+        /// This is the fast path for deck/list imports. Identifiers are exact names or Scryfall ids.
+        /// Names the batch endpoint can't match (e.g. typos) are simply absent from the result —
+        /// callers fall back to a fuzzy single lookup for those few.
+        /// </summary>
+        public async Task<List<ScryfallCard>> GetCardsByIdentifiersAsync(IEnumerable<CardIdentifier> identifiers)
+        {
+            var list = identifiers.ToList();
+            var all = new List<ScryfallCard>();
+
+            for (int offset = 0; offset < list.Count; offset += 75)
+            {
+                var chunk = list.Skip(offset).Take(75).Select(id => id.ScryfallId != null
+                    ? (object)new { id = id.ScryfallId }
+                    : new { name = id.Name }).ToList();
+
+                try
+                {
+                    string body = JsonConvert.SerializeObject(new { identifiers = chunk });
+                    using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+                    var response = await _httpClient.PostAsync("https://api.scryfall.com/cards/collection", content);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var json = await response.Content.ReadAsStringAsync();
+                        var result = JsonConvert.DeserializeObject<ScryfallCollectionResult>(json);
+                        if (result?.Data != null)
+                            all.AddRange(result.Data);
+                    }
+                }
+                catch { /* this chunk failed — caller falls back to per-name lookups */ }
+
+                if (offset + 75 < list.Count)
+                    await Task.Delay(100); // Scryfall rate limit between API requests
+            }
+
+            return all;
         }
 
         /// <summary>Fetch a single card by Scryfall ID.</summary>

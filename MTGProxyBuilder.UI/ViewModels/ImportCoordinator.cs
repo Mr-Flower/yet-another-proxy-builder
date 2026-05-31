@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
@@ -64,25 +65,18 @@ namespace MTGProxyBuilder.UI.ViewModels
             bool useFavoritesOnly,
             Action<string>? onProgress = null)
         {
-            var importedCards = new List<CardModel>();
             int failed = 0, skippedDupes = 0;
 
+            // ---- Phase 1: resolve duplicates up front (pure CPU, sequential) ----
             var existingByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             if (ignoreDuplicates)
-            {
                 foreach (var c in existingCards)
-                {
-                    if (existingByName.ContainsKey(c.Name))
-                        existingByName[c.Name] += c.Quantity;
-                    else
-                        existingByName[c.Name] = c.Quantity;
-                }
-            }
+                    existingByName[c.Name] = existingByName.GetValueOrDefault(c.Name) + c.Quantity;
 
-            for (int i = 0; i < deck.Entries.Count; i++)
+            var toFetch = new List<DeckImportEntry>();
+            foreach (var original in deck.Entries)
             {
-                var entry = deck.Entries[i];
-
+                var entry = original;
                 if (ignoreDuplicates && existingByName.ContainsKey(entry.CardName))
                 {
                     if (IsBasicLand(entry.CardName))
@@ -100,54 +94,89 @@ namespace MTGProxyBuilder.UI.ViewModels
                     else { skippedDupes++; continue; }
                 }
 
-                onProgress?.Invoke($"Looking up card {i + 1}/{deck.Entries.Count}: {entry.CardName}" +
-                    (entry.Quantity > 1 ? $" (x{entry.Quantity})" : "") + "...");
+                toFetch.Add(entry);
+                if (ignoreDuplicates)
+                    existingByName[entry.CardName] = existingByName.GetValueOrDefault(entry.CardName) + entry.Quantity;
+            }
 
-                ScryfallCard? scryfallCard = null;
-                if (!string.IsNullOrEmpty(entry.ScryfallId))
-                    scryfallCard = await _search.Scryfall.GetCardByIdAsync(entry.ScryfallId);
-                if (scryfallCard == null)
-                    scryfallCard = await _search.Scryfall.GetCardByNameAsync(entry.CardName);
-                if (scryfallCard == null) { failed++; continue; }
+            // ---- Phase 2: batch-resolve Scryfall metadata in ONE round-trip per 75 cards
+            //               (was one /cards/named call per card — the old bottleneck) ----
+            onProgress?.Invoke($"Ricerca di {toFetch.Count} carte su Scryfall...");
+            var resolved = await _search.Scryfall.GetCardsByIdentifiersAsync(
+                toFetch.Select(e => new CardIdentifier(
+                    string.IsNullOrEmpty(e.ScryfallId) ? null : e.ScryfallId, e.CardName)));
 
-                onProgress?.Invoke($"Downloading artwork {i + 1}/{deck.Entries.Count}: {entry.CardName}...");
+            var byId = new Dictionary<string, ScryfallCard>(StringComparer.OrdinalIgnoreCase);
+            var byName = new Dictionary<string, ScryfallCard>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in resolved)
+            {
+                if (!string.IsNullOrEmpty(c.Id)) byId[c.Id] = c;
+                if (!byName.ContainsKey(c.Name)) byName[c.Name] = c;
+            }
 
-                string? frontPath = null;
-                string? backPath = null;
+            // ---- Phase 3: download artwork in parallel (bounded), preserving deck order ----
+            var slots = new CardModel?[toFetch.Count];
+            int completed = 0;
+            using var gate = new SemaphoreSlim(8);
 
-                if (useMpcFill)
+            async Task FetchAsync(int idx)
+            {
+                var entry = toFetch[idx];
+                await gate.WaitAsync();
+                try
                 {
-                    var (mpcResults, _) = await _search.SearchMpcFillForCard(
-                        entry.CardName, minDpi, fuzzySearch, useFavoritesOnly);
-                    var bestMatch = mpcResults.FirstOrDefault(mc =>
-                        mc.Name.Contains(entry.CardName, StringComparison.OrdinalIgnoreCase));
-                    if (bestMatch != null)
-                        frontPath = await _search.DownloadMpcFillArtAsync(bestMatch);
-                    if (frontPath == null)
+                    ScryfallCard? scryfallCard = null;
+                    if (!string.IsNullOrEmpty(entry.ScryfallId))
+                        byId.TryGetValue(entry.ScryfallId!, out scryfallCard);
+                    if (scryfallCard == null)
+                        byName.TryGetValue(entry.CardName, out scryfallCard);
+                    // Fuzzy single lookup only for the few names the batch endpoint couldn't match.
+                    scryfallCard ??= await _search.Scryfall.GetCardByNameAsync(entry.CardName);
+                    if (scryfallCard == null) { Interlocked.Increment(ref failed); return; }
+
+                    string? frontPath = null;
+                    string? backPath = null;
+
+                    if (useMpcFill)
+                    {
+                        var (mpcResults, _) = await _search.SearchMpcFillForCard(
+                            entry.CardName, minDpi, fuzzySearch, useFavoritesOnly);
+                        var bestMatch = mpcResults.FirstOrDefault(mc =>
+                            mc.Name.Contains(entry.CardName, StringComparison.OrdinalIgnoreCase));
+                        if (bestMatch != null)
+                            frontPath = await _search.DownloadMpcFillArtAsync(bestMatch);
+                        frontPath ??= await _search.DownloadScryfallArtAsync(scryfallCard);
+                    }
+                    else
+                    {
                         frontPath = await _search.DownloadScryfallArtAsync(scryfallCard);
+                    }
+
+                    if (scryfallCard.GetBackImageUrl() != null)
+                        backPath = await _search.DownloadScryfallArtAsync(scryfallCard, back: true);
+
+                    var card = scryfallCard.ToCardModel(frontPath ?? string.Empty, backPath);
+                    card.Quantity = entry.Quantity;
+                    slots[idx] = card;
                 }
-                else
+                finally
                 {
-                    frontPath = await _search.DownloadScryfallArtAsync(scryfallCard);
+                    gate.Release();
+                    int n = Interlocked.Increment(ref completed);
+                    onProgress?.Invoke($"Scaricate {n}/{toFetch.Count} carte...");
                 }
+            }
 
-                if (scryfallCard.GetBackImageUrl() != null)
-                    backPath = await _search.DownloadScryfallArtAsync(scryfallCard, back: true);
+            await Task.WhenAll(Enumerable.Range(0, toFetch.Count).Select(FetchAsync));
 
-                var card = scryfallCard.ToCardModel(frontPath ?? string.Empty, backPath);
-                card.Quantity = entry.Quantity;
+            // ---- Phase 4: assemble in deck order. AutoApply touches a shared on-disk store,
+            //               so it runs sequentially (and is a no-op unless the user enabled it). ----
+            var importedCards = new List<CardModel>();
+            foreach (var card in slots)
+            {
+                if (card == null) continue;
                 _imageAdjust.AutoApply(card); // fork-specific: black-point etc. on Scryfall imports
                 importedCards.Add(card);
-
-                if (ignoreDuplicates)
-                {
-                    if (existingByName.ContainsKey(entry.CardName))
-                        existingByName[entry.CardName] += entry.Quantity;
-                    else
-                        existingByName[entry.CardName] = entry.Quantity;
-                }
-
-                await Task.Delay(100);
             }
 
             return new DeckImportResult(importedCards, deck.Name, "", skippedDupes, failed);

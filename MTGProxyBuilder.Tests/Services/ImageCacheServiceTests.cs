@@ -42,6 +42,27 @@ public class ImageCacheServiceTests
         Assert.Null(result);
     }
 
+    [Fact]
+    public async Task ConcurrentAccess_DoesNotCorruptIndex()
+    {
+        // Deck import now downloads art in parallel, so the file index must tolerate
+        // concurrent reads/writes without throwing (e.g. Dictionary enumeration corruption).
+        var svc = new ImageCacheService();
+        using var http = new HttpClient();
+
+        var ex = await Record.ExceptionAsync(() => Task.WhenAll(
+            Enumerable.Range(0, 64).Select(i => Task.Run(async () =>
+            {
+                string key = $"concurrent_{Guid.NewGuid():N}";
+                await svc.CacheImageFromUrlAsync(http, "https://invalid.example.com/x.jpg", key);
+                _ = svc.GetCachedImagePath(key);
+                _ = svc.IsImageCached(key);
+                _ = svc.GetCachedByPrefix("concurrent_");
+            }))));
+
+        Assert.Null(ex);
+    }
+
     // --- Metadata Tests ---
 
     [Fact]
