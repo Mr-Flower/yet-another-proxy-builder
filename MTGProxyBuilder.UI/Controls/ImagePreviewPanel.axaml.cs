@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 
 namespace MTGProxyBuilder.UI.Controls
 {
@@ -22,6 +23,9 @@ namespace MTGProxyBuilder.UI.Controls
         // Natural size of the currently loaded image (in pixels)
         private double _naturalW;
         private double _naturalH;
+        // True while the image is auto-fitted to the viewport; manual zoom turns it off.
+        // Keeps the card fully visible and at a constant size as the panel/window resizes.
+        private bool _fitMode = true;
 
         public ImagePreviewPanel()
         {
@@ -31,6 +35,9 @@ namespace MTGProxyBuilder.UI.Controls
             ScrollArea.PointerPressed += OnPointerPressed;
             ScrollArea.PointerReleased += OnPointerReleased;
             ScrollArea.PointerMoved += OnPointerMoved;
+            // Re-fit when the preview area resizes (window widened / splitter dragged) so the whole
+            // card stays visible without manual zooming.
+            ScrollArea.SizeChanged += (_, _) => { if (_fitMode) ZoomToFit(); };
         }
 
         /// <summary>Display a pre-loaded Bitmap with title and detail text.</summary>
@@ -41,7 +48,11 @@ namespace MTGProxyBuilder.UI.Controls
             PreviewImage.Source = image;
             TitleLabel.Text = title;
             DetailLabel.Text = detail;
+            _fitMode = true;
+            // Defer until the panel has a measured viewport; on first show the viewport may still be
+            // 0, which would otherwise fit against a zero size and leave the image overflowing.
             ZoomToFit(image);
+            Dispatcher.UIThread.Post(() => { if (_fitMode) ZoomToFit(image); }, DispatcherPriority.Loaded);
         }
 
         /// <summary>Load an image from a file path, compute metadata, and display it.</summary>
@@ -95,10 +106,16 @@ namespace MTGProxyBuilder.UI.Controls
             bmp ??= PreviewImage.Source as Bitmap;
             if (bmp == null || bmp.PixelSize.Width == 0) return;
 
-            double fitW = (ScrollArea.Viewport.Width - 20) / bmp.Size.Width;
-            double fitH = (ScrollArea.Viewport.Height - 20) / bmp.Size.Height;
+            // Fall back to the control bounds when the viewport hasn't been measured yet.
+            double availW = ScrollArea.Viewport.Width > 0 ? ScrollArea.Viewport.Width : ScrollArea.Bounds.Width;
+            double availH = ScrollArea.Viewport.Height > 0 ? ScrollArea.Viewport.Height : ScrollArea.Bounds.Height;
+            if (availW <= 0 || availH <= 0) return;
+
+            double fitW = (availW - 20) / bmp.Size.Width;
+            double fitH = (availH - 20) / bmp.Size.Height;
             double fit = Math.Min(fitW, fitH);
             if (fit <= 0) fit = 0.5;
+            _fitMode = true;
             SetZoom(fit);
         }
 
@@ -121,6 +138,7 @@ namespace MTGProxyBuilder.UI.Controls
             {
                 double delta = e.Delta.Y > 0 ? ZoomStep : -ZoomStep;
                 if (_zoom < 0.5) delta *= 0.5;
+                _fitMode = false;
                 SetZoom(_zoom + delta);
                 e.Handled = true;
                 return;
@@ -175,9 +193,9 @@ namespace MTGProxyBuilder.UI.Controls
 
         // --- Zoom button handlers ---
 
-        private void OnZoomIn(object? sender, RoutedEventArgs e) => SetZoom(_zoom + ZoomStep);
-        private void OnZoomOut(object? sender, RoutedEventArgs e) => SetZoom(_zoom - ZoomStep);
-        private void OnZoomReset(object? sender, RoutedEventArgs e) => SetZoom(1.0);
+        private void OnZoomIn(object? sender, RoutedEventArgs e) { _fitMode = false; SetZoom(_zoom + ZoomStep); }
+        private void OnZoomOut(object? sender, RoutedEventArgs e) { _fitMode = false; SetZoom(_zoom - ZoomStep); }
+        private void OnZoomReset(object? sender, RoutedEventArgs e) { _fitMode = false; SetZoom(1.0); }
         private void OnZoomFit(object? sender, RoutedEventArgs e) => ZoomToFit();
     }
 }

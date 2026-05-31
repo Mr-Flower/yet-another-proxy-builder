@@ -44,7 +44,6 @@
     <Compile Remove="Dialogs\ImagePreviewDialog.xaml.cs" />
     <Compile Remove="Dialogs\MpcSourceManagerDialog.xaml.cs" />
     <Compile Remove="Dialogs\SettingsDialog.xaml.cs" />
-    <Compile Remove="Dialogs\CardEditorWindow.xaml.cs" />
   </ItemGroup>
 
 

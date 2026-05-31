@@ -453,6 +453,21 @@ namespace MTGProxyBuilder.Core.Services
             return await GetTokensForCardAsync(card.Id);
         }
 
+        /// <summary>
+        /// Finds a TOKEN by name (used by the "t: name" add syntax). Searches Scryfall restricted to
+        /// token cards and returns the best name match, or the first token if none matches exactly.
+        /// </summary>
+        public async Task<ScryfallCard?> GetTokenByNameAsync(string tokenName)
+        {
+            if (string.IsNullOrWhiteSpace(tokenName)) return null;
+            var (cards, _) = await SearchCardAsync($"type:token {tokenName}");
+            return cards.FirstOrDefault(c =>
+                       c.Name.Equals(tokenName, StringComparison.OrdinalIgnoreCase))
+                   ?? cards.FirstOrDefault(c =>
+                       c.Name.Contains(tokenName, StringComparison.OrdinalIgnoreCase))
+                   ?? cards.FirstOrDefault();
+        }
+
         /// <summary>Fetch a card by name (exact match).</summary>
         public async Task<ScryfallCard?> GetCardByNameAsync(string cardName)
         {

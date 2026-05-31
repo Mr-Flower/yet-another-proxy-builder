@@ -99,7 +99,7 @@ public partial class ArtSelectorWindow : Window
         // instead of the whole stack. Mutually understood with "apply to all same name".
         if (card.Quantity > 1)
         {
-            ApplyThisCopyChk.Content = $"Solo questa copia (su {card.Quantity})";
+            ApplyThisCopyChk.Content = $"This copy only (of {card.Quantity})";
             ApplyThisCopyChk.IsVisible = true;
         }
 

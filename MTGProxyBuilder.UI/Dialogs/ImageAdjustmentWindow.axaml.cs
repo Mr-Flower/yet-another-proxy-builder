@@ -76,7 +76,6 @@ public partial class ImageAdjustmentWindow : Window
 
     private void ApplySettingsToControls(ImageAdjustmentSettings s)
     {
-        EnabledCheck.IsChecked = s.Enabled;
         AutoApplyCheck.IsChecked = s.AutoApplyToScryfall;
         BrightnessSlider.Value = s.Brightness;
         ContrastSlider.Value = s.Contrast;
@@ -87,7 +86,7 @@ public partial class ImageAdjustmentWindow : Window
 
     private ImageAdjustmentSettings BuildSettings() => new()
     {
-        Enabled = EnabledCheck.IsChecked == true,
+        Enabled = true, // the adjustment applies whenever the user clicks Apply (no separate toggle)
         AutoApplyToScryfall = AutoApplyCheck.IsChecked == true,
         Brightness = (int)BrightnessSlider.Value,
         Contrast = (int)ContrastSlider.Value,
@@ -132,12 +131,10 @@ public partial class ImageAdjustmentWindow : Window
     // ---- event handlers ----
 
     private void OnSliderChanged(object? sender, RangeBaseValueChangedEventArgs e) => Refresh();
-    private void OnCheckChanged(object? sender, RoutedEventArgs e) => Refresh();
 
     private void OnReset(object? sender, RoutedEventArgs e)
     {
         _loading = true;
-        EnabledCheck.IsChecked = true;
         BrightnessSlider.Value = 0;
         ContrastSlider.Value = 0;
         SaturationSlider.Value = 0;
@@ -152,11 +149,11 @@ public partial class ImageAdjustmentWindow : Window
         try
         {
             new ImageAdjustmentStore().SaveDefault(BuildSettings());
-            StatusLabel.Text = "Predefinito salvato.";
+            StatusLabel.Text = "Default saved.";
         }
         catch
         {
-            StatusLabel.Text = "Impossibile salvare il predefinito.";
+            StatusLabel.Text = "Could not save default.";
         }
     }
 

@@ -40,7 +40,6 @@ public interface IDialogService
     Task ShowMpcSourceManagerAsync(MpcFillSourceManager manager, MpcFillService service);
     Task ShowBackArtLibraryAsync(BackArtLibraryService library, MpcFillService mpcFill, AppSettingsService settings);
     Task ShowFrontArtLibraryAsync(FrontArtLibraryService library, ImageCacheService imageCache, AppSettingsService settings, ScryfallService scryfall);
-    Task ShowCardEditorAsync();
 
     // Fork-specific: image adjustment editor (brightness/contrast/saturation/black-point).
     // Returns the chosen settings, or null if the user cancelled.

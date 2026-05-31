@@ -56,7 +56,6 @@ public class ShellViewModel : INotifyPropertyChanged
         DismissUpdateCommand = new RelayCommand(_ => UpdateAvailable = false);
         ManageFrontArtLibraryCommand = new RelayCommand(_ => _ = ManageFrontArtLibraryAsync());
         ManageBackArtLibraryCommand = new RelayCommand(_ => _ = ManageBackArtLibraryAsync());
-        OpenCardEditorCommand = new RelayCommand(_ => _ = OpenCardEditorAsync());
 
         _ = CheckForUpdateAsync();
     }
@@ -87,7 +86,6 @@ public class ShellViewModel : INotifyPropertyChanged
     public ICommand DismissUpdateCommand { get; }
     public ICommand ManageFrontArtLibraryCommand { get; }
     public ICommand ManageBackArtLibraryCommand { get; }
-    public ICommand OpenCardEditorCommand { get; }
 
     // --- Update ---
     public bool UpdateAvailable
@@ -282,9 +280,6 @@ public class ShellViewModel : INotifyPropertyChanged
     private Task ManageBackArtLibraryAsync()
         => _dialogService.ShowBackArtLibraryAsync(
             _backArtLibraryService, _mpcFillService, _appSettings);
-
-    private Task OpenCardEditorAsync()
-        => _dialogService.ShowCardEditorAsync();
 
     // --- Update Check ---
 

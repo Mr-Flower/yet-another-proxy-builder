@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="MTGProxyBuilder.UI.Dialogs.ImageAdjustmentWindow"
-        Title="Regola immagine"
+        Title="Adjust Image"
         Width="760" Height="560" MinWidth="680" MinHeight="500"
         Background="#2D2D30"
         WindowStartupLocation="CenterOwner"
@@ -11,11 +11,11 @@
 
         <!-- ============ PREVIEW (original vs adjusted) ============ -->
         <Grid Grid.Row="0" Grid.Column="0" RowDefinitions="Auto,*,Auto,*" Margin="0,0,16,0">
-            <TextBlock Grid.Row="0" Text="Originale" Foreground="#999" FontSize="11" Margin="0,0,0,4"/>
+            <TextBlock Grid.Row="0" Text="Original" Foreground="#999" FontSize="11" Margin="0,0,0,4"/>
             <Border Grid.Row="1" Background="#111" CornerRadius="4">
                 <Image x:Name="OriginalPreview" Stretch="Uniform" Margin="6"/>
             </Border>
-            <TextBlock Grid.Row="2" Text="Anteprima regolata" Foreground="#4a9eff"
+            <TextBlock Grid.Row="2" Text="Adjusted Preview" Foreground="#4a9eff"
                        FontSize="11" Margin="0,8,0,4"/>
             <Border Grid.Row="3" Background="#111" CornerRadius="4">
                 <Image x:Name="AdjustedPreview" Stretch="Uniform" Margin="6"/>
@@ -25,65 +25,62 @@
         <!-- ============ CONTROLS ============ -->
         <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
 
-            <CheckBox x:Name="EnabledCheck" Content="Abilita regolazione"
-                      Foreground="#DDD" Margin="0,0,0,8" IsCheckedChanged="OnCheckChanged"/>
-
-            <!-- Luminosità -->
+            <!-- Brightness -->
             <Grid ColumnDefinitions="*,44">
-                <TextBlock Text="Luminosità" Foreground="#CCC" FontSize="12"/>
+                <TextBlock Text="Brightness" Foreground="#CCC" FontSize="12"/>
                 <TextBlock x:Name="BrightnessLabel" Grid.Column="1" Text="0"
                            Foreground="#999" FontSize="12" TextAlignment="Right"/>
             </Grid>
             <Slider x:Name="BrightnessSlider" Minimum="-100" Maximum="100" Value="0"
                     SmallChange="1" LargeChange="10" ValueChanged="OnSliderChanged" Margin="0,0,0,6"/>
 
-            <!-- Contrasto -->
+            <!-- Contrast -->
             <Grid ColumnDefinitions="*,44">
-                <TextBlock Text="Contrasto" Foreground="#CCC" FontSize="12"/>
+                <TextBlock Text="Contrast" Foreground="#CCC" FontSize="12"/>
                 <TextBlock x:Name="ContrastLabel" Grid.Column="1" Text="0"
                            Foreground="#999" FontSize="12" TextAlignment="Right"/>
             </Grid>
             <Slider x:Name="ContrastSlider" Minimum="-100" Maximum="100" Value="0"
                     SmallChange="1" LargeChange="10" ValueChanged="OnSliderChanged" Margin="0,0,0,6"/>
 
-            <!-- Saturazione -->
+            <!-- Saturation -->
             <Grid ColumnDefinitions="*,44">
-                <TextBlock Text="Saturazione" Foreground="#CCC" FontSize="12"/>
+                <TextBlock Text="Saturation" Foreground="#CCC" FontSize="12"/>
                 <TextBlock x:Name="SaturationLabel" Grid.Column="1" Text="0"
                            Foreground="#999" FontSize="12" TextAlignment="Right"/>
             </Grid>
             <Slider x:Name="SaturationSlider" Minimum="-100" Maximum="100" Value="0"
                     SmallChange="1" LargeChange="10" ValueChanged="OnSliderChanged" Margin="0,0,0,12"/>
 
-            <!-- Soglia nero -->
+            <!-- Black Threshold -->
             <Grid ColumnDefinitions="*,44">
-                <TextBlock Text="Soglia nero" Foreground="#CCC" FontSize="12" FontWeight="SemiBold"/>
+                <TextBlock Text="Black Threshold" Foreground="#CCC" FontSize="12" FontWeight="SemiBold"/>
                 <TextBlock x:Name="BlackPointLabel" Grid.Column="1" Text="0"
                            Foreground="#4a9eff" FontSize="12" FontWeight="SemiBold" TextAlignment="Right"/>
             </Grid>
-            <TextBlock Text="Porta a nero assoluto tutti i grigi sotto questa soglia (bordi sgranati Scryfall)."
+            <TextBlock Text="Crush every grey below this threshold to pure black (grainy Scryfall scan borders)."
                        Foreground="#777" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,2"/>
             <Slider x:Name="BlackPointSlider" Minimum="0" Maximum="50" Value="0"
                     SmallChange="1" LargeChange="5" ValueChanged="OnSliderChanged" Margin="0,0,0,12"/>
 
             <Border Height="1" Background="#444" Margin="0,0,0,10"/>
 
-            <!-- Applica a (target per fonte) -->
-            <TextBlock Text="Applica a" Foreground="#CCC" FontSize="12" Margin="0,0,0,2"/>
+            <!-- Apply to (per-source target) -->
+            <TextBlock Text="Apply to" Foreground="#CCC" FontSize="12" Margin="0,0,0,2"/>
             <ComboBox x:Name="TargetCombo" HorizontalAlignment="Stretch" Margin="0,0,0,10" SelectedIndex="0">
-                <ComboBoxItem>Solo questa carta</ComboBoxItem>
-                <ComboBoxItem>Tutte le carte Scryfall</ComboBoxItem>
-                <ComboBoxItem>Tutte le carte MPCFill</ComboBoxItem>
-                <ComboBoxItem>Tutte le carte (entrambe le fonti)</ComboBoxItem>
+                <ComboBoxItem>This card only</ComboBoxItem>
+                <ComboBoxItem>All Scryfall cards</ComboBoxItem>
+                <ComboBoxItem>All MPCFill cards</ComboBoxItem>
+                <ComboBoxItem>All cards (both sources)</ComboBoxItem>
             </ComboBox>
 
             <CheckBox x:Name="AutoApplyCheck"
-                      Content="Applica automaticamente alle nuove carte da Scryfall"
+                      Content="Apply automatically to new Scryfall cards"
                       Foreground="#CCC" Margin="0,0,0,4"/>
-            <TextBlock Text="Usa i valori qui sopra come predefiniti per ogni nuova immagine importata."
+            <TextBlock Text="Use the values above as the default for every newly imported image."
                        Foreground="#777" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
-            <Button x:Name="SaveDefaultBtn" Content="Salva come predefinito"
+            <Button x:Name="SaveDefaultBtn" Content="Save as Default"
                     HorizontalAlignment="Stretch" Padding="8,6" Margin="0,0,0,4"
                     Background="#3E3E42" Foreground="White" BorderThickness="0"
                     Click="OnSaveDefault"/>
@@ -94,11 +91,11 @@
         <!-- ============ BUTTONS ============ -->
         <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
                     HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
-            <Button x:Name="ResetBtn" Content="Ripristina" Padding="12,6"
+            <Button x:Name="ResetBtn" Content="Reset" Padding="12,6"
                     Background="#3E3E42" Foreground="White" BorderThickness="0" Click="OnReset"/>
-            <Button x:Name="CancelBtn" Content="Annulla" Padding="12,6"
+            <Button x:Name="CancelBtn" Content="Cancel" Padding="12,6"
                     Background="#3E3E42" Foreground="White" BorderThickness="0" Click="OnCancel"/>
-            <Button x:Name="ApplyBtn" Content="Applica" Padding="14,6"
+            <Button x:Name="ApplyBtn" Content="Apply" Padding="14,6"
                     Background="#7A6FB0" Foreground="White" BorderThickness="0" Click="OnApply"/>
         </StackPanel>
     </Grid>

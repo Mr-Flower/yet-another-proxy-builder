@@ -65,8 +65,6 @@
                 </ItemsControl>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,2">
-                    <Button Theme="{StaticResource ToolBtn}" Command="{Binding OpenCardEditorCommand}"
-                            Content="Card Editor" Padding="8,4"/>
                     <Button Theme="{StaticResource ToolBtn}" Content="Libraries  ▾" Padding="8,4">
                         <Button.Flyout>
                             <MenuFlyout>
@@ -100,7 +98,6 @@
                     <Button Theme="{StaticResource ToolBtn}" Command="{Binding RedoCommand}" Content="Redo" ToolTip.Tip="Ctrl+Y"/>
                     <Border Width="1" Background="#444" Margin="6,4"/>
                     <Button Theme="{StaticResource ToolBtn}" Command="{Binding AddCardFromFileCommand}" Content="+ File"/>
-                    <Button Theme="{StaticResource ToolBtn}" Command="{Binding RemoveCardCommand}" Content="- Card"/>
                     <Border Width="1" Background="#444" Margin="6,4"/>
                     <Button Theme="{StaticResource ToolBtn}" Command="{Binding ClearAllCardsCommand}" Content="Clear All" Foreground="#E06060"/>
                 </StackPanel>
@@ -182,7 +179,7 @@
                                 <!-- Add cards by name. One per line; a single line adds one card. -->
                                 <TextBlock Text="Add Cards by Name" FontWeight="SemiBold" Foreground="#CCC"
                                            Margin="0,0,0,6" FontSize="12"/>
-                                <TextBlock Text="One card per line, e.g. &quot;2 Sol Ring&quot; or &quot;Lightning Bolt&quot;. Write a single name to add just one card."
+                                <TextBlock Text="One card per line, e.g. &quot;2 Sol Ring&quot; or &quot;Lightning Bolt&quot;. Write a single name to add just one card. Prefix a line with &quot;t:&quot; to add a token, e.g. &quot;t: Goblin&quot;."
                                            Foreground="#666" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,4"/>
                                 <TextBox Text="{Binding ImportDeckText}"
                                          AcceptsReturn="True" TextWrapping="Wrap"
@@ -221,12 +218,6 @@
                                         Content="Import cards.xml..." HorizontalAlignment="Stretch" Padding="8,6"/>
                                 <TextBlock Text="Import a cards.xml file exported from MPCFill"
                                            Foreground="#666" FontSize="10" Margin="0,4,0,0"/>
-
-                                <TextBlock Text="Artwork" FontWeight="SemiBold" Foreground="#CCC"
-                                           Margin="0,16,0,6" FontSize="12"/>
-                                <Button Theme="{StaticResource ToolBtn}" Command="{Binding UpdateAllArtFromMpcFillCommand}"
-                                        Content="Update All Art from MPCFill" HorizontalAlignment="Stretch"
-                                        Background="#3E3E42" Foreground="#CCC" Padding="8,6"/>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>
@@ -353,8 +344,8 @@
                                      Disabled (greyed) when this card has only one copy. -->
                                 <Button Theme="{StaticResource ToolBtn}"
                                         Command="{Binding UnlinkCardCopyCommand}"
-                                        Content="✂  Scollega questa copia"
-                                        ToolTip.Tip="Stacca 1 copia da questa pila per modificarla separatamente dalle altre"
+                                        Content="✂  Unlink This Copy"
+                                        ToolTip.Tip="Split 1 copy off this stack so you can edit it separately from the others"
                                         Background="#3E3E42" Foreground="#CCC"
                                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                         Padding="8,5" Margin="0,0,0,8"/>
@@ -382,16 +373,12 @@
                                 </Border>
                                 <TextBlock Text="{Binding SelectedCard.ArtworkPath}" Foreground="#555"
                                            FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
-                                <!-- fork-specific: image adjustment (brightness/contrast/black-point) -->
-                                <Button Theme="{StaticResource ToolBtn}"
+                                <!-- fork-specific: image adjustment (brightness/contrast/saturation/black-point) -->
+                                <Button Theme="{StaticResource AccentBtn}"
                                         Command="{Binding AdjustImageCommand}"
-                                        Content="Regola immagine…" Margin="0,0,0,10"
-                                        HorizontalAlignment="Stretch" Padding="8,5"/>
-
-                                <TextBlock Text="Overlay Text" Foreground="#999" FontSize="10" Margin="0,4,0,2"/>
-                                <TextBox Text="{Binding SelectedCard.OverlayText}" Padding="6,4" FontSize="12"
-                                         Background="#3E3E42" Foreground="White" BorderBrush="#555"
-                                         CaretBrush="White" Margin="0,0,0,8"/>
+                                        Content="🎚  Adjust Image…" Margin="0,0,0,12"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                        Padding="8,8" FontWeight="SemiBold"/>
 
                                 <CheckBox Content="Include Back Artwork"
                                           IsChecked="{Binding SelectedCard.IncludeBack}"
@@ -408,80 +395,6 @@
                                 <TextBlock Text="{Binding SelectedCard.BackArtworkPath}" Foreground="#555"
                                            FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
                             </StackPanel>
-                        </StackPanel>
-                    </ScrollViewer>
-                </TabItem>
-
-                <!-- ===== DARKEN PIXELS PANEL ===== -->
-                <TabItem Header="Darken" Foreground="#AAA">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#2D2D30">
-                        <StackPanel Margin="10,8">
-                            <TextBlock Text="DARKEN PIXELS" Foreground="#9B8FD4" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
-                            <TextBlock Text="Porta a nero i grigi scuri delle scan (es. bordi Scryfall) e regola luminosità/contrasto/saturazione."
-                                       Foreground="#777" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,8"/>
-
-                            <CheckBox Content="Abilita regolazione" IsChecked="{Binding DarkenEnabled}"
-                                      Foreground="#CCC" Margin="0,0,0,8"/>
-
-                            <!-- Apply To -->
-                            <TextBlock Text="Applica a" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
-                            <ComboBox SelectedIndex="{Binding DarkenTargetIndex}" HorizontalAlignment="Stretch"
-                                      Padding="4" Margin="0,0,0,10" FontSize="11">
-                                <ComboBoxItem>Tutte le carte</ComboBoxItem>
-                                <ComboBoxItem>Solo Scryfall</ComboBoxItem>
-                                <ComboBoxItem>Solo MPCFill</ComboBoxItem>
-                            </ComboBox>
-
-                            <!-- Black point -->
-                            <Grid ColumnDefinitions="*,40">
-                                <TextBlock Text="Soglia nero" Foreground="#CCC" FontSize="11" FontWeight="SemiBold"/>
-                                <TextBlock Grid.Column="1" Text="{Binding DarkenBlackPoint}" Foreground="#9B8FD4"
-                                           FontSize="11" FontWeight="SemiBold" TextAlignment="Right"/>
-                            </Grid>
-                            <Slider Minimum="0" Maximum="50" Value="{Binding DarkenBlackPoint}"
-                                    SmallChange="1" LargeChange="5" Margin="0,0,0,8"/>
-
-                            <!-- Brightness -->
-                            <Grid ColumnDefinitions="*,40">
-                                <TextBlock Text="Luminosità" Foreground="#CCC" FontSize="11"/>
-                                <TextBlock Grid.Column="1" Text="{Binding DarkenBrightness}" Foreground="#999"
-                                           FontSize="11" TextAlignment="Right"/>
-                            </Grid>
-                            <Slider Minimum="-100" Maximum="100" Value="{Binding DarkenBrightness}"
-                                    SmallChange="1" LargeChange="10" Margin="0,0,0,8"/>
-
-                            <!-- Contrast -->
-                            <Grid ColumnDefinitions="*,40">
-                                <TextBlock Text="Contrasto" Foreground="#CCC" FontSize="11"/>
-                                <TextBlock Grid.Column="1" Text="{Binding DarkenContrast}" Foreground="#999"
-                                           FontSize="11" TextAlignment="Right"/>
-                            </Grid>
-                            <Slider Minimum="-100" Maximum="100" Value="{Binding DarkenContrast}"
-                                    SmallChange="1" LargeChange="10" Margin="0,0,0,8"/>
-
-                            <!-- Saturation -->
-                            <Grid ColumnDefinitions="*,40">
-                                <TextBlock Text="Saturazione" Foreground="#CCC" FontSize="11"/>
-                                <TextBlock Grid.Column="1" Text="{Binding DarkenSaturation}" Foreground="#999"
-                                           FontSize="11" TextAlignment="Right"/>
-                            </Grid>
-                            <Slider Minimum="-100" Maximum="100" Value="{Binding DarkenSaturation}"
-                                    SmallChange="1" LargeChange="10" Margin="0,0,0,12"/>
-
-                            <Button Content="Applica a tutte le carte" Command="{Binding ApplyDarkenToAllCommand}"
-                                    Theme="{StaticResource AccentBtn}" HorizontalAlignment="Stretch"
-                                    Padding="8,6" Margin="0,0,0,6"/>
-                            <Grid ColumnDefinitions="*,6,*">
-                                <Button Grid.Column="0" Content="Azzera" Command="{Binding ResetDarkenCommand}"
-                                        Background="#3E3E42" Foreground="White" BorderThickness="0"
-                                        Padding="8,5" HorizontalAlignment="Stretch"/>
-                                <Button Grid.Column="2" Content="Salva default" Command="{Binding SaveDarkenDefaultCommand}"
-                                        Background="#3E3E42" Foreground="White" BorderThickness="0"
-                                        Padding="8,5" HorizontalAlignment="Stretch"/>
-                            </Grid>
-                            <CheckBox Content="Applica auto alle nuove carte Scryfall"
-                                      IsChecked="{Binding DarkenAutoApplyScryfall}"
-                                      Foreground="#999" FontSize="10" Margin="0,8,0,0"/>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>

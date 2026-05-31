@@ -220,16 +220,6 @@ public class AvaloniaDialogService : IDialogService
     //  DOMAIN DIALOGS
     // ================================================================
 
-    public async Task ShowCardEditorAsync()
-    {
-        var owner = GetMainWindow();
-        if (owner == null) return;
-
-        var vm = new CardEditorViewModel(this);
-        var window = new CardEditorWindow(vm);
-        await window.ShowDialog(owner);
-    }
-
     public async Task<ArtSelectorResult?> ShowArtSelectorAsync(
         CardModel card, ArtSelectorMode mode,
         ScryfallService scryfall, MpcFillService mpcFill,

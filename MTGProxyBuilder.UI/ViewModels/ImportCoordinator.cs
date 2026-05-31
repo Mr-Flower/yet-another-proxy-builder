@@ -100,10 +100,11 @@ namespace MTGProxyBuilder.UI.ViewModels
             }
 
             // ---- Phase 2: batch-resolve Scryfall metadata in ONE round-trip per 75 cards
-            //               (was one /cards/named call per card — the old bottleneck) ----
-            onProgress?.Invoke($"Ricerca di {toFetch.Count} carte su Scryfall...");
+            //               (was one /cards/named call per card — the old bottleneck).
+            //               Token entries ("t: name") are resolved separately, so skip them here. ----
+            onProgress?.Invoke($"Searching {toFetch.Count} card(s) on Scryfall...");
             var resolved = await _search.Scryfall.GetCardsByIdentifiersAsync(
-                toFetch.Select(e => new CardIdentifier(
+                toFetch.Where(e => !IsTokenEntry(e.CardName)).Select(e => new CardIdentifier(
                     string.IsNullOrEmpty(e.ScryfallId) ? null : e.ScryfallId, e.CardName)));
 
             var byId = new Dictionary<string, ScryfallCard>(StringComparer.OrdinalIgnoreCase);
@@ -122,22 +123,33 @@ namespace MTGProxyBuilder.UI.ViewModels
             async Task FetchAsync(int idx)
             {
                 var entry = toFetch[idx];
+                bool isToken = IsTokenEntry(entry.CardName);
                 await gate.WaitAsync();
                 try
                 {
-                    ScryfallCard? scryfallCard = null;
-                    if (!string.IsNullOrEmpty(entry.ScryfallId))
-                        byId.TryGetValue(entry.ScryfallId!, out scryfallCard);
-                    if (scryfallCard == null)
-                        byName.TryGetValue(entry.CardName, out scryfallCard);
-                    // Fuzzy single lookup only for the few names the batch endpoint couldn't match.
-                    scryfallCard ??= await _search.Scryfall.GetCardByNameAsync(entry.CardName);
+                    ScryfallCard? scryfallCard;
+                    if (isToken)
+                    {
+                        // "t: name" -> look the token up directly (it isn't in the batch result).
+                        scryfallCard = await _search.Scryfall.GetTokenByNameAsync(TokenName(entry.CardName));
+                    }
+                    else
+                    {
+                        scryfallCard = null;
+                        if (!string.IsNullOrEmpty(entry.ScryfallId))
+                            byId.TryGetValue(entry.ScryfallId!, out scryfallCard);
+                        if (scryfallCard == null)
+                            byName.TryGetValue(entry.CardName, out scryfallCard);
+                        // Fuzzy single lookup only for the few names the batch endpoint couldn't match.
+                        scryfallCard ??= await _search.Scryfall.GetCardByNameAsync(entry.CardName);
+                    }
                     if (scryfallCard == null) { Interlocked.Increment(ref failed); return; }
 
                     string? frontPath = null;
                     string? backPath = null;
 
-                    if (useMpcFill)
+                    // Tokens come from Scryfall only; MPCFill name search wouldn't match a token.
+                    if (useMpcFill && !isToken)
                     {
                         var (mpcResults, _) = await _search.SearchMpcFillForCard(
                             entry.CardName, minDpi, fuzzySearch, useFavoritesOnly);
@@ -163,8 +175,18 @@ namespace MTGProxyBuilder.UI.ViewModels
                 {
                     gate.Release();
                     int n = Interlocked.Increment(ref completed);
-                    onProgress?.Invoke($"Scaricate {n}/{toFetch.Count} carte...");
+                    onProgress?.Invoke($"Downloaded {n}/{toFetch.Count} card(s)...");
                 }
+            }
+
+            // "t: name" entries add a token (resolved via Scryfall type:token) instead of a card.
+            static bool IsTokenEntry(string name) =>
+                name.TrimStart().StartsWith("t:", StringComparison.OrdinalIgnoreCase);
+            static string TokenName(string name)
+            {
+                string t = name.TrimStart();
+                int colon = t.IndexOf(':');
+                return colon >= 0 ? t[(colon + 1)..].Trim() : t.Trim();
             }
 
             await Task.WhenAll(Enumerable.Range(0, toFetch.Count).Select(FetchAsync));

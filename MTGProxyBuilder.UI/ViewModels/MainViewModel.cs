@@ -101,16 +101,6 @@ public class MainViewModel : ViewModelBase
     private readonly UpdateCheckService _updateService = new();
     private readonly AppSettingsService _appSettings = new();
     private readonly ImageAdjustmentService _imageAdjust = new(); // fork-specific
-    // fork-specific: right-side Darken panel state. Force Enabled=true so the sliders
-    // actually take effect (the stored default may be disabled on first run, which made
-    // "Apply to all" a silent no-op).
-    private ImageAdjustmentSettings _darken = WithEnabled(new ImageAdjustmentStore().Default);
-
-    private static ImageAdjustmentSettings WithEnabled(ImageAdjustmentSettings s)
-    {
-        s.Enabled = true;
-        return s;
-    }
     private bool _updateAvailable;
     private string _updateMessage = string.Empty;
     private string _updateDownloadUrl = string.Empty;
@@ -169,7 +159,6 @@ public class MainViewModel : ViewModelBase
     private readonly RelayCommand _unlinkCardCopyCmd; // fork-specific
     private readonly RelayCommand _addMpcFillCardCmd;
     private readonly RelayCommand _clearAllCardsCmd;
-    private readonly RelayCommand _updateAllArtFromMpcFillCmd;
     private readonly RelayCommand _undoCmd;
     private readonly RelayCommand _redoCmd;
 
@@ -228,12 +217,6 @@ public class MainViewModel : ViewModelBase
         AdjustImageCommand = _adjustImageCmd;
         _unlinkCardCopyCmd = new RelayCommand(_ => UnlinkCardCopy(), _ => SelectedCard != null && SelectedCard.Quantity > 1); // fork-specific
         UnlinkCardCopyCommand = _unlinkCardCopyCmd;
-        // Always enabled: ApplyDarkenToAll no-ops gracefully with no cards. (RelayCommand has no
-        // auto-requery, and this command had no field to RaiseCanExecuteChanged from, so a
-        // Cards.Count predicate left the button stuck disabled after cards were added.)
-        ApplyDarkenToAllCommand = new RelayCommand(_ => ApplyDarkenToAll()); // fork-specific
-        ResetDarkenCommand = new RelayCommand(_ => ResetDarken());
-        SaveDarkenDefaultCommand = new RelayCommand(_ => SaveDarkenDefault());
 
         AddCardFromFileCommand = new RelayCommand(_ => _ = AddCardFromFileAsync());
         ExportPdfCommand = new RelayCommand(_ => _ = ExportPdfAsync());
@@ -275,8 +258,6 @@ public class MainViewModel : ViewModelBase
         AddMpcFillCardCommand = _addMpcFillCardCmd;
         _clearAllCardsCmd = new RelayCommand(_ => _ = ClearAllCardsAsync(), _ => Cards.Count > 0);
         ClearAllCardsCommand = _clearAllCardsCmd;
-        _updateAllArtFromMpcFillCmd = new RelayCommand(_ => _ = UpdateAllArtFromMpcFillAsync(), _ => Cards.Count > 0);
-        UpdateAllArtFromMpcFillCommand = _updateAllArtFromMpcFillCmd;
 
         PrintModeValues = new ObservableCollection<PrintMode>(Enum.GetValues<PrintMode>());
         PagePresets = new ObservableCollection<string> { "A4", "A3", "Letter", "Legal", "Tabloid" };
@@ -375,7 +356,6 @@ public class MainViewModel : ViewModelBase
         _applyBackArtToAllCmd.RaiseCanExecuteChanged();
         _clearBackArtFromAllCmd.RaiseCanExecuteChanged();
         _clearAllCardsCmd.RaiseCanExecuteChanged();
-        _updateAllArtFromMpcFillCmd.RaiseCanExecuteChanged();
     }
 
     private void OnPageSettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -626,7 +606,6 @@ public class MainViewModel : ViewModelBase
     public ICommand ImportTextListCommand { get; } // fork-specific: paste a decklist
     public ICommand AddMpcFillCardCommand { get; }
     public ICommand ClearAllCardsCommand { get; }
-    public ICommand UpdateAllArtFromMpcFillCommand { get; }
 
     public string ImportDeckUrl
     {
@@ -829,9 +808,6 @@ public class MainViewModel : ViewModelBase
     public ICommand AddScryfallCardCommand { get; }
     public ICommand AdjustImageCommand { get; } // fork-specific
     public ICommand UnlinkCardCopyCommand { get; } // fork-specific
-    public ICommand ApplyDarkenToAllCommand { get; } // fork-specific: right-side Darken panel
-    public ICommand ResetDarkenCommand { get; }      // fork-specific
-    public ICommand SaveDarkenDefaultCommand { get; } // fork-specific
     public ICommand ExportPdfCommand { get; }
     public ICommand ExportSvgCommand { get; }
     public ICommand AddBackArtToLibraryCommand { get; }
@@ -985,10 +961,10 @@ public class MainViewModel : ViewModelBase
 
         // Ask how to treat these local images for bleed (and what source they count as).
         var choice = await _dialogService.ConfirmCancelAsync(
-            "Come trattare queste immagini per il bleed?\n\n" +
-            "• Sì = stile MPCFill: hanno già 1/8\" di bordo per il bleed (verrà ritagliato)\n" +
-            "• No = stile Scryfall: carta intera, il bleed verrà aggiunto io",
-            "Bleed immagini locali");
+            "How should these images be treated for bleed?\n\n" +
+            "• Yes = MPCFill style: they already include the 1/8\" bleed border (it will be trimmed)\n" +
+            "• No = Scryfall style: bare card, the bleed will be added for you",
+            "Local image bleed");
         if (choice == MessageResult.Cancel) return;
         bool asMpc = choice == MessageResult.Yes;
 
@@ -1160,12 +1136,12 @@ public class MainViewModel : ViewModelBase
         if (eligible.Count == 0)
         {
             await _dialogService.ShowInfoAsync(
-                "Nessuna carta valida selezionata per la generazione token.",
-                "Nessun token");
+                "No valid card selected for token generation.",
+                "No tokens");
             return;
         }
 
-        SetBusy("Ricerca token associati...");
+        SetBusy("Searching for related tokens...");
         try
         {
             string? commonBack = GetMostCommonBackArt();
@@ -1195,8 +1171,8 @@ public class MainViewModel : ViewModelBase
             {
                 ClearBusy();
                 await _dialogService.ShowInfoAsync(
-                    "Le carte selezionate non hanno token associati su Scryfall.",
-                    "Nessun token");
+                    "The selected cards have no associated tokens on Scryfall.",
+                    "No tokens");
                 return;
             }
 
@@ -1205,11 +1181,11 @@ public class MainViewModel : ViewModelBase
                 Cards.Add(t);
 
             ApplyFilterAndSort();
-            StatusText = $"Creati {newTokens.Count} token.";
+            StatusText = $"Created {newTokens.Count} token(s).";
         }
         catch (Exception ex)
         {
-            StatusText = $"Generazione token fallita: {ex.Message}";
+            StatusText = $"Token generation failed: {ex.Message}";
         }
         finally { ClearBusy(); }
     }
@@ -1438,7 +1414,7 @@ public class MainViewModel : ViewModelBase
         SelectedCard = copy; // edits now affect only this single copy
         _unlinkCardCopyCmd.RaiseCanExecuteChanged();
         RefreshCanvas();
-        StatusText = $"Scollegata 1 copia di \"{copy.Name}\" — ora modificabile separatamente.";
+        StatusText = $"Unlinked 1 copy of \"{copy.Name}\" — now editable separately.";
     }
 
     /// <summary>
@@ -1472,7 +1448,7 @@ public class MainViewModel : ViewModelBase
         if (card == null) return;
         if (string.IsNullOrEmpty(card.ArtworkPath))
         {
-            await _dialogService.ShowInfoAsync("La carta selezionata non ha un'immagine fronte.", "Regola immagine");
+            await _dialogService.ShowInfoAsync("The selected card has no front image.", "Adjust Image");
             return;
         }
 
@@ -1505,94 +1481,8 @@ public class MainViewModel : ViewModelBase
         RefreshCanvas();
 
         StatusText = result.Target == ImageAdjustmentTarget.ThisCard
-            ? (settings.IsNoOp ? "Immagine ripristinata all'originale." : "Regolazione immagine applicata.")
-            : $"Regolazione applicata a {n} carta/e.";
-    }
-
-    // ===== fork-specific: right-side "Darken Pixels" panel =====
-    // Bindable sliders backed by the global default settings (_darken). Changing a
-    // slider updates the in-memory state; "Apply to all" bakes it across cards by
-    // source; "Save default" persists it for Scryfall auto-apply.
-
-    public bool DarkenEnabled
-    {
-        get => _darken.Enabled;
-        set { _darken.Enabled = value; OnPropertyChanged(); }
-    }
-    public int DarkenBrightness
-    {
-        get => _darken.Brightness;
-        set { _darken.Brightness = value; OnPropertyChanged(); }
-    }
-    public int DarkenContrast
-    {
-        get => _darken.Contrast;
-        set { _darken.Contrast = value; OnPropertyChanged(); }
-    }
-    public int DarkenSaturation
-    {
-        get => _darken.Saturation;
-        set { _darken.Saturation = value; OnPropertyChanged(); }
-    }
-    public int DarkenBlackPoint
-    {
-        get => _darken.BlackPoint;
-        set { _darken.BlackPoint = value; OnPropertyChanged(); }
-    }
-    public bool DarkenAutoApplyScryfall
-    {
-        get => _darken.AutoApplyToScryfall;
-        set { _darken.AutoApplyToScryfall = value; OnPropertyChanged(); }
-    }
-
-    // "Apply To" target index for the panel (0=All, 1=Scryfall, 2=MPCFill).
-    private int _darkenTargetIndex = 1; // default to "Solo Scryfall" on app open (0=All, 1=Scryfall, 2=MPCFill)
-    public int DarkenTargetIndex
-    {
-        get => _darkenTargetIndex;
-        set => SetProperty(ref _darkenTargetIndex, value);
-    }
-
-    private void ApplyDarkenToAll()
-    {
-        var settings = _darken.Clone();
-        var targets = DarkenTargetIndex switch
-        {
-            1 => Cards.Where(c => !IsMpcFillArt(c)),
-            2 => Cards.Where(IsMpcFillArt),
-            _ => Cards.Where(c => !string.IsNullOrEmpty(c.ArtworkPath))
-        };
-
-        PushUndo();
-        int n = 0;
-        foreach (var c in targets)
-        {
-            if (string.IsNullOrEmpty(c.ArtworkPath)) continue;
-            _imageAdjust.BakeFront(c, settings);
-            n++;
-        }
-        RefreshTrigger++;
-        StatusText = settings.IsNoOp
-            ? $"Immagini ripristinate all'originale ({n})."
-            : $"Darken applicato a {n} carta/e.";
-    }
-
-    private void ResetDarken()
-    {
-        _darken = new ImageAdjustmentSettings { Enabled = true };
-        OnPropertyChanged(nameof(DarkenEnabled));
-        OnPropertyChanged(nameof(DarkenBrightness));
-        OnPropertyChanged(nameof(DarkenContrast));
-        OnPropertyChanged(nameof(DarkenSaturation));
-        OnPropertyChanged(nameof(DarkenBlackPoint));
-        OnPropertyChanged(nameof(DarkenAutoApplyScryfall));
-        StatusText = "Darken azzerato.";
-    }
-
-    private void SaveDarkenDefault()
-    {
-        _imageAdjust.OpenStore().SaveDefault(_darken.Clone());
-        StatusText = "Darken salvato come predefinito.";
+            ? (settings.IsNoOp ? "Image restored to the original." : "Image adjustment applied.")
+            : $"Adjustment applied to {n} card(s).";
     }
 
     private async Task ExportPdfAsync()
@@ -1903,33 +1793,6 @@ public class MainViewModel : ViewModelBase
         StatusText = "All cards removed";
     }
 
-    private async Task UpdateAllArtFromMpcFillAsync()
-    {
-        if (Cards.Count == 0) return;
-
-        bool confirmed = await _dialogService.ConfirmAsync(
-            $"Search MPCFill for matching art for all {Cards.Count} card(s) and replace their front artwork?\n\n" +
-            "This will use the first available MPCFill result for each card.",
-            "Update All Art from MPCFill");
-        if (!confirmed) return;
-
-        PushUndo();
-        SetBusy("Updating card art from MPCFill...");
-        try
-        {
-            var (updated, failed) = await _importCoordinator.UpdateAllArtFromMpcFillAsync(
-                Cards, MpcAdvMinDpi, MpcFuzzySearch, MpcUseFavoritesOnly,
-                onProgress: msg => BusyMessage = msg);
-
-            StatusText = $"Updated {updated} card(s) with MPCFill art" + (failed > 0 ? $", {failed} not found" : "");
-            await _dialogService.ShowInfoAsync(
-                $"Updated {updated} card(s) with MPCFill art.\n{(failed > 0 ? $"{failed} card(s) had no matching art." : "")}",
-                "Update Complete");
-        }
-        catch (Exception ex) { StatusText = $"Update failed: {ex.Message}"; }
-        finally { ClearBusy(); }
-    }
-
     private async Task ImportMpcFillXmlAsync()
     {
         var path = await _dialogService.PickOpenFileAsync(
@@ -2053,13 +1916,13 @@ public class MainViewModel : ViewModelBase
         if (deck.Entries.Count == 0)
         {
             await _dialogService.ShowWarningAsync(
-                "Nessuna carta riconosciuta. Incolla una lista con una carta per riga, es.:\n\n" +
-                "2 Sol Ring\n1 Counterspell\nLightning Bolt",
-                "Lista vuota");
+                "No card recognized. Paste a list with one card per line, e.g.:\n\n" +
+                "2 Sol Ring\n1 Counterspell\nLightning Bolt\nt: Goblin",
+                "Empty list");
             return;
         }
 
-        SetBusy("Importazione lista incollata...");
+        SetBusy("Importing pasted list...");
         try
         {
             PushUndo();
@@ -2078,15 +1941,15 @@ public class MainViewModel : ViewModelBase
             ImportDeckText = string.Empty;
 
             int totalAdded = result.Cards.Sum(c => c.Quantity);
-            string summary = $"Importate {result.Cards.Count} carte ({totalAdded} totali) dalla lista incollata";
-            if (result.Failed > 0) summary += $"\n{result.Failed} carta/e non trovata/e su Scryfall";
+            string summary = $"Imported {result.Cards.Count} card(s) ({totalAdded} total) from the pasted list";
+            if (result.Failed > 0) summary += $"\n{result.Failed} card(s) not found on Scryfall";
             StatusText = summary;
-            await _dialogService.ShowInfoAsync(summary, "Import completato");
+            await _dialogService.ShowInfoAsync(summary, "Import complete");
         }
         catch (Exception ex)
         {
-            StatusText = $"Import fallito: {ex.Message}";
-            await _dialogService.ShowErrorAsync($"Errore import:\n{ex.Message}", "Errore");
+            StatusText = $"Import failed: {ex.Message}";
+            await _dialogService.ShowErrorAsync($"Import error:\n{ex.Message}", "Error");
         }
         finally { ClearBusy(); }
     }
