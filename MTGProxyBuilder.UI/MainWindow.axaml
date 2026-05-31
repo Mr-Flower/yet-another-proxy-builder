@@ -65,11 +65,18 @@
                 </ItemsControl>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,2">
-                    <Button Theme="{StaticResource ToolBtn}" Command="{Binding OpenCardEditorCommand}" Content="Card Editor" Padding="8,4"/>
-                    <Border Width="1" Background="#555" Margin="2,4"/>
-                    <Button Theme="{StaticResource ToolBtn}" Command="{Binding ManageFrontArtLibraryCommand}" Content="Front Art Library" Padding="8,4"/>
-                    <Button Theme="{StaticResource ToolBtn}" Command="{Binding ManageBackArtLibraryCommand}" Content="Back Art Library" Padding="8,4"/>
-                    <Button Theme="{StaticResource ToolBtn}" Command="{Binding OpenSettingsCommand}" Content="Settings" Padding="8,4"/>
+                    <Button Theme="{StaticResource ToolBtn}" Command="{Binding OpenCardEditorCommand}"
+                            Content="Card Editor" Padding="8,4"/>
+                    <Button Theme="{StaticResource ToolBtn}" Content="Libraries  ▾" Padding="8,4">
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuItem Header="Front Art Library" Command="{Binding ManageFrontArtLibraryCommand}"/>
+                                <MenuItem Header="Back Art Library" Command="{Binding ManageBackArtLibraryCommand}"/>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button Theme="{StaticResource ToolBtn}" Command="{Binding OpenSettingsCommand}"
+                            Content="⚙ Settings" Padding="8,4"/>
                 </StackPanel>
             </Grid>
         </Border>
