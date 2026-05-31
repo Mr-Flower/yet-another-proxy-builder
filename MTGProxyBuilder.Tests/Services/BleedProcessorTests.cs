@@ -100,6 +100,100 @@ public class BleedProcessorTests
         }
     }
 
+    // ---- corner square-off (white triangle removal) ----
+
+    [Fact]
+    public void GetBleedExtendedImage_BlackBorderWhiteCorners_FillsCornersDark()
+    {
+        // White background with a black rounded "card" -> the 4 rectangle corners are white triangles.
+        var proc = new BleedProcessor();
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_corner_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            string input = Path.Combine(tmpDir, "blackcard.png");
+            CreateRoundedCardImage(input, 60, 84, radius: 5, card: SKColors.Black, bg: SKColors.White);
+
+            var result = proc.GetBleedExtendedImage(input, 6);
+            Assert.NotNull(result);
+            using var outBmp = SKBitmap.Decode(result);
+
+            // Every extreme output corner (in the bleed) must be dark, not the original white.
+            AssertDark(outBmp.GetPixel(0, 0));
+            AssertDark(outBmp.GetPixel(outBmp.Width - 1, 0));
+            AssertDark(outBmp.GetPixel(0, outBmp.Height - 1));
+            AssertDark(outBmp.GetPixel(outBmp.Width - 1, outBmp.Height - 1));
+        }
+        finally { try { Directory.Delete(tmpDir, true); } catch { } proc.ClearCache(); }
+    }
+
+    [Fact]
+    public void GetBleedExtendedImage_WhiteCard_KeepsCornersWhite()
+    {
+        // An all-white card: a white border must stay white (no recolouring to art).
+        var proc = new BleedProcessor();
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_white_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            string input = Path.Combine(tmpDir, "whitecard.png");
+            CreateRoundedCardImage(input, 60, 84, radius: 5, card: SKColors.White, bg: SKColors.White);
+
+            var result = proc.GetBleedExtendedImage(input, 6);
+            using var outBmp = SKBitmap.Decode(result);
+            AssertNearWhite(outBmp.GetPixel(0, 0));
+            AssertNearWhite(outBmp.GetPixel(outBmp.Width - 1, outBmp.Height - 1));
+        }
+        finally { try { Directory.Delete(tmpDir, true); } catch { } proc.ClearCache(); }
+    }
+
+    [Fact]
+    public void GetBleedExtendedImage_FullArtColouredCorners_NotRecoloured()
+    {
+        // Full-art card (corners already coloured, no white triangle): corners must NOT be repainted.
+        var proc = new BleedProcessor();
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_red_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            string input = Path.Combine(tmpDir, "redcard.png");
+            using (var bmp = new SKBitmap(60, 84))
+            {
+                using var canvas = new SKCanvas(bmp);
+                canvas.Clear(SKColors.Red);
+                using var stream = File.OpenWrite(input);
+                bmp.Encode(stream, SKEncodedImageFormat.Png, 100);
+            }
+
+            var result = proc.GetBleedExtendedImage(input, 6);
+            using var outBmp = SKBitmap.Decode(result);
+            var px = outBmp.GetPixel(0, 0);
+            Assert.True(px.Red > 150 && px.Green < 120 && px.Blue < 120,
+                $"corner should stay red-ish, was ({px.Red},{px.Green},{px.Blue})");
+        }
+        finally { try { Directory.Delete(tmpDir, true); } catch { } proc.ClearCache(); }
+    }
+
+    private static void AssertDark(SKColor c) =>
+        Assert.True(c.Red < 80 && c.Green < 80 && c.Blue < 80,
+            $"expected dark corner, was ({c.Red},{c.Green},{c.Blue})");
+
+    private static void AssertNearWhite(SKColor c) =>
+        Assert.True(c.Red >= 230 && c.Green >= 230 && c.Blue >= 230,
+            $"expected white corner, was ({c.Red},{c.Green},{c.Blue})");
+
+    private static void CreateRoundedCardImage(string path, int w, int h, float radius, SKColor card, SKColor bg)
+    {
+        using var bitmap = new SKBitmap(w, h);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(bg);
+        using var paint = new SKPaint { Color = card, IsAntialias = false, Style = SKPaintStyle.Fill };
+        canvas.DrawRoundRect(new SKRect(0, 0, w, h), radius, radius, paint);
+        canvas.Flush();
+        using var stream = File.OpenWrite(path);
+        bitmap.Encode(stream, SKEncodedImageFormat.Png, 100);
+    }
+
     private static void CreateTestImage(string path, int width, int height)
     {
         using var bitmap = new SKBitmap(width, height);

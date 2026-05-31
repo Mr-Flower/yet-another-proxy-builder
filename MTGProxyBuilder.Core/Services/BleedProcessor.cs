@@ -39,8 +39,8 @@ namespace MTGProxyBuilder.Core.Services
             {
                 // The trailing _vN is a processing-logic version: bump it whenever the bleed
                 // algorithm changes so stale cached results (e.g. the broken coloured corners) are
-                // regenerated instead of reused. v3 = square-off white corners (border colour) then bleed.
-                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedPixels}_v3";
+                // regenerated instead of reused. v4 = per-row square-off of white corners then bleed.
+                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedPixels}_v4";
                 string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
 
                 if (File.Exists(outputPath))
@@ -148,36 +148,49 @@ namespace MTGProxyBuilder.Core.Services
         private static bool IsNearWhite(SKColor c) => c.Red >= 235 && c.Green >= 235 && c.Blue >= 235;
 
         /// <summary>
-        /// Fills the near-white triangle in one rectangular corner of a (rounded) card scan with the
-        /// card's border colour, squaring off the corner. (cx,cy) is the extreme corner pixel and
-        /// (dx,dy) points inward (±1). No-op if that corner isn't near-white (coloured/full-art) or if
-        /// the border itself is white/light (so white-bordered cards keep white corners).
+        /// Squares off one rectangular corner of a (rounded) card scan by replacing the near-white
+        /// triangle outside the rounding with the card's border colour, so the border extends all the
+        /// way to the corner — exactly like the straight edges do. (cx,cy) is the extreme corner pixel;
+        /// (dx,dy) point inward (±1). No-op when the corner isn't near-white (coloured/full-art) or when
+        /// the border itself is white/light (white-bordered cards keep their white corners).
         /// </summary>
         private static void SquareOffWhiteCorner(SKBitmap bmp, int w, int h, int cx, int cy, int dx, int dy)
         {
             if (!IsNearWhite(bmp.GetPixel(cx, cy))) return;
 
-            int maxScan = Math.Max(2, Math.Min(w, h) / 10); // covers the rounded-corner radius with margin
+            // Generous band — the rounded-corner radius is only a few % of the card, so 1/6 of the
+            // shorter side covers it comfortably regardless of image resolution.
+            int band = Math.Max(4, Math.Min(w, h) / 6);
 
-            // Border colour = first non-near-white pixel scanning diagonally inward.
+            // Border colour = first non-near-white pixel scanning diagonally inward, sampled a couple
+            // of pixels deeper to skip the anti-aliased white->border fringe. If the diagonal stays
+            // white across the whole band, this is a white/light-bordered card -> leave it white.
             SKColor? border = null;
-            for (int d = 1; d <= maxScan; d++)
+            for (int d = 1; d <= band; d++)
             {
-                var p = bmp.GetPixel(cx + dx * d, cy + dy * d);
-                if (!IsNearWhite(p)) { border = p; break; }
-            }
-            if (border == null) return; // white/light border -> leave the corner white
-
-            // Recolour only the near-white pixels in the corner box (the triangle), never the
-            // card's actual frame/art pixels.
-            for (int ix = 0; ix <= maxScan; ix++)
-                for (int iy = 0; iy <= maxScan; iy++)
+                if (!IsNearWhite(bmp.GetPixel(cx + dx * d, cy + dy * d)))
                 {
-                    int x = cx + dx * ix, y = cy + dy * iy;
-                    if (x < 0 || x >= w || y < 0 || y >= h) continue;
-                    if (IsNearWhite(bmp.GetPixel(x, y)))
-                        bmp.SetPixel(x, y, border.Value);
+                    int dd = Math.Min(d + 2, band);
+                    border = bmp.GetPixel(cx + dx * dd, cy + dy * dd);
+                    break;
                 }
+            }
+            if (border == null) return;
+
+            // For each row in the corner band, fill the contiguous near-white run from the edge inward
+            // until the border. This follows the rounding exactly and never crosses into the card.
+            for (int iy = 0; iy <= band; iy++)
+            {
+                int y = cy + dy * iy;
+                if (y < 0 || y >= h) break;
+                for (int ix = 0; ix <= band; ix++)
+                {
+                    int x = cx + dx * ix;
+                    if (x < 0 || x >= w) break;
+                    if (!IsNearWhite(bmp.GetPixel(x, y))) break;
+                    bmp.SetPixel(x, y, border.Value);
+                }
+            }
         }
 
         public void ClearCache()
