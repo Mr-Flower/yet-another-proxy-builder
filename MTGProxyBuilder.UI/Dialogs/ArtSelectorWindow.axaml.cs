@@ -36,6 +36,7 @@ public partial class ArtSelectorWindow : Window
     public string? ResultPath { get; private set; }
     public bool ApplyToSameName { get; private set; }
     public bool ApplyToNoBack { get; private set; }
+    public bool ApplyToThisCopyOnly { get; private set; }
 
     private readonly Dictionary<string, ScryfallCard> _scryfallCardsByPath = new(StringComparer.OrdinalIgnoreCase);
 
@@ -92,6 +93,14 @@ public partial class ArtSelectorWindow : Window
                 ApplyNoBackChk.Content = $"Apply to all without back art ({noBackCount} cards)";
                 ApplyNoBackChk.IsVisible = true;
             }
+        }
+
+        // Stacked card (Quantity > 1): offer to apply the chosen art to just ONE copy (splits it off),
+        // instead of the whole stack. Mutually understood with "apply to all same name".
+        if (card.Quantity > 1)
+        {
+            ApplyThisCopyChk.Content = $"Solo questa copia (su {card.Quantity})";
+            ApplyThisCopyChk.IsVisible = true;
         }
 
         if (isFront && _frontArtLibrary != null)
@@ -885,8 +894,9 @@ public partial class ArtSelectorWindow : Window
             OkBtn.IsEnabled = true;
         }
 
-        ApplyToSameName = ApplySameNameChk.IsChecked == true;
-        ApplyToNoBack = ApplyNoBackChk.IsChecked == true;
+        ApplyToThisCopyOnly = ApplyThisCopyChk.IsChecked == true;
+        ApplyToSameName = !ApplyToThisCopyOnly && ApplySameNameChk.IsChecked == true;
+        ApplyToNoBack = !ApplyToThisCopyOnly && ApplyNoBackChk.IsChecked == true;
         Close();
     }
 

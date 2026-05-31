@@ -9,7 +9,7 @@ public enum MessageResult { Yes, No, Cancel }
 
 public enum ArtSelectorMode { Front, Back }
 
-public record ArtSelectorResult(string ResultPath, bool ApplyToSameName, bool ApplyToNoBack);
+public record ArtSelectorResult(string ResultPath, bool ApplyToSameName, bool ApplyToNoBack, bool ApplyToThisCopyOnly = false);
 
 // Fork-specific: result of the image adjustment dialog (settings + which cards to apply to).
 public record ImageAdjustmentResult(ImageAdjustmentSettings Settings, ImageAdjustmentTarget Target);

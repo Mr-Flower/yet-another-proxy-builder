@@ -246,7 +246,7 @@ public class AvaloniaDialogService : IDialogService
         await dialog.ShowDialog(owner);
 
         if (dialog.ResultPath == null) return null;
-        return new ArtSelectorResult(dialog.ResultPath, dialog.ApplyToSameName, dialog.ApplyToNoBack);
+        return new ArtSelectorResult(dialog.ResultPath, dialog.ApplyToSameName, dialog.ApplyToNoBack, dialog.ApplyToThisCopyOnly);
     }
 
     public async Task ShowSettingsAsync(AppSettingsService settings, MpcFillSourceManager mpcSources, MpcFillService mpcFill)

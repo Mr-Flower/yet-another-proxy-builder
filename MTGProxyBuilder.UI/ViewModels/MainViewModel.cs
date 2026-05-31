@@ -1200,7 +1200,13 @@ public class MainViewModel : ViewModelBase
         PushUndo();
         if (mode == ArtSelectorMode.Front)
         {
-            if (result.ApplyToSameName)
+            if (result.ApplyToThisCopyOnly && card.Quantity > 1)
+            {
+                var copy = SplitCardCopy(card);
+                if (copy != null) { copy.ArtworkPath = result.ResultPath; SelectedCard = copy; }
+                StatusText = $"Front art updated for one copy of {card.Name}";
+            }
+            else if (result.ApplyToSameName)
             {
                 int count = 0;
                 foreach (var c in Cards.Where(c => c.Name == card.Name))
@@ -1218,7 +1224,13 @@ public class MainViewModel : ViewModelBase
         }
         else
         {
-            if (result.ApplyToNoBack)
+            if (result.ApplyToThisCopyOnly && card.Quantity > 1)
+            {
+                var copy = SplitCardCopy(card);
+                if (copy != null) { copy.BackArtworkPath = result.ResultPath; copy.IncludeBack = true; SelectedCard = copy; }
+                StatusText = $"Back art updated for one copy of {card.Name}";
+            }
+            else if (result.ApplyToNoBack)
             {
                 int count = 0;
                 foreach (var c in Cards.Where(c => string.IsNullOrEmpty(c.BackArtworkPath)))
@@ -1375,18 +1387,30 @@ public class MainViewModel : ViewModelBase
         if (card == null || card.Quantity <= 1) return;
 
         PushUndo();
-        int idx = Cards.IndexOf(card);
-        card.Quantity -= 1;
-
-        var copy = card.Clone();
-        copy.Quantity = 1;
-        if (idx >= 0) Cards.Insert(idx + 1, copy);
-        else Cards.Add(copy);
+        var copy = SplitCardCopy(card);
+        if (copy == null) return;
 
         SelectedCard = copy; // edits now affect only this single copy
         _unlinkCardCopyCmd.RaiseCanExecuteChanged();
         RefreshCanvas();
         StatusText = $"Scollegata 1 copia di \"{copy.Name}\" — ora modificabile separatamente.";
+    }
+
+    /// <summary>
+    /// Splits one copy off a stacked card (Quantity > 1): decrements the original and inserts a
+    /// distinct Quantity=1 clone right after it. Returns the new clone (or null if not a stack).
+    /// Caller is responsible for PushUndo()/refresh.
+    /// </summary>
+    private CardModel? SplitCardCopy(CardModel card)
+    {
+        if (card.Quantity <= 1) return null;
+        int idx = Cards.IndexOf(card);
+        card.Quantity -= 1;
+        var copy = card.Clone();
+        copy.Quantity = 1;
+        if (idx >= 0) Cards.Insert(idx + 1, copy);
+        else Cards.Add(copy);
+        return copy;
     }
 
     // fork-specific: open the image adjustment editor for the selected card and bake the result.
