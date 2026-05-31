@@ -45,10 +45,10 @@
             </ControlTemplate>
         </Setter>
         <Style Selector="^:pointerover">
-            <Setter Property="Background" Value="#3E3E42"/>
+            <Setter Property="Background" Value="#243352"/>
         </Style>
         <Style Selector="^:pressed">
-            <Setter Property="Background" Value="#4E4E52"/>
+            <Setter Property="Background" Value="#2E4068"/>
         </Style>
         <Style Selector="^:disabled">
             <Setter Property="Opacity" Value="0.4"/>

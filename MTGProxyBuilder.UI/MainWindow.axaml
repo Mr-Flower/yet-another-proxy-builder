@@ -7,7 +7,7 @@
         Title="TCG Proxy Builder"
         Height="950" Width="1600"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E1E">
+        Background="#0F1729">
 
     <Window.Resources>
         <converters:NullToCollapsedConverter x:Key="NullToCollapsed"/>
@@ -25,7 +25,7 @@
         </Grid.RowDefinitions>
 
         <!-- ==================== PROJECT TAB BAR ==================== -->
-        <Border Grid.Row="0" Background="#252526">
+        <Border Grid.Row="0" Background="#16213E">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -50,7 +50,7 @@
                         <DataTemplate>
                             <Border Padding="10,5" Margin="1,2" CornerRadius="4,4,0,0"
                                     Cursor="Hand" Tag="{Binding}"
-                                    Background="#3E3E42"
+                                    Background="#243352"
                                     PointerReleased="OnTabPointerReleased">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="{Binding TabTitle}" Foreground="#DDD" FontSize="11" VerticalAlignment="Center"/>
@@ -75,7 +75,7 @@
         </Border>
 
         <!-- ==================== PER-PROJECT TOOLBAR ==================== -->
-        <Border Grid.Row="1" Background="#2D2D30" Padding="6,4"
+        <Border Grid.Row="1" Background="#16213E" Padding="6,4"
                 DataContext="{Binding ActiveProject.Inner}"
                 IsVisible="{Binding #Root.DataContext.HasActiveProject}">
             <Grid>
@@ -101,7 +101,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0">
                     <TextBlock Text="Project:" Foreground="#999" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12"/>
                     <TextBox Text="{Binding ProjectName}" Width="180" Padding="6,4" FontSize="12"
-                             Background="#3E3E42" Foreground="White" BorderBrush="#555" BorderThickness="1"
+                             Background="#243352" Foreground="White" BorderBrush="#555" BorderThickness="1"
                              CaretBrush="White"/>
                 </StackPanel>
 
@@ -136,7 +136,7 @@
         </Border>
 
         <!-- ==================== WELCOME SCREEN (no project open) ==================== -->
-        <Border Grid.Row="3" Background="#1E1E1E"
+        <Border Grid.Row="3" Background="#0F1729"
                 IsVisible="{Binding !HasActiveProject}">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock Text="TCG Proxy Builder" Foreground="#555" FontSize="36"
@@ -147,7 +147,7 @@
                     <Button Theme="{StaticResource AccentBtn}" Command="{Binding NewProjectCommand}"
                             Content="New Project" Padding="16,8" FontSize="13" Margin="0,0,10,0"/>
                     <Button Theme="{StaticResource ToolBtn}" Command="{Binding OpenProjectCommand}"
-                            Content="Open Project" Padding="16,8" FontSize="13" Background="#3E3E42"/>
+                            Content="Open Project" Padding="16,8" FontSize="13" Background="#243352"/>
                 </StackPanel>
                 <TextBlock Foreground="#444" FontSize="11" HorizontalAlignment="Center" Margin="0,24,0,0">
                     <Run Text="v"/><Run Text="{Binding AppVersion, Mode=OneTime}"/>
@@ -167,10 +167,10 @@
             </Grid.ColumnDefinitions>
 
             <!-- ===== LEFT: Input panel (search / import / add cards) ===== -->
-            <TabControl Grid.Column="0" Background="#2D2D30" Padding="0">
+            <TabControl Grid.Column="0" Background="#16213E" Padding="0">
                     <!-- ===== SEARCH PANEL ===== -->
                     <TabItem Header="Search" Foreground="#AAA">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#2D2D30">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#16213E">
                             <StackPanel Margin="10,8">
                                 <Grid Margin="0,0,0,4">
                                     <Grid.ColumnDefinitions>
@@ -180,7 +180,7 @@
                                     <TextBox x:Name="ScryfallSearchBox"
                                              Text="{Binding ScryfallSearchQuery}"
                                              Padding="6,5" FontSize="12"
-                                             Background="#3E3E42" Foreground="White"
+                                             Background="#243352" Foreground="White"
                                              BorderBrush="#555" BorderThickness="1" CaretBrush="White"/>
                                     <Button Grid.Column="1" Theme="{StaticResource AccentBtn}"
                                             Command="{Binding ScryfallSearchCommand}"
@@ -195,20 +195,20 @@
                                                IsVisible="{Binding ShowAdvancedSearch}"/>
                                 </StackPanel>
 
-                                <Border Background="#252526" CornerRadius="4" Padding="8" Margin="0,0,0,6"
+                                <Border Background="#16213E" CornerRadius="4" Padding="8" Margin="0,0,0,6"
                                         IsVisible="{Binding ShowAdvancedSearch}">
                                     <StackPanel>
                                         <TextBlock Text="Name" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
                                         <TextBox Text="{Binding AdvName}" Padding="4,3" FontSize="11"
-                                                 Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                                 Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
 
                                         <TextBlock Text="Type (e.g. creature, instant, legendary)" Foreground="#999" FontSize="9.5" Margin="0,4,0,1"/>
                                         <TextBox Text="{Binding AdvType}" Padding="4,3" FontSize="11"
-                                                 Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                                 Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
 
                                         <TextBlock Text="Rules text contains" Foreground="#999" FontSize="9.5" Margin="0,4,0,1"/>
                                         <TextBox Text="{Binding AdvOracle}" Padding="4,3" FontSize="11"
-                                                 Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                                 Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
 
                                         <Grid Margin="0,4,0,0">
                                             <Grid.ColumnDefinitions>
@@ -219,12 +219,12 @@
                                             <StackPanel Grid.Column="0">
                                                 <TextBlock Text="Colors (WUBRG)" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
                                                 <TextBox Text="{Binding AdvColors}" Padding="4,3" FontSize="11"
-                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                                         Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2">
                                                 <TextBlock Text="Identity (WUBRG)" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
                                                 <TextBox Text="{Binding AdvIdentity}" Padding="4,3" FontSize="11"
-                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                                         Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                             </StackPanel>
                                         </Grid>
 
@@ -245,7 +245,7 @@
                                                     </Grid.ColumnDefinitions>
                                                     <ComboBox ItemsSource="{Binding ComparisonOps}" SelectedItem="{Binding AdvCmcOp}" Padding="2" FontSize="10"/>
                                                     <TextBox Grid.Column="1" Text="{Binding AdvCmcValue}" Padding="4,3" FontSize="11"
-                                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
+                                                             Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
                                                 </Grid>
                                             </StackPanel>
                                             <StackPanel Grid.Column="3" Grid.ColumnSpan="2">
@@ -266,7 +266,7 @@
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                                     <ComboBox ItemsSource="{Binding ComparisonOps}" SelectedItem="{Binding AdvPowOp}" Padding="2" FontSize="10"/>
                                                     <TextBox Grid.Column="1" Text="{Binding AdvPowValue}" Padding="4,3" FontSize="11"
-                                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
+                                                             Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
                                                 </Grid>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2">
@@ -275,7 +275,7 @@
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                                     <ComboBox ItemsSource="{Binding ComparisonOps}" SelectedItem="{Binding AdvTouOp}" Padding="2" FontSize="10"/>
                                                     <TextBox Grid.Column="1" Text="{Binding AdvTouValue}" Padding="4,3" FontSize="11"
-                                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
+                                                             Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White" Margin="4,0,0,0"/>
                                                 </Grid>
                                             </StackPanel>
                                         </Grid>
@@ -289,7 +289,7 @@
                                             <StackPanel Grid.Column="0">
                                                 <TextBlock Text="Set code" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
                                                 <TextBox Text="{Binding AdvSet}" Padding="4,3" FontSize="11"
-                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                                         Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2">
                                                 <TextBlock Text="Format" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
@@ -306,12 +306,12 @@
                                             <StackPanel Grid.Column="0">
                                                 <TextBlock Text="Artist" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
                                                 <TextBox Text="{Binding AdvArtist}" Padding="4,3" FontSize="11"
-                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                                         Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2">
                                                 <TextBlock Text="Keyword" Foreground="#999" FontSize="9.5" Margin="0,0,0,1"/>
                                                 <TextBox Text="{Binding AdvKeyword}" Padding="4,3" FontSize="11"
-                                                         Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                                         Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                             </StackPanel>
                                         </Grid>
 
@@ -344,12 +344,12 @@
                                          ItemsSource="{Binding ScryfallResults}"
                                          SelectedItem="{Binding SelectedScryfallCard}"
                                          Height="180" BorderThickness="1" BorderBrush="#444"
-                                         Background="#252526" FontSize="11"
+                                         Background="#16213E" FontSize="11"
                                          DoubleTapped="OnScryfallDoubleTapped">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" Margin="2">
-                                                <Border Width="36" Height="50" Background="#111"
+                                                <Border Width="36" Height="50" Background="#0B1020"
                                                         CornerRadius="3" Margin="0,0,6,0"/>
                                                 <StackPanel VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding Name}" FontSize="10.5" Foreground="#DDD"
@@ -364,7 +364,7 @@
                                     </ListBox.ItemTemplate>
                                 </ListBox>
 
-                                <Border Height="200" Background="#111" CornerRadius="4" Margin="0,6,0,0"
+                                <Border Height="200" Background="#0B1020" CornerRadius="4" Margin="0,6,0,0"
                                         IsVisible="{Binding SearchPreviewUrl, Converter={StaticResource NullToCollapsed}}"/>
 
                                 <Button Theme="{StaticResource AccentBtn}" Command="{Binding AddScryfallCardCommand}"
@@ -383,7 +383,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBox x:Name="DeckImportUrlBox" Text="{Binding ImportDeckUrl}"
                                              Padding="6,5" FontSize="11"
-                                             Background="#3E3E42" Foreground="White"
+                                             Background="#243352" Foreground="White"
                                              BorderBrush="#555" BorderThickness="1" CaretBrush="White"/>
                                     <Button Grid.Column="1" Theme="{StaticResource AccentBtn}"
                                             Command="{Binding ImportDeckCommand}" Content="Import"
@@ -401,7 +401,7 @@
                                          AcceptsReturn="True" TextWrapping="Wrap"
                                          Height="110" Padding="6,5" FontSize="11"
                                          VerticalContentAlignment="Top"
-                                         Background="#3E3E42" Foreground="White"
+                                         Background="#243352" Foreground="White"
                                          BorderBrush="#555" BorderThickness="1" CaretBrush="White"/>
                                 <Button Theme="{StaticResource AccentBtn}"
                                         Command="{Binding ImportTextListCommand}" Content="Add Cards from List"
@@ -419,14 +419,14 @@
             </TabControl>
 
             <!-- ===== SPLITTER (left) ===== -->
-            <GridSplitter Grid.Column="1" Background="#3E3E42" ResizeDirection="Columns"/>
+            <GridSplitter Grid.Column="1" Background="#243352" ResizeDirection="Columns"/>
 
             <!-- ===== LEFT: Canvas / Page Preview ===== -->
             <Grid Grid.Column="2">
                 <ScrollViewer x:Name="CanvasScrollViewer"
                               HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Auto"
-                              Background="#1E1E1E">
+                              Background="#0F1729">
                     <Border Padding="30" HorizontalAlignment="Center">
                         <Border BoxShadow="0 4 20 0 #59000000">
                             <controls:GridEditorCanvas
@@ -468,15 +468,15 @@
 
             <!-- ===== SPLITTER ===== -->
             <!-- ===== SPLITTER (right) ===== -->
-            <GridSplitter Grid.Column="3" Background="#3E3E42" ResizeDirection="Columns"/>
+            <GridSplitter Grid.Column="3" Background="#243352" ResizeDirection="Columns"/>
 
             <!-- ===== RIGHT: Tool panels as tabs ===== -->
-            <TabControl Grid.Column="4" Background="#2D2D30" Padding="0">
+            <TabControl Grid.Column="4" Background="#16213E" Padding="0">
 
 
                 <!-- ===== CARD PANEL ===== -->
                 <TabItem Header="Card" Foreground="#AAA">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#2D2D30">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#16213E">
                         <StackPanel Margin="10,8">
                             <TextBlock Text="(Click a card on the page)" Foreground="#666"
                                        FontStyle="Italic" FontSize="12" Margin="0,0,0,8"
@@ -485,7 +485,7 @@
                             <StackPanel IsVisible="{Binding SelectedCard, Converter={StaticResource NullToCollapsed}}">
                                 <TextBlock Text="Name" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
                                 <TextBox Text="{Binding SelectedCard.Name}" Padding="6,4" FontSize="12"
-                                         Background="#3E3E42" Foreground="White" BorderBrush="#555"
+                                         Background="#243352" Foreground="White" BorderBrush="#555"
                                          CaretBrush="White" Margin="0,0,0,8"/>
 
                                 <Grid Margin="0,0,0,8">
@@ -496,7 +496,7 @@
                                     <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                         <TextBlock Text="Quantity" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
                                         <TextBox Text="{Binding SelectedCard.Quantity}" Padding="6,4"
-                                                 Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                                 Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Margin="4,0,0,0">
                                         <TextBlock Text="Mana Cost" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
@@ -521,7 +521,7 @@
                                         Command="{Binding BrowseFrontArtworkCommand}"
                                         Content="Select Art..." Margin="0,0,0,6"
                                         HorizontalAlignment="Stretch" Padding="8,6"/>
-                                <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4"/>
+                                <Border Height="150" Background="#0B1020" CornerRadius="4" Margin="0,0,0,4"/>
                                 <TextBlock Text="{Binding SelectedCard.ArtworkPath}" Foreground="#555"
                                            FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
                                 <!-- fork-specific: image adjustment (brightness/contrast/black-point) -->
@@ -532,7 +532,7 @@
 
                                 <TextBlock Text="Overlay Text" Foreground="#999" FontSize="10" Margin="0,4,0,2"/>
                                 <TextBox Text="{Binding SelectedCard.OverlayText}" Padding="6,4" FontSize="12"
-                                         Background="#3E3E42" Foreground="White" BorderBrush="#555"
+                                         Background="#243352" Foreground="White" BorderBrush="#555"
                                          CaretBrush="White" Margin="0,0,0,8"/>
 
                                 <CheckBox Content="Include Back Artwork"
@@ -542,7 +542,7 @@
                                         Command="{Binding BrowseBackArtworkCommand}"
                                         Content="Select Card Back..." Margin="0,0,0,6"
                                         HorizontalAlignment="Stretch" Padding="8,6"/>
-                                <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4"/>
+                                <Border Height="150" Background="#0B1020" CornerRadius="4" Margin="0,0,0,4"/>
                                 <TextBlock Text="{Binding SelectedCard.BackArtworkPath}" Foreground="#555"
                                            FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
                             </StackPanel>
@@ -552,7 +552,7 @@
 
                 <!-- ===== DARKEN PIXELS PANEL ===== -->
                 <TabItem Header="Darken" Foreground="#AAA">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#2D2D30">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#16213E">
                         <StackPanel Margin="10,8">
                             <TextBlock Text="DARKEN PIXELS" Foreground="#4a9eff" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
                             <TextBlock Text="Porta a nero i grigi scuri delle scan (es. bordi Scryfall) e regola luminosità/contrasto/saturazione."
@@ -611,10 +611,10 @@
                                     Padding="8,6" Margin="0,0,0,6"/>
                             <Grid ColumnDefinitions="*,6,*">
                                 <Button Grid.Column="0" Content="Azzera" Command="{Binding ResetDarkenCommand}"
-                                        Background="#3E3E42" Foreground="White" BorderThickness="0"
+                                        Background="#243352" Foreground="White" BorderThickness="0"
                                         Padding="8,5" HorizontalAlignment="Stretch"/>
                                 <Button Grid.Column="2" Content="Salva default" Command="{Binding SaveDarkenDefaultCommand}"
-                                        Background="#3E3E42" Foreground="White" BorderThickness="0"
+                                        Background="#243352" Foreground="White" BorderThickness="0"
                                         Padding="8,5" HorizontalAlignment="Stretch"/>
                             </Grid>
                             <CheckBox Content="Applica auto alle nuove carte Scryfall"
@@ -626,7 +626,7 @@
 
                 <!-- ===== LAYOUT PANEL ===== -->
                 <TabItem Header="Layout" Foreground="#AAA">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#2D2D30">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#16213E">
                         <StackPanel Margin="10,8">
                             <TextBlock Text="PAGE" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
                             <TextBlock Text="Page Size" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
@@ -658,13 +658,13 @@
                                     <TextBlock Text="Color" Foreground="#999" FontSize="9"/>
                                     <TextBox Text="{Binding CurrentProject.PrintSettings.OutlineColor}"
                                              Padding="4,3" FontSize="11"
-                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                             Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
                                     <TextBlock Text="Line Weight (pt)" Foreground="#999" FontSize="9"/>
                                     <TextBox Text="{Binding CurrentProject.PrintSettings.LineWeight, Converter={StaticResource FlexibleNumber}}"
                                              Padding="4,3" FontSize="11"
-                                             Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                             Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                             </Grid>
 
@@ -697,7 +697,7 @@
                                 <StackPanel Grid.Column="0">
                                     <TextBlock Text="Corner Radius (mm)" Foreground="#999" FontSize="9"/>
                                     <TextBox Text="{Binding CurrentProject.PrintSettings.CornerRadiusMm, Converter={StaticResource FlexibleNumber}}"
-                                             Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                             Padding="4,3" FontSize="11" Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
                                     <TextBlock Text="Line Type" Foreground="#999" FontSize="9"/>
@@ -707,7 +707,7 @@
                                 <StackPanel Grid.Column="4">
                                     <TextBlock Text="Corner Length (mm)" Foreground="#999" FontSize="9"/>
                                     <TextBox Text="{Binding CurrentProject.PrintSettings.CornerLengthMm, Converter={StaticResource FlexibleNumber}}"
-                                             Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                             Padding="4,3" FontSize="11" Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                             </Grid>
 
@@ -721,7 +721,7 @@
                                       IsChecked="{Binding CurrentProject.PrintSettings.ExportSvgCutLines}"
                                       Foreground="#CCC" Margin="0,0,0,4"/>
                             <Button Content="Export SVG Only" Command="{Binding ExportSvgCommand}"
-                                    Background="#3E3E42" Foreground="#CCC" BorderThickness="0"
+                                    Background="#243352" Foreground="#CCC" BorderThickness="0"
                                     Padding="8,4" FontSize="11" Cursor="Hand" HorizontalAlignment="Left"
                                     Margin="0,0,0,6"/>
                             <Grid Margin="0,0,0,4"
@@ -738,22 +738,22 @@
                                 <StackPanel Grid.Column="0">
                                     <TextBlock Text="Square (in)" Foreground="#999" FontSize="9"/>
                                     <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkSquareSizeIn, Converter={StaticResource FlexibleNumber}}"
-                                             Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                             Padding="4,3" FontSize="11" Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
                                     <TextBlock Text="Arm Length (in)" Foreground="#999" FontSize="9"/>
                                     <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkLengthIn, Converter={StaticResource FlexibleNumber}}"
-                                             Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                             Padding="4,3" FontSize="11" Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="4">
                                     <TextBlock Text="Thickness (in)" Foreground="#999" FontSize="9"/>
                                     <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkThicknessIn, Converter={StaticResource FlexibleNumber}}"
-                                             Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                             Padding="4,3" FontSize="11" Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="6">
                                     <TextBlock Text="Inset (in)" Foreground="#999" FontSize="9"/>
                                     <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkInsetIn, Converter={StaticResource FlexibleNumber}}"
-                                             Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
+                                             Padding="4,3" FontSize="11" Background="#243352" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                             </Grid>
 
@@ -856,12 +856,12 @@
 
                 <!-- ===== FILTER PANEL ===== -->
                 <TabItem Header="Filter" Foreground="#AAA">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#2D2D30">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#16213E">
                         <StackPanel Margin="10,8">
                             <TextBlock Text="FILTER" Foreground="#0078D4" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
                             <TextBlock Text="Search" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
                             <TextBox Text="{Binding FilterText}" Padding="6,4" FontSize="11"
-                                     Background="#3E3E42" Foreground="White" BorderBrush="#555"
+                                     Background="#243352" Foreground="White" BorderBrush="#555"
                                      CaretBrush="White" Margin="0,0,0,6"/>
 
                             <Grid Margin="0,0,0,6">
@@ -936,7 +936,7 @@
         <!-- ==================== SHELL LOADING OVERLAY ==================== -->
         <Border Grid.RowSpan="5" Background="#CC000000"
                 IsVisible="{Binding IsLoading}">
-            <Border Background="#2D2D30" CornerRadius="8" Padding="30,24"
+            <Border Background="#16213E" CornerRadius="8" Padding="30,24"
                     HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="300"
                     BorderBrush="#0078D4" BorderThickness="1">
                 <StackPanel HorizontalAlignment="Center">
@@ -953,7 +953,7 @@
         <Border Grid.RowSpan="5" Background="#CC000000"
                 DataContext="{Binding ActiveProject.Inner}"
                 IsVisible="{Binding IsBusy, FallbackValue=False}">
-            <Border Background="#2D2D30" CornerRadius="8" Padding="30,24"
+            <Border Background="#16213E" CornerRadius="8" Padding="30,24"
                     HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="300"
                     BorderBrush="#0078D4" BorderThickness="1">
                 <StackPanel HorizontalAlignment="Center">
