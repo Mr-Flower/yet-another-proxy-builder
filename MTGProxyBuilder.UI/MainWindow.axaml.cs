@@ -32,13 +32,6 @@ public partial class MainWindow : Window
 
         Opened += (_, _) =>
         {
-            ScryfallSearchBox.KeyDown += (_, e) =>
-            {
-                if (e.Key == Key.Return && Shell.ActiveProject?.Inner is { } vm
-                    && vm.ScryfallSearchCommand.CanExecute(null))
-                    vm.ScryfallSearchCommand.Execute(null);
-            };
-
             DeckImportUrlBox.KeyDown += (_, e) =>
             {
                 if (e.Key == Key.Return && Shell.ActiveProject?.Inner is { } vm
@@ -111,16 +104,6 @@ public partial class MainWindow : Window
     {
         if (sender is Control c && c.Tag is ProjectViewModel tab)
             _ = Shell.CloseProjectAsync(tab);
-    }
-
-    // ================================================================
-    //  SCRYFALL DOUBLE-TAP
-    // ================================================================
-
-    private void OnScryfallDoubleTapped(object? sender, TappedEventArgs e)
-    {
-        if (Shell.ActiveProject?.Inner is { } vm && vm.AddScryfallCardCommand.CanExecute(null))
-            vm.AddScryfallCardCommand.Execute(null);
     }
 
     // ================================================================
