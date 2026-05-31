@@ -15,8 +15,10 @@ namespace MTGProxyBuilder.UI.Converters;
 /// cached in-memory keyed by the source string, so the same card art is only fetched once.
 /// Usage in XAML: <c>&lt;Image converters:ImageLoader.Source="{Binding SmallImageUrl}"/&gt;</c>.
 /// </summary>
-public static class ImageLoader
+public class ImageLoader
 {
+    private ImageLoader() { }
+
     private static readonly HttpClient _http = CreateClient();
     private static readonly ConcurrentDictionary<string, Bitmap?> _cache =
         new(StringComparer.OrdinalIgnoreCase);
