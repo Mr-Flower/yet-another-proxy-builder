@@ -624,14 +624,22 @@ public class MainViewModel : ViewModelBase
     public string ImportDeckUrl
     {
         get => _importDeckUrl;
-        set => SetProperty(ref _importDeckUrl, value);
+        set
+        {
+            if (SetProperty(ref _importDeckUrl, value))
+                (ImportDeckCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        }
     }
 
     private string _importDeckText = string.Empty;
     public string ImportDeckText
     {
         get => _importDeckText;
-        set => SetProperty(ref _importDeckText, value);
+        set
+        {
+            if (SetProperty(ref _importDeckText, value))
+                (ImportTextListCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        }
     }
 
     public bool IgnoreDuplicates
