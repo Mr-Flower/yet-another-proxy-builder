@@ -13,9 +13,9 @@ namespace MTGProxyBuilder.UI.Controls
     /// </summary>
     public static class ArtTileBuilder
     {
-        public const double TileWidth = 150;
-        public const double TileHeight = 220;
-        public const double ImageHeight = 175;
+        public const double TileWidth = 200;
+        public const double TileHeight = 295;
+        public const double ImageHeight = 235;
         public const double LabelFontSize = 11;
         public const double DetailFontSize = 9;
 
