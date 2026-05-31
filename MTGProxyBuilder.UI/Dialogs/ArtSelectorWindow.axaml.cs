@@ -242,7 +242,8 @@ public partial class ArtSelectorWindow : Window
 
         var scryfallTask = Task.Run(async () =>
         {
-            try { return (await _scryfall.SearchCardAsync($"!\"{_card.Name}\"")).Cards; }
+            // uniquePrints: true -> every printing/version of this exact card
+            try { return (await _scryfall.SearchCardAsync($"!\"{_card.Name}\"", uniquePrints: true)).Cards; }
             catch { return new List<ScryfallCard>(); }
         });
         var mpcTask = Task.Run(async () =>

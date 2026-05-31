@@ -13,11 +13,11 @@ namespace MTGProxyBuilder.UI.Controls
     /// </summary>
     public static class ArtTileBuilder
     {
-        public const double TileWidth = 110;
-        public const double TileHeight = 165;
-        public const double ImageHeight = 125;
-        public const double LabelFontSize = 9.5;
-        public const double DetailFontSize = 8;
+        public const double TileWidth = 150;
+        public const double TileHeight = 220;
+        public const double ImageHeight = 175;
+        public const double LabelFontSize = 11;
+        public const double DetailFontSize = 9;
 
         /// <summary>Creates an art option tile with image, label, and detail text.</summary>
         public static Border CreateOptionTile(string label, string imagePath, bool isCurrent, string detail,

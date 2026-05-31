@@ -204,15 +204,18 @@ namespace MTGProxyBuilder.Core.Services
             _imageCache = imageCache;
         }
 
-        public async Task<(List<ScryfallCard> Cards, string? Error)> SearchCardAsync(string cardName)
+        /// <param name="uniquePrints">
+        /// When false (default), returns one result per card (unique=cards) — the standard
+        /// printing, used by the main search box. When true, returns every printing/version
+        /// (unique=prints, newest first) — used by the art/version selector.
+        /// </param>
+        public async Task<(List<ScryfallCard> Cards, string? Error)> SearchCardAsync(string cardName, bool uniquePrints = false)
         {
             try
             {
                 string encoded = System.Net.WebUtility.UrlEncode(cardName);
-                // unique=prints returns every printing/version of each matching card
-                // (default is unique=cards, which collapses to one per card).
-                // order=released shows newest printings first.
-                string? url = $"https://api.scryfall.com/cards/search?q={encoded}&unique=prints&order=released";
+                string unique = uniquePrints ? "prints" : "cards";
+                string? url = $"https://api.scryfall.com/cards/search?q={encoded}&unique={unique}&order=released";
                 var allCards = new List<ScryfallCard>();
 
                 while (url != null)
