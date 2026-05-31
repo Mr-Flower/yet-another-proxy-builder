@@ -104,15 +104,18 @@ namespace MTGProxyBuilder.UI.Controls
         public void ZoomToFit(Bitmap? bmp = null)
         {
             bmp ??= PreviewImage.Source as Bitmap;
-            if (bmp == null || bmp.PixelSize.Width == 0) return;
+            if (bmp == null || _naturalW <= 0 || _naturalH <= 0) return;
 
             // Fall back to the control bounds when the viewport hasn't been measured yet.
             double availW = ScrollArea.Viewport.Width > 0 ? ScrollArea.Viewport.Width : ScrollArea.Bounds.Width;
             double availH = ScrollArea.Viewport.Height > 0 ? ScrollArea.Viewport.Height : ScrollArea.Bounds.Height;
             if (availW <= 0 || availH <= 0) return;
 
-            double fitW = (availW - 20) / bmp.Size.Width;
-            double fitH = (availH - 20) / bmp.Size.Height;
+            // Divide by the PIXEL size (_naturalW/_naturalH) — the SAME basis SetZoom multiplies by.
+            // Using the DIP Size here instead caused images carrying DPI metadata (Size != PixelSize,
+            // common for full-size library art) to be scaled too large and clipped.
+            double fitW = (availW - 20) / _naturalW;
+            double fitH = (availH - 20) / _naturalH;
             double fit = Math.Min(fitW, fitH);
             if (fit <= 0) fit = 0.5;
             _fitMode = true;
