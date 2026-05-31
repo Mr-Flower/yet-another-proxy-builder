@@ -12,6 +12,7 @@
     <Window.Resources>
         <converters:NullToCollapsedConverter x:Key="NullToCollapsed"/>
         <converters:InverseBoolToVisibilityConverter x:Key="InverseBool"/>
+        <converters:FlexibleNumberConverter x:Key="FlexibleNumber"/>
     </Window.Resources>
 
     <Grid>
@@ -573,7 +574,7 @@
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
                                     <TextBlock Text="Line Weight (pt)" Foreground="#999" FontSize="9"/>
-                                    <TextBox Text="{Binding CurrentProject.PrintSettings.LineWeight}"
+                                    <TextBox Text="{Binding CurrentProject.PrintSettings.LineWeight, Converter={StaticResource FlexibleNumber}}"
                                              Padding="4,3" FontSize="11"
                                              Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
@@ -607,7 +608,7 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
                                     <TextBlock Text="Corner Radius (mm)" Foreground="#999" FontSize="9"/>
-                                    <TextBox Text="{Binding CurrentProject.PrintSettings.CornerRadiusMm}"
+                                    <TextBox Text="{Binding CurrentProject.PrintSettings.CornerRadiusMm, Converter={StaticResource FlexibleNumber}}"
                                              Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
@@ -617,7 +618,7 @@
                                 </StackPanel>
                                 <StackPanel Grid.Column="4">
                                     <TextBlock Text="Corner Length (mm)" Foreground="#999" FontSize="9"/>
-                                    <TextBox Text="{Binding CurrentProject.PrintSettings.CornerLengthMm}"
+                                    <TextBox Text="{Binding CurrentProject.PrintSettings.CornerLengthMm, Converter={StaticResource FlexibleNumber}}"
                                              Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                             </Grid>
@@ -648,22 +649,22 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
                                     <TextBlock Text="Square (in)" Foreground="#999" FontSize="9"/>
-                                    <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkSquareSizeIn}"
+                                    <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkSquareSizeIn, Converter={StaticResource FlexibleNumber}}"
                                              Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
                                     <TextBlock Text="Arm Length (in)" Foreground="#999" FontSize="9"/>
-                                    <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkLengthIn}"
+                                    <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkLengthIn, Converter={StaticResource FlexibleNumber}}"
                                              Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="4">
                                     <TextBlock Text="Thickness (in)" Foreground="#999" FontSize="9"/>
-                                    <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkThicknessIn}"
+                                    <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkThicknessIn, Converter={StaticResource FlexibleNumber}}"
                                              Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="6">
                                     <TextBlock Text="Inset (in)" Foreground="#999" FontSize="9"/>
-                                    <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkInsetIn}"
+                                    <TextBox Text="{Binding CurrentProject.PrintSettings.RegMarkInsetIn, Converter={StaticResource FlexibleNumber}}"
                                              Padding="4,3" FontSize="11" Background="#3E3E42" Foreground="White" BorderBrush="#555" CaretBrush="White"/>
                                 </StackPanel>
                             </Grid>

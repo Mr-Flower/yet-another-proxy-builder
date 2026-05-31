@@ -39,11 +39,11 @@ namespace MTGProxyBuilder.Core.Models
         private bool _showCardOutline = true;
         private string _outlineColor = "#66FF00";
         private OutlineAlignment _outlineAlignment = OutlineAlignment.Outside;
-        private float _cornerRadiusMm = 3f;
+        private float _cornerRadiusMm = 0f;
         private OutlineType _outlineType = OutlineType.Corners;
         private LineType _outlineLineType = LineType.Solid;
-        private float _cornerLengthMm = 5f;
-        private float _lineWeight = 2f;
+        private float _cornerLengthMm = 1.5f;
+        private float _lineWeight = 1f;
 
         // Silhouette Cameo
         private bool _showRegistrationMarks;
