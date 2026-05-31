@@ -84,7 +84,11 @@ namespace MTGProxyBuilder.Core.Services
 
             string id = Guid.NewGuid().ToString("N")[..12];
             string ext = Path.GetExtension(sourceFilePath);
-            string destFileName = $"{id}{ext}";
+            // Preserve the "mpc_" marker so MPCFill art (already full-bleed) keeps being recognised
+            // as such after it's copied into the library (drives bleed handling at render/PDF time).
+            string prefix = Path.GetFileName(sourceFilePath).StartsWith("mpc_", StringComparison.OrdinalIgnoreCase)
+                ? "mpc_" : "";
+            string destFileName = $"{prefix}{id}{ext}";
             string destPath = Path.Combine(_libraryDirectory, destFileName);
 
             File.Copy(sourceFilePath, destPath, overwrite: true);

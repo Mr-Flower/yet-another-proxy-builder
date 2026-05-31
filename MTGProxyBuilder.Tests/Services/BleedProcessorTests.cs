@@ -100,6 +100,17 @@ public class BleedProcessorTests
         }
     }
 
+    // ---- MPCFill art already has bleed (must not be extended) ----
+
+    [Theory]
+    [InlineData("/cache/mpc_abc123.jpg", true)]
+    [InlineData("/cache/MPC_Upper.png", true)]
+    [InlineData("/cache/3f2a9b-scryfall.jpg", false)]
+    [InlineData("/lib/abcdef123456.jpg", false)]
+    [InlineData("", false)]
+    public void ImageAlreadyHasBleed_DetectsMpcFillByPrefix(string path, bool expected)
+        => Assert.Equal(expected, BleedProcessor.ImageAlreadyHasBleed(path));
+
     // ---- corner square-off (white triangle removal) ----
 
     [Fact]

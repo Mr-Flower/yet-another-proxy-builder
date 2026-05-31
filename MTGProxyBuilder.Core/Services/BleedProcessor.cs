@@ -21,6 +21,16 @@ namespace MTGProxyBuilder.Core.Services
         }
 
         /// <summary>
+        /// True if the image already includes its own bleed margin and must NOT be bleed-extended.
+        /// MPCFill art is authored full-bleed (cached with an "mpc_" filename prefix), unlike Scryfall
+        /// scans which are the bare card and need bleed added. Such images are drawn straight into the
+        /// full cell instead of being extended (which would double the border).
+        /// </summary>
+        public static bool ImageAlreadyHasBleed(string? path) =>
+            !string.IsNullOrEmpty(path) &&
+            Path.GetFileName(path).StartsWith("mpc_", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
         /// Returns the path to a bleed-extended version of the source image.
         /// The bleed area is filled by stretching the outermost edge pixels outward.
         /// </summary>

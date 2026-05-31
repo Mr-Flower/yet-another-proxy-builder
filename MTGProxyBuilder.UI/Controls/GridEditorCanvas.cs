@@ -254,8 +254,12 @@ namespace MTGProxyBuilder.UI.Controls
                     {
                         // Resolve (and disk-generate) the bled image on the background thread, then
                         // decode the result into the bitmap cache. Falls back to the raw path.
+                        // MPCFill art already has bleed -> use it as-is (drawn full-cell). Scryfall
+                        // scans get bleed-extended. Bleed off -> raw path.
                         string disp = _displayPathCache.GetOrAdd(DisplayKey(path, bleedPx, useBleed),
-                            _ => useBleed ? (_bleedProcessor.GetBleedExtendedImage(path, bleedPx) ?? path) : path);
+                            _ => (useBleed && !BleedProcessor.ImageAlreadyHasBleed(path))
+                                ? (_bleedProcessor.GetBleedExtendedImage(path, bleedPx) ?? path)
+                                : path);
                         LoadImageToCache(disp, decodeWidth);
                     }, token);
                     loaded++;
@@ -758,8 +762,11 @@ namespace MTGProxyBuilder.UI.Controls
                 string disp = _displayPathCache.TryGetValue(DisplayKey(imagePath, _bleedPx, _useBleed), out var d)
                     ? d : imagePath;
                 bmp = GetCachedImage(disp);
-                // The bled image already contains the bleed margin (display path differs from raw).
-                bledImage = _useBleed && bmp != null && !string.Equals(disp, imagePath, StringComparison.Ordinal);
+                // Fill the whole cell when the drawn image carries the bleed: either we extended a
+                // Scryfall scan (disp != raw) or it's MPCFill art that already includes its bleed.
+                bledImage = _useBleed && bmp != null
+                    && (!string.Equals(disp, imagePath, StringComparison.Ordinal)
+                        || BleedProcessor.ImageAlreadyHasBleed(imagePath));
             }
 
             CardVisualRenderer.PlaceCard(this, card, bmp,
