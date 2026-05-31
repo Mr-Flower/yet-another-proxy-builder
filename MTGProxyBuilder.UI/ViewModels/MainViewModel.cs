@@ -101,6 +101,7 @@ public class MainViewModel : ViewModelBase
     private readonly UpdateCheckService _updateService = new();
     private readonly AppSettingsService _appSettings = new();
     private readonly ImageAdjustmentService _imageAdjust = new(); // fork-specific
+    private ImageAdjustmentSettings _darken = new ImageAdjustmentStore().Default; // fork-specific: right-side panel state
     private bool _updateAvailable;
     private string _updateMessage = string.Empty;
     private string _updateDownloadUrl = string.Empty;
@@ -215,6 +216,9 @@ public class MainViewModel : ViewModelBase
         AddScryfallCardCommand = _addScryfallCardCmd;
         _adjustImageCmd = new RelayCommand(_ => _ = AdjustImageAsync(), _ => SelectedCard != null); // fork-specific
         AdjustImageCommand = _adjustImageCmd;
+        ApplyDarkenToAllCommand = new RelayCommand(_ => ApplyDarkenToAll(), _ => Cards.Count > 0); // fork-specific
+        ResetDarkenCommand = new RelayCommand(_ => ResetDarken());
+        SaveDarkenDefaultCommand = new RelayCommand(_ => SaveDarkenDefault());
 
         AddCardFromFileCommand = new RelayCommand(_ => _ = AddCardFromFileAsync());
         ExportPdfCommand = new RelayCommand(_ => _ = ExportPdfAsync());
@@ -800,6 +804,9 @@ public class MainViewModel : ViewModelBase
     public ICommand ScryfallSearchCommand { get; }
     public ICommand AddScryfallCardCommand { get; }
     public ICommand AdjustImageCommand { get; } // fork-specific
+    public ICommand ApplyDarkenToAllCommand { get; } // fork-specific: right-side Darken panel
+    public ICommand ResetDarkenCommand { get; }      // fork-specific
+    public ICommand SaveDarkenDefaultCommand { get; } // fork-specific
     public ICommand ExportPdfCommand { get; }
     public ICommand ExportSvgCommand { get; }
     public ICommand AddBackArtToLibraryCommand { get; }
@@ -1375,6 +1382,92 @@ public class MainViewModel : ViewModelBase
         StatusText = result.Target == ImageAdjustmentTarget.ThisCard
             ? (settings.IsNoOp ? "Immagine ripristinata all'originale." : "Regolazione immagine applicata.")
             : $"Regolazione applicata a {n} carta/e.";
+    }
+
+    // ===== fork-specific: right-side "Darken Pixels" panel =====
+    // Bindable sliders backed by the global default settings (_darken). Changing a
+    // slider updates the in-memory state; "Apply to all" bakes it across cards by
+    // source; "Save default" persists it for Scryfall auto-apply.
+
+    public bool DarkenEnabled
+    {
+        get => _darken.Enabled;
+        set { _darken.Enabled = value; OnPropertyChanged(); }
+    }
+    public int DarkenBrightness
+    {
+        get => _darken.Brightness;
+        set { _darken.Brightness = value; OnPropertyChanged(); }
+    }
+    public int DarkenContrast
+    {
+        get => _darken.Contrast;
+        set { _darken.Contrast = value; OnPropertyChanged(); }
+    }
+    public int DarkenSaturation
+    {
+        get => _darken.Saturation;
+        set { _darken.Saturation = value; OnPropertyChanged(); }
+    }
+    public int DarkenBlackPoint
+    {
+        get => _darken.BlackPoint;
+        set { _darken.BlackPoint = value; OnPropertyChanged(); }
+    }
+    public bool DarkenAutoApplyScryfall
+    {
+        get => _darken.AutoApplyToScryfall;
+        set { _darken.AutoApplyToScryfall = value; OnPropertyChanged(); }
+    }
+
+    // "Apply To" target index for the panel (0=All, 1=Scryfall, 2=MPCFill).
+    private int _darkenTargetIndex;
+    public int DarkenTargetIndex
+    {
+        get => _darkenTargetIndex;
+        set => SetProperty(ref _darkenTargetIndex, value);
+    }
+
+    private void ApplyDarkenToAll()
+    {
+        var settings = _darken.Clone();
+        var targets = DarkenTargetIndex switch
+        {
+            1 => Cards.Where(c => c.Source == CardSource.Scryfall),
+            2 => Cards.Where(c => c.Source == CardSource.MpcFill),
+            _ => Cards.Where(c => !string.IsNullOrEmpty(c.ArtworkPath))
+        };
+
+        PushUndo();
+        int n = 0;
+        foreach (var c in targets)
+        {
+            if (string.IsNullOrEmpty(c.ArtworkPath)) continue;
+            _imageAdjust.BakeFront(c, settings);
+            n++;
+        }
+        RefreshTrigger++;
+        StatusText = settings.IsNoOp
+            ? $"Immagini ripristinate all'originale ({n})."
+            : $"Darken applicato a {n} carta/e.";
+    }
+
+    private void ResetDarken()
+    {
+        _darken = new ImageAdjustmentSettings { Enabled = true };
+        OnPropertyChanged(nameof(DarkenEnabled));
+        OnPropertyChanged(nameof(DarkenBrightness));
+        OnPropertyChanged(nameof(DarkenContrast));
+        OnPropertyChanged(nameof(DarkenSaturation));
+        OnPropertyChanged(nameof(DarkenBlackPoint));
+        OnPropertyChanged(nameof(DarkenAutoApplyScryfall));
+        StatusText = "Darken azzerato.";
+    }
+
+    private void SaveDarkenDefault()
+    {
+        _imageAdjust.OpenStore().SaveDefault(_darken.Clone());
+        StatusText = "Darken salvato come predefinito.";
     }
 
     private async Task ExportPdfAsync()

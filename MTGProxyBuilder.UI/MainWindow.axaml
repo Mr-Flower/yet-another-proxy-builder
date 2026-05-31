@@ -550,6 +550,80 @@
                     </ScrollViewer>
                 </TabItem>
 
+                <!-- ===== DARKEN PIXELS PANEL ===== -->
+                <TabItem Header="Darken" Foreground="#AAA">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#2D2D30">
+                        <StackPanel Margin="10,8">
+                            <TextBlock Text="DARKEN PIXELS" Foreground="#4a9eff" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+                            <TextBlock Text="Porta a nero i grigi scuri delle scan (es. bordi Scryfall) e regola luminosità/contrasto/saturazione."
+                                       Foreground="#777" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                            <CheckBox Content="Abilita regolazione" IsChecked="{Binding DarkenEnabled}"
+                                      Foreground="#CCC" Margin="0,0,0,8"/>
+
+                            <!-- Apply To -->
+                            <TextBlock Text="Applica a" Foreground="#999" FontSize="10" Margin="0,0,0,2"/>
+                            <ComboBox SelectedIndex="{Binding DarkenTargetIndex}" HorizontalAlignment="Stretch"
+                                      Padding="4" Margin="0,0,0,10" FontSize="11">
+                                <ComboBoxItem>Tutte le carte</ComboBoxItem>
+                                <ComboBoxItem>Solo Scryfall</ComboBoxItem>
+                                <ComboBoxItem>Solo MPCFill</ComboBoxItem>
+                            </ComboBox>
+
+                            <!-- Black point -->
+                            <Grid ColumnDefinitions="*,40">
+                                <TextBlock Text="Soglia nero" Foreground="#CCC" FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="1" Text="{Binding DarkenBlackPoint}" Foreground="#4a9eff"
+                                           FontSize="11" FontWeight="SemiBold" TextAlignment="Right"/>
+                            </Grid>
+                            <Slider Minimum="0" Maximum="254" Value="{Binding DarkenBlackPoint}"
+                                    SmallChange="1" LargeChange="5" Margin="0,0,0,8"/>
+
+                            <!-- Brightness -->
+                            <Grid ColumnDefinitions="*,40">
+                                <TextBlock Text="Luminosità" Foreground="#CCC" FontSize="11"/>
+                                <TextBlock Grid.Column="1" Text="{Binding DarkenBrightness}" Foreground="#999"
+                                           FontSize="11" TextAlignment="Right"/>
+                            </Grid>
+                            <Slider Minimum="-100" Maximum="100" Value="{Binding DarkenBrightness}"
+                                    SmallChange="1" LargeChange="10" Margin="0,0,0,8"/>
+
+                            <!-- Contrast -->
+                            <Grid ColumnDefinitions="*,40">
+                                <TextBlock Text="Contrasto" Foreground="#CCC" FontSize="11"/>
+                                <TextBlock Grid.Column="1" Text="{Binding DarkenContrast}" Foreground="#999"
+                                           FontSize="11" TextAlignment="Right"/>
+                            </Grid>
+                            <Slider Minimum="-100" Maximum="100" Value="{Binding DarkenContrast}"
+                                    SmallChange="1" LargeChange="10" Margin="0,0,0,8"/>
+
+                            <!-- Saturation -->
+                            <Grid ColumnDefinitions="*,40">
+                                <TextBlock Text="Saturazione" Foreground="#CCC" FontSize="11"/>
+                                <TextBlock Grid.Column="1" Text="{Binding DarkenSaturation}" Foreground="#999"
+                                           FontSize="11" TextAlignment="Right"/>
+                            </Grid>
+                            <Slider Minimum="-100" Maximum="100" Value="{Binding DarkenSaturation}"
+                                    SmallChange="1" LargeChange="10" Margin="0,0,0,12"/>
+
+                            <Button Content="Applica a tutte le carte" Command="{Binding ApplyDarkenToAllCommand}"
+                                    Theme="{StaticResource AccentBtn}" HorizontalAlignment="Stretch"
+                                    Padding="8,6" Margin="0,0,0,6"/>
+                            <Grid ColumnDefinitions="*,6,*">
+                                <Button Grid.Column="0" Content="Azzera" Command="{Binding ResetDarkenCommand}"
+                                        Background="#3E3E42" Foreground="White" BorderThickness="0"
+                                        Padding="8,5" HorizontalAlignment="Stretch"/>
+                                <Button Grid.Column="2" Content="Salva default" Command="{Binding SaveDarkenDefaultCommand}"
+                                        Background="#3E3E42" Foreground="White" BorderThickness="0"
+                                        Padding="8,5" HorizontalAlignment="Stretch"/>
+                            </Grid>
+                            <CheckBox Content="Applica auto alle nuove carte Scryfall"
+                                      IsChecked="{Binding DarkenAutoApplyScryfall}"
+                                      Foreground="#999" FontSize="10" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
                 <!-- ===== LAYOUT PANEL ===== -->
                 <TabItem Header="Layout" Foreground="#AAA">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#2D2D30">
