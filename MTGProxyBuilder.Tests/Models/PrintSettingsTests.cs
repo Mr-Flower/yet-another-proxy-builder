@@ -42,11 +42,11 @@ public class PrintSettingsTests
         Assert.True(settings.ShowCardOutline);
         Assert.Equal("#66FF00", settings.OutlineColor);
         Assert.Equal(OutlineAlignment.Outside, settings.OutlineAlignment);
-        Assert.Equal(3f, settings.CornerRadiusMm);
+        Assert.Equal(0f, settings.CornerRadiusMm);
         Assert.Equal(OutlineType.Corners, settings.OutlineType);
         Assert.Equal(LineType.Solid, settings.OutlineLineType);
-        Assert.Equal(5f, settings.CornerLengthMm);
-        Assert.Equal(2f, settings.LineWeight);
+        Assert.Equal(1.5f, settings.CornerLengthMm);
+        Assert.Equal(1f, settings.LineWeight);
     }
 
     [Fact]
