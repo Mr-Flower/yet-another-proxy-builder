@@ -100,6 +100,14 @@ namespace MTGProxyBuilder.Core.Services
             return null;
         }
 
+        /// <summary>Small thumbnail URL (handles double-faced cards). For binding in result lists.</summary>
+        [JsonIgnore]
+        public string? SmallImageUrl => GetImageUrl("small");
+
+        /// <summary>Normal-size image URL (handles double-faced cards). For binding in previews.</summary>
+        [JsonIgnore]
+        public string? NormalImageUrl => GetImageUrl("normal");
+
         /// <summary>Populate a CardModel with all available Scryfall metadata.</summary>
         public CardModel ToCardModel(string artworkPath, string? backArtworkPath)
         {

@@ -357,7 +357,10 @@
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" Margin="2">
                                                 <Border Width="36" Height="50" Background="#111"
-                                                        CornerRadius="3" Margin="0,0,6,0"/>
+                                                        CornerRadius="3" Margin="0,0,6,0" ClipToBounds="True">
+                                                    <Image Stretch="UniformToFill"
+                                                           converters:ImageLoader.Source="{Binding SmallImageUrl}"/>
+                                                </Border>
                                                 <StackPanel VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding Name}" FontSize="10.5" Foreground="#DDD"
                                                                TextTrimming="CharacterEllipsis" MaxWidth="180"/>
@@ -372,7 +375,11 @@
                                 </ListBox>
 
                                 <Border Height="200" Background="#111" CornerRadius="4" Margin="0,6,0,0"
-                                        IsVisible="{Binding SearchPreviewUrl, Converter={StaticResource NullToCollapsed}}"/>
+                                        ClipToBounds="True"
+                                        IsVisible="{Binding SearchPreviewUrl, Converter={StaticResource NullToCollapsed}}">
+                                    <Image Stretch="Uniform" Margin="4"
+                                           converters:ImageLoader.Source="{Binding SearchPreviewUrl}"/>
+                                </Border>
 
                                 <Button Theme="{StaticResource AccentBtn}" Command="{Binding AddScryfallCardCommand}"
                                         Content="Add Selected Card" Margin="0,6,0,0" HorizontalAlignment="Stretch"/>
@@ -558,7 +565,11 @@
                                         Command="{Binding BrowseFrontArtworkCommand}"
                                         Content="Select Art..." Margin="0,0,0,6"
                                         HorizontalAlignment="Stretch" Padding="8,6"/>
-                                <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4"/>
+                                <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4"
+                                        ClipToBounds="True">
+                                    <Image Stretch="Uniform" Margin="4"
+                                           converters:ImageLoader.Source="{Binding SelectedCard.ArtworkPath}"/>
+                                </Border>
                                 <TextBlock Text="{Binding SelectedCard.ArtworkPath}" Foreground="#555"
                                            FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
                                 <!-- fork-specific: image adjustment (brightness/contrast/black-point) -->
@@ -579,7 +590,11 @@
                                         Command="{Binding BrowseBackArtworkCommand}"
                                         Content="Select Card Back..." Margin="0,0,0,6"
                                         HorizontalAlignment="Stretch" Padding="8,6"/>
-                                <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4"/>
+                                <Border Height="150" Background="#111" CornerRadius="4" Margin="0,0,0,4"
+                                        ClipToBounds="True">
+                                    <Image Stretch="Uniform" Margin="4"
+                                           converters:ImageLoader.Source="{Binding SelectedCard.BackArtworkPath}"/>
+                                </Border>
                                 <TextBlock Text="{Binding SelectedCard.BackArtworkPath}" Foreground="#555"
                                            FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
                             </StackPanel>
