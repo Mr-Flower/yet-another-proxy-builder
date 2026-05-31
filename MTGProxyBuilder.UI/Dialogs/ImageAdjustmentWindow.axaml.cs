@@ -24,6 +24,7 @@ public partial class ImageAdjustmentWindow : Window
     private readonly ImageAdjustmentProcessor _processor = new();
     private SKBitmap? _previewSource;
     private bool _loading = true;
+    private readonly ImageAdjustmentSettings _initial; // values when the dialog opened — used by Reset
 
     /// <summary>The settings the user applied, or null if they cancelled.</summary>
     public ImageAdjustmentSettings? Result { get; private set; }
@@ -34,6 +35,7 @@ public partial class ImageAdjustmentWindow : Window
     public ImageAdjustmentWindow(string imagePath, ImageAdjustmentSettings current)
     {
         InitializeComponent();
+        _initial = current;
 
         Loaded += (_, _) =>
         {
@@ -134,11 +136,9 @@ public partial class ImageAdjustmentWindow : Window
 
     private void OnReset(object? sender, RoutedEventArgs e)
     {
+        // Return the sliders to where they were when the dialog opened (the card's original values).
         _loading = true;
-        BrightnessSlider.Value = 0;
-        ContrastSlider.Value = 0;
-        SaturationSlider.Value = 0;
-        BlackPointSlider.Value = 0;
+        ApplySettingsToControls(_initial);
         _loading = false;
         Refresh();
         StatusLabel.Text = "";
