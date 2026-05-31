@@ -39,8 +39,8 @@ namespace MTGProxyBuilder.Core.Services
             {
                 // The trailing _vN is a processing-logic version: bump it whenever the bleed
                 // algorithm changes so stale cached results (e.g. the broken coloured corners) are
-                // regenerated instead of reused. v2 = bleed-only corner fill, white→frame colour.
-                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedPixels}_v2";
+                // regenerated instead of reused. v3 = square-off white corners (border colour) then bleed.
+                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}_b{bleedPixels}_v3";
                 string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
 
                 if (File.Exists(outputPath))
@@ -54,13 +54,25 @@ namespace MTGProxyBuilder.Core.Services
 
                 int srcW = source.Width;
                 int srcH = source.Height;
+
+                // Square off white corners of Scryfall-style scans: those images show a rounded card
+                // with a WHITE triangle filling each rectangular corner (outside the rounding). Replace
+                // ONLY those near-white corner pixels with the card's border colour, so the corner — and
+                // the bleed stretched from it — matches the border: black border -> black corners, white
+                // border -> left white. Coloured/full-art/MPCFill images (no white corner) are untouched.
+                // This makes Scryfall bleed behave like MPCFill's full-bleed art.
+                SquareOffWhiteCorner(source, srcW, srcH, 0,        0,         1,  1);
+                SquareOffWhiteCorner(source, srcW, srcH, srcW - 1, 0,        -1,  1);
+                SquareOffWhiteCorner(source, srcW, srcH, 0,        srcH - 1,  1, -1);
+                SquareOffWhiteCorner(source, srcW, srcH, srcW - 1, srcH - 1, -1, -1);
+
                 int outW = srcW + 2 * bleedPixels;
                 int outH = srcH + 2 * bleedPixels;
 
                 using var output = new SKBitmap(outW, outH);
                 using var canvas = new SKCanvas(output);
 
-                // Draw original image centered
+                // Draw original (now squared-off) image centered
                 canvas.DrawBitmap(source, bleedPixels, bleedPixels);
 
                 // Extend edges: take a 1-pixel strip from each edge and stretch it outward
@@ -101,32 +113,13 @@ namespace MTGProxyBuilder.Core.Services
                         new SKRect(bleedPixels + srcW, bleedPixels, outW, bleedPixels + srcH));
                 }
 
-                // Corners: fill ONLY the bleed-region squares (outside the original image) — never
-                // the visible card area. By default use the literal corner pixel (same as the edges
-                // do). Scryfall/scan images, however, have a WHITE triangle outside the rounded black
-                // frame, so that corner pixel is white and the bleed corner would print white (a gap
-                // at the rounded cut). ONLY when the corner pixel is near-white do we scan inward
-                // along the diagonal to pick up the card's frame colour instead. Cards with coloured
-                // borders, full-art, or MPC art keep their own corner colour unchanged.
-                static bool IsNearWhite(SKColor c) => c.Red >= 235 && c.Green >= 235 && c.Blue >= 235;
-
-                SKColor CornerColor(int cx, int cy, int dx, int dy)
-                {
-                    var c = source.GetPixel(cx, cy);
-                    if (!IsNearWhite(c)) return c;
-                    int steps = Math.Min(srcW, srcH) / 8;
-                    for (int d = 1; d <= steps; d++)
-                    {
-                        var p = source.GetPixel(cx + dx * d, cy + dy * d);
-                        if (!IsNearWhite(p)) return p;
-                    }
-                    return c;
-                }
-
-                var topLeft     = CornerColor(0,        0,        1,  1);
-                var topRight    = CornerColor(srcW - 1,  0,       -1,  1);
-                var bottomLeft  = CornerColor(0,         srcH - 1, 1, -1);
-                var bottomRight = CornerColor(srcW - 1,  srcH - 1,-1, -1);
+                // Corners: fill the bleed-region squares with the corner pixel colour. The source
+                // corners were already squared off above, so this is the correct border colour
+                // (black/white/coloured) — never white-on-a-black-border.
+                var topLeft     = source.GetPixel(0, 0);
+                var topRight    = source.GetPixel(srcW - 1, 0);
+                var bottomLeft  = source.GetPixel(0, srcH - 1);
+                var bottomRight = source.GetPixel(srcW - 1, srcH - 1);
 
                 using var paint = new SKPaint();
                 paint.Color = topLeft;
@@ -150,6 +143,41 @@ namespace MTGProxyBuilder.Core.Services
                 System.Diagnostics.Debug.WriteLine($"Bleed processing error: {ex.Message}");
                 return sourcePath; // Fall back to original
             }
+        }
+
+        private static bool IsNearWhite(SKColor c) => c.Red >= 235 && c.Green >= 235 && c.Blue >= 235;
+
+        /// <summary>
+        /// Fills the near-white triangle in one rectangular corner of a (rounded) card scan with the
+        /// card's border colour, squaring off the corner. (cx,cy) is the extreme corner pixel and
+        /// (dx,dy) points inward (±1). No-op if that corner isn't near-white (coloured/full-art) or if
+        /// the border itself is white/light (so white-bordered cards keep white corners).
+        /// </summary>
+        private static void SquareOffWhiteCorner(SKBitmap bmp, int w, int h, int cx, int cy, int dx, int dy)
+        {
+            if (!IsNearWhite(bmp.GetPixel(cx, cy))) return;
+
+            int maxScan = Math.Max(2, Math.Min(w, h) / 10); // covers the rounded-corner radius with margin
+
+            // Border colour = first non-near-white pixel scanning diagonally inward.
+            SKColor? border = null;
+            for (int d = 1; d <= maxScan; d++)
+            {
+                var p = bmp.GetPixel(cx + dx * d, cy + dy * d);
+                if (!IsNearWhite(p)) { border = p; break; }
+            }
+            if (border == null) return; // white/light border -> leave the corner white
+
+            // Recolour only the near-white pixels in the corner box (the triangle), never the
+            // card's actual frame/art pixels.
+            for (int ix = 0; ix <= maxScan; ix++)
+                for (int iy = 0; iy <= maxScan; iy++)
+                {
+                    int x = cx + dx * ix, y = cy + dy * iy;
+                    if (x < 0 || x >= w || y < 0 || y >= h) continue;
+                    if (IsNearWhite(bmp.GetPixel(x, y)))
+                        bmp.SetPixel(x, y, border.Value);
+                }
         }
 
         public void ClearCache()
