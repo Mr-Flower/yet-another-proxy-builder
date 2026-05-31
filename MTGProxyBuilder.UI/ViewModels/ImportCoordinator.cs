@@ -52,6 +52,10 @@ namespace MTGProxyBuilder.UI.ViewModels
             return await _deckImport.ImportAsync(url);
         }
 
+        /// <summary>
+        /// Resolves a deck/list into cards: skips duplicates (when requested), batch-resolves Scryfall
+        /// metadata, then downloads artwork in parallel (bounded, cancellable) preserving deck order.
+        /// </summary>
         public async Task<DeckImportResult> ImportDeckCardsAsync(
             ImportedDeck deck,
             IEnumerable<CardModel> existingCards,
@@ -63,115 +67,31 @@ namespace MTGProxyBuilder.UI.ViewModels
             Action<string>? onProgress = null,
             CancellationToken ct = default)
         {
-            int failed = 0, skippedDupes = 0;
+            var toFetch = SelectEntriesToFetch(deck, existingCards, ignoreDuplicates, out int skippedDupes);
 
-            // ---- Phase 1: resolve duplicates up front (pure CPU, sequential) ----
-            var existingByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            if (ignoreDuplicates)
-                foreach (var c in existingCards)
-                    existingByName[c.Name] = existingByName.GetValueOrDefault(c.Name) + c.Quantity;
-
-            var toFetch = new List<DeckImportEntry>();
-            foreach (var original in deck.Entries)
-            {
-                var entry = original;
-                if (ignoreDuplicates && existingByName.ContainsKey(entry.CardName))
-                {
-                    if (IsBasicLand(entry.CardName))
-                    {
-                        int have = existingByName[entry.CardName];
-                        if (entry.Quantity <= have) { skippedDupes++; continue; }
-                        entry = new DeckImportEntry
-                        {
-                            CardName = entry.CardName,
-                            Quantity = entry.Quantity - have,
-                            ScryfallId = entry.ScryfallId,
-                            Board = entry.Board
-                        };
-                    }
-                    else { skippedDupes++; continue; }
-                }
-
-                toFetch.Add(entry);
-                if (ignoreDuplicates)
-                    existingByName[entry.CardName] = existingByName.GetValueOrDefault(entry.CardName) + entry.Quantity;
-            }
-
-            // ---- Phase 2: batch-resolve Scryfall metadata in ONE round-trip per 75 cards
-            //               (was one /cards/named call per card — the old bottleneck).
-            //               Token entries ("t: name") are resolved separately, so skip them here. ----
+            // Batch-resolve Scryfall metadata in ONE round-trip per 75 cards (token "t:" entries are
+            // resolved individually later, so they're excluded from the batch).
             onProgress?.Invoke($"Searching {toFetch.Count} card(s) on Scryfall...");
             var resolved = await _search.Scryfall.GetCardsByIdentifiersAsync(
                 toFetch.Where(e => !IsTokenEntry(e.CardName)).Select(e => new CardIdentifier(
                     string.IsNullOrEmpty(e.ScryfallId) ? null : e.ScryfallId, e.CardName)));
+            var (byId, byName) = BuildScryfallLookups(resolved);
 
-            var byId = new Dictionary<string, ScryfallCard>(StringComparer.OrdinalIgnoreCase);
-            var byName = new Dictionary<string, ScryfallCard>(StringComparer.OrdinalIgnoreCase);
-            foreach (var c in resolved)
-            {
-                if (!string.IsNullOrEmpty(c.Id)) byId[c.Id] = c;
-                if (!byName.ContainsKey(c.Name)) byName[c.Name] = c;
-            }
-
-            // ---- Phase 3: download artwork in parallel (bounded), preserving deck order ----
+            // Download artwork in parallel (bounded), writing each card into its deck-order slot.
             var slots = new CardModel?[toFetch.Count];
-            int completed = 0;
+            int failed = 0, completed = 0;
             using var gate = new SemaphoreSlim(8);
 
-            async Task FetchAsync(int idx)
+            async Task RunAsync(int idx)
             {
-                var entry = toFetch[idx];
-                bool isToken = IsTokenEntry(entry.CardName);
                 if (ct.IsCancellationRequested) return;
                 await gate.WaitAsync(ct);
                 try
                 {
-                    ScryfallCard? scryfallCard;
-                    if (isToken)
-                    {
-                        // "t: name" -> look the token up directly (it isn't in the batch result).
-                        scryfallCard = await _search.Scryfall.GetTokenByNameAsync(TokenName(entry.CardName));
-                    }
-                    else
-                    {
-                        scryfallCard = null;
-                        if (!string.IsNullOrEmpty(entry.ScryfallId))
-                            byId.TryGetValue(entry.ScryfallId!, out scryfallCard);
-                        if (scryfallCard == null)
-                            byName.TryGetValue(entry.CardName, out scryfallCard);
-                        // Fuzzy single lookup only for the few names the batch endpoint couldn't match.
-                        scryfallCard ??= await _search.Scryfall.GetCardByNameAsync(entry.CardName);
-                    }
-                    if (scryfallCard == null) { Interlocked.Increment(ref failed); return; }
-
-                    string? frontPath = null;
-                    string? backPath = null;
-                    bool usedMpcArt = false;
-
-                    // Tokens come from Scryfall only; MPCFill name search wouldn't match a token.
-                    if (useMpcFill && !isToken)
-                    {
-                        var (mpcResults, _) = await _search.SearchMpcFillForCard(
-                            entry.CardName, minDpi, fuzzySearch, useFavoritesOnly);
-                        var bestMatch = mpcResults.FirstOrDefault(mc =>
-                            mc.Name.Contains(entry.CardName, StringComparison.OrdinalIgnoreCase));
-                        if (bestMatch != null)
-                            frontPath = await _search.DownloadMpcFillArtAsync(bestMatch);
-                        usedMpcArt = frontPath != null;
-                        frontPath ??= await _search.DownloadScryfallArtAsync(scryfallCard);
-                    }
-                    else
-                    {
-                        frontPath = await _search.DownloadScryfallArtAsync(scryfallCard);
-                    }
-
-                    if (scryfallCard.GetBackImageUrl() != null)
-                        backPath = await _search.DownloadScryfallArtAsync(scryfallCard, back: true);
-
-                    var card = scryfallCard.ToCardModel(frontPath ?? string.Empty, backPath);
-                    card.Quantity = entry.Quantity;
-                    if (usedMpcArt) card.Source = CardSource.MpcFill; // front art actually came from MPCFill
-                    slots[idx] = card;
+                    var card = await FetchCardAsync(
+                        toFetch[idx], byId, byName, useMpcFill, minDpi, fuzzySearch, useFavoritesOnly);
+                    if (card == null) Interlocked.Increment(ref failed); // couldn't resolve the entry
+                    else slots[idx] = card;
                 }
                 finally
                 {
@@ -181,30 +101,145 @@ namespace MTGProxyBuilder.UI.ViewModels
                 }
             }
 
-            // "t: name" entries add a token (resolved via Scryfall type:token) instead of a card.
-            static bool IsTokenEntry(string name) =>
-                name.TrimStart().StartsWith("t:", StringComparison.OrdinalIgnoreCase);
-            static string TokenName(string name)
-            {
-                string t = name.TrimStart();
-                int colon = t.IndexOf(':');
-                return colon >= 0 ? t[(colon + 1)..].Trim() : t.Trim();
-            }
-
-            try { await Task.WhenAll(Enumerable.Range(0, toFetch.Count).Select(FetchAsync)); }
+            try { await Task.WhenAll(Enumerable.Range(0, toFetch.Count).Select(RunAsync)); }
             catch (OperationCanceledException) { /* user cancelled — keep whatever was fetched so far */ }
 
-            // ---- Phase 4: assemble in deck order. AutoApply touches a shared on-disk store,
-            //               so it runs sequentially (and is a no-op unless the user enabled it). ----
+            return new DeckImportResult(AssembleCards(slots), deck.Name, "", skippedDupes, failed);
+        }
+
+        /// <summary>
+        /// Filters the deck's entries to those that still need fetching, honoring "skip duplicates"
+        /// (basic lands only top up the missing quantity). Reports how many were skipped.
+        /// </summary>
+        private static List<DeckImportEntry> SelectEntriesToFetch(ImportedDeck deck,
+            IEnumerable<CardModel> existingCards, bool ignoreDuplicates, out int skippedDupes)
+        {
+            skippedDupes = 0;
+            var toFetch = new List<DeckImportEntry>();
+
+            var existingByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (ignoreDuplicates)
+                foreach (var c in existingCards)
+                    existingByName[c.Name] = existingByName.GetValueOrDefault(c.Name) + c.Quantity;
+
+            foreach (var original in deck.Entries)
+            {
+                var entry = original;
+                if (ignoreDuplicates && existingByName.ContainsKey(entry.CardName))
+                {
+                    if (!IsBasicLand(entry.CardName)) { skippedDupes++; continue; }
+                    int have = existingByName[entry.CardName];
+                    if (entry.Quantity <= have) { skippedDupes++; continue; }
+                    entry = new DeckImportEntry
+                    {
+                        CardName = entry.CardName,
+                        Quantity = entry.Quantity - have, // basic land: only fetch the shortfall
+                        ScryfallId = entry.ScryfallId,
+                        Board = entry.Board
+                    };
+                }
+
+                toFetch.Add(entry);
+                if (ignoreDuplicates)
+                    existingByName[entry.CardName] = existingByName.GetValueOrDefault(entry.CardName) + entry.Quantity;
+            }
+            return toFetch;
+        }
+
+        /// <summary>Indexes resolved Scryfall cards by id and by name (first printing per name wins).</summary>
+        private static (Dictionary<string, ScryfallCard> ById, Dictionary<string, ScryfallCard> ByName)
+            BuildScryfallLookups(IEnumerable<ScryfallCard> resolved)
+        {
+            var byId = new Dictionary<string, ScryfallCard>(StringComparer.OrdinalIgnoreCase);
+            var byName = new Dictionary<string, ScryfallCard>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in resolved)
+            {
+                if (!string.IsNullOrEmpty(c.Id)) byId[c.Id] = c;
+                if (!byName.ContainsKey(c.Name)) byName[c.Name] = c;
+            }
+            return (byId, byName);
+        }
+
+        /// <summary>
+        /// Resolves one entry to a Scryfall card and downloads its art. Returns null only when the entry
+        /// can't be resolved at all (the caller counts that as a failure). The card is not yet adjusted.
+        /// </summary>
+        private async Task<CardModel?> FetchCardAsync(DeckImportEntry entry,
+            IReadOnlyDictionary<string, ScryfallCard> byId, IReadOnlyDictionary<string, ScryfallCard> byName,
+            bool useMpcFill, int minDpi, bool fuzzySearch, bool useFavoritesOnly)
+        {
+            bool isToken = IsTokenEntry(entry.CardName);
+            var scryfallCard = isToken
+                ? await _search.Scryfall.GetTokenByNameAsync(TokenName(entry.CardName))
+                : await ResolveScryfallCard(entry, byId, byName);
+            if (scryfallCard == null) return null;
+
+            var (frontPath, usedMpcArt) = await DownloadFrontArt(
+                entry, scryfallCard, isToken, useMpcFill, minDpi, fuzzySearch, useFavoritesOnly);
+            string? backPath = scryfallCard.GetBackImageUrl() != null
+                ? await _search.DownloadScryfallArtAsync(scryfallCard, back: true)
+                : null;
+
+            var card = scryfallCard.ToCardModel(frontPath ?? string.Empty, backPath);
+            card.Quantity = entry.Quantity;
+            if (usedMpcArt) card.Source = CardSource.MpcFill; // front art actually came from MPCFill
+            return card;
+        }
+
+        /// <summary>Looks the entry up in the batch result (by id, then name), falling back to a fuzzy
+        /// single Scryfall lookup for the few names the batch endpoint couldn't match.</summary>
+        private async Task<ScryfallCard?> ResolveScryfallCard(DeckImportEntry entry,
+            IReadOnlyDictionary<string, ScryfallCard> byId, IReadOnlyDictionary<string, ScryfallCard> byName)
+        {
+            ScryfallCard? card = null;
+            if (!string.IsNullOrEmpty(entry.ScryfallId)) byId.TryGetValue(entry.ScryfallId!, out card);
+            if (card == null) byName.TryGetValue(entry.CardName, out card);
+            return card ?? await _search.Scryfall.GetCardByNameAsync(entry.CardName);
+        }
+
+        /// <summary>Downloads the front art: MPCFill when enabled and a name match exists, otherwise
+        /// Scryfall (tokens are always Scryfall). Returns the path and whether MPCFill art was used.</summary>
+        private async Task<(string? FrontPath, bool UsedMpcArt)> DownloadFrontArt(DeckImportEntry entry,
+            ScryfallCard scryfallCard, bool isToken, bool useMpcFill, int minDpi, bool fuzzySearch, bool useFavoritesOnly)
+        {
+            if (useMpcFill && !isToken)
+            {
+                var (mpcResults, _) = await _search.SearchMpcFillForCard(
+                    entry.CardName, minDpi, fuzzySearch, useFavoritesOnly);
+                var bestMatch = mpcResults.FirstOrDefault(mc =>
+                    mc.Name.Contains(entry.CardName, StringComparison.OrdinalIgnoreCase));
+                if (bestMatch != null)
+                {
+                    var mpcPath = await _search.DownloadMpcFillArtAsync(bestMatch);
+                    if (mpcPath != null) return (mpcPath, true);
+                }
+            }
+            return (await _search.DownloadScryfallArtAsync(scryfallCard), false);
+        }
+
+        /// <summary>Collects the non-null fetched cards in deck order, applying the saved image
+        /// adjustment to each (a no-op unless the user enabled auto-apply).</summary>
+        private List<CardModel> AssembleCards(CardModel?[] slots)
+        {
             var importedCards = new List<CardModel>();
             foreach (var card in slots)
             {
                 if (card == null) continue;
-                _imageAdjust.AutoApply(card); // fork-specific: black-point etc. on Scryfall imports
+                _imageAdjust.AutoApply(card);
                 importedCards.Add(card);
             }
+            return importedCards;
+        }
 
-            return new DeckImportResult(importedCards, deck.Name, "", skippedDupes, failed);
+        // "t: name" entries add a token (resolved via Scryfall type:token) instead of a card.
+        private static bool IsTokenEntry(string name) =>
+            name.TrimStart().StartsWith("t:", StringComparison.OrdinalIgnoreCase);
+
+        private static string TokenName(string name)
+        {
+            string trimmed = name.TrimStart();
+            int colon = trimmed.IndexOf(':');
+            return colon >= 0 ? trimmed[(colon + 1)..].Trim() : trimmed.Trim();
         }
 
         // ================================================================
