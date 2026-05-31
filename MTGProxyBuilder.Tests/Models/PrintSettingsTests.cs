@@ -6,10 +6,10 @@ namespace MTGProxyBuilder.Tests.Models;
 public class PrintSettingsTests
 {
     [Fact]
-    public void Defaults_AreDuplexWith300Dpi()
+    public void Defaults_AreFrontsOnlyWith300Dpi()
     {
         var settings = new PrintSettings();
-        Assert.Equal(PrintMode.Duplex, settings.PrintMode);
+        Assert.Equal(PrintMode.FrontsOnly, settings.PrintMode);
         Assert.Equal(Constants.DefaultDpi, settings.DPI);
         Assert.True(settings.ShowCutGuides);
     }

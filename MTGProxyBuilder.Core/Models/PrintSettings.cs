@@ -31,7 +31,7 @@ namespace MTGProxyBuilder.Core.Models
 
     public class PrintSettings : INotifyPropertyChanged
     {
-        private PrintMode _printMode = PrintMode.Duplex;
+        private PrintMode _printMode = PrintMode.FrontsOnly;
         private int _dpi = Constants.DefaultDpi;
         private bool _showCutGuides = true;
 
