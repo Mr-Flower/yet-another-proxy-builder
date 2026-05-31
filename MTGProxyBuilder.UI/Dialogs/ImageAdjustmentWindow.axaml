@@ -63,7 +63,7 @@
             </Grid>
             <TextBlock Text="Porta a nero assoluto tutti i grigi sotto questa soglia (bordi sgranati Scryfall)."
                        Foreground="#777" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,2"/>
-            <Slider x:Name="BlackPointSlider" Minimum="0" Maximum="254" Value="0"
+            <Slider x:Name="BlackPointSlider" Minimum="0" Maximum="50" Value="0"
                     SmallChange="1" LargeChange="5" ValueChanged="OnSliderChanged" Margin="0,0,0,12"/>
 
             <Border Height="1" Background="#444" Margin="0,0,0,10"/>

@@ -1459,6 +1459,13 @@ public class MainViewModel : ViewModelBase
     }
 
     // fork-specific: open the image adjustment editor for the selected card and bake the result.
+    // fork-specific: a card counts as MPCFill if it's tagged so OR its art file carries the
+    // "mpc_" full-bleed marker. Cards imported by name keep Source=Scryfall even when their
+    // art was pulled from MPCFill, so the filename marker is the reliable signal for the
+    // source-based darken/adjust filters (otherwise "Solo Scryfall" would catch MPCFill cards).
+    private static bool IsMpcFillArt(CardModel c) =>
+        c.Source == CardSource.MpcFill || BleedProcessor.ImageAlreadyHasBleed(c.ArtworkPath);
+
     private async Task AdjustImageAsync()
     {
         var card = SelectedCard;
@@ -1481,8 +1488,8 @@ public class MainViewModel : ViewModelBase
         // Decide which cards to bake based on the chosen target (this card / by source / both).
         var targets = result.Target switch
         {
-            ImageAdjustmentTarget.AllScryfall => Cards.Where(c => c.Source == CardSource.Scryfall),
-            ImageAdjustmentTarget.AllMpcFill  => Cards.Where(c => c.Source == CardSource.MpcFill),
+            ImageAdjustmentTarget.AllScryfall => Cards.Where(c => !IsMpcFillArt(c)),
+            ImageAdjustmentTarget.AllMpcFill  => Cards.Where(IsMpcFillArt),
             ImageAdjustmentTarget.AllBoth     => Cards.Where(c => !string.IsNullOrEmpty(c.ArtworkPath)),
             _                                 => new[] { card }.AsEnumerable()
         };
@@ -1551,8 +1558,8 @@ public class MainViewModel : ViewModelBase
         var settings = _darken.Clone();
         var targets = DarkenTargetIndex switch
         {
-            1 => Cards.Where(c => c.Source == CardSource.Scryfall),
-            2 => Cards.Where(c => c.Source == CardSource.MpcFill),
+            1 => Cards.Where(c => !IsMpcFillArt(c)),
+            2 => Cards.Where(IsMpcFillArt),
             _ => Cards.Where(c => !string.IsNullOrEmpty(c.ArtworkPath))
         };
 
