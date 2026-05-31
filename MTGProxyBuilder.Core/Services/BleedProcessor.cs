@@ -79,8 +79,9 @@ namespace MTGProxyBuilder.Core.Services
             }
         }
 
-        // MakePlayingCards / MPCFill standard bleed per side (the margin baked into MPCFill art).
-        private const double MpcBleedMm = 3.0;
+        // MakePlayingCards / MPCFill standard bleed per side (the margin baked into MPCFill art):
+        // exactly 1/8 inch.
+        private const double MpcBleedMm = 25.4 / 8.0; // = 3.175 mm
 
         /// <summary>
         /// Resolves the image to draw filling a full (card + 2*bleed) cell, matching the PDF output.
@@ -103,7 +104,7 @@ namespace MTGProxyBuilder.Core.Services
             try
             {
                 string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{sourcePath.GetHashCode():X8}" +
-                              $"_b{bleedPixels}_{(int)cardWmm}x{(int)cardHmm}_mpc_v5";
+                              $"_b{bleedPixels}_{(int)cardWmm}x{(int)cardHmm}_mpc_v6";
                 string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
                 if (File.Exists(outputPath)) { _processedCache[cacheKey] = outputPath; return outputPath; }
 
