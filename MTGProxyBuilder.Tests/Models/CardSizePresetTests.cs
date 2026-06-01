@@ -11,20 +11,26 @@ public class CardSizePresetTests
     }
 
     [Fact]
-    public void BuiltInPresets_ContainsMtg()
+    public void BuiltInPresets_ContainsMagicPokerSize()
     {
-        var mtg = CardSizePreset.BuiltInPresets.FirstOrDefault(p => p.Name == "Magic: The Gathering");
+        var mtg = CardSizePreset.BuiltInPresets.FirstOrDefault(p => p.WidthMm == 63f && p.HeightMm == 88f);
         Assert.NotNull(mtg);
-        Assert.Equal(63f, mtg.WidthMm);
-        Assert.Equal(88f, mtg.HeightMm);
     }
 
     [Fact]
-    public void BuiltInPresets_OnlyMtg()
+    public void BuiltInPresets_ContainsYuGiOhSize()
     {
-        // This is an MTG-only proxy builder; other-game presets were removed.
-        Assert.Single(CardSizePreset.BuiltInPresets);
-        Assert.Equal("Magic: The Gathering", CardSizePreset.BuiltInPresets[0].Name);
+        // The Add-Cards game selector relies on a 59 x 86 (Yu-Gi-Oh!/Japanese) preset existing.
+        var ygo = CardSizePreset.BuiltInPresets.FirstOrDefault(p => p.WidthMm == 59f && p.HeightMm == 86f);
+        Assert.NotNull(ygo);
+    }
+
+    [Fact]
+    public void BuiltInPresets_DimensionsAreUnique()
+    {
+        // FindCardSizePreset matches by dimensions, so no two presets may share a size.
+        var sizes = CardSizePreset.BuiltInPresets.Select(p => (p.WidthMm, p.HeightMm)).ToList();
+        Assert.Equal(sizes.Count, sizes.Distinct().Count());
     }
 
     [Fact]

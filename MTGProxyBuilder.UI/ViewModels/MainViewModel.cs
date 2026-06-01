@@ -275,7 +275,7 @@ public class MainViewModel : ViewModelBase
         PrintModeValues = new ObservableCollection<PrintMode>(Enum.GetValues<PrintMode>());
         PagePresets = new ObservableCollection<string> { "A4", "A3", "Letter", "Legal", "Tabloid" };
         _selectedPagePreset = "A4";
-        _selectedCardSize = CardSizePresets.First(p => p.Name == "Magic: The Gathering");
+        _selectedCardSize = FindCardSizePreset(63f, 88f); // Magic / poker default
 
         RefreshBackArtLibrary();
         ApplyFilterAndSort();
@@ -639,12 +639,27 @@ public class MainViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _selectedGame, value))
+            {
                 OnPropertyChanged(nameof(IsYuGiOh));
+                ApplyDefaultCardSizeForGame(); // Yu-Gi-Oh! -> 59x86, Magic -> 63x88
+            }
         }
     }
 
     /// <summary>True when the pasted-list resolver should query YGOPRODeck instead of Scryfall.</summary>
     public bool IsYuGiOh => _selectedGame == "Yu-Gi-Oh!";
+
+    /// <summary>Switches the sheet card size to match the selected game, so picking Yu-Gi-Oh! lays out
+    /// 59 x 86 mm cards and Magic lays out 63 x 88 mm — no manual size change needed.</summary>
+    private void ApplyDefaultCardSizeForGame()
+    {
+        var preset = IsYuGiOh ? FindCardSizePreset(59f, 86f) : FindCardSizePreset(63f, 88f);
+        if (preset != null) SelectedCardSize = preset; // updates the dropdown, page settings and canvas
+    }
+
+    /// <summary>Finds the built-in card-size preset with the given dimensions, or null.</summary>
+    private CardSizePreset? FindCardSizePreset(float widthMm, float heightMm)
+        => CardSizePresets.FirstOrDefault(p => p.WidthMm == widthMm && p.HeightMm == heightMm);
 
     public bool IgnoreDuplicates
     {
@@ -795,6 +810,15 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Selects the card-size dropdown entry matching the loaded project's dimensions (or none
+    /// if it's a custom size), so the dropdown reflects the project after opening it.</summary>
+    private void SyncCardSizeToPageSettings()
+    {
+        var ps = _currentProject.PageSettings;
+        _selectedCardSize = FindCardSizePreset(ps.CardWidthMm, ps.CardHeightMm);
+        OnPropertyChanged(nameof(SelectedCardSize));
+    }
+
     public ObservableCollection<string> PagePresets { get; }
 
     public string SelectedPagePreset
@@ -892,6 +916,7 @@ public class MainViewModel : ViewModelBase
         Cards = new ObservableCollection<CardModel>(project.Cards);
         SelectedCard = null;
         _selectedPagePreset = DetectPagePreset(project.PageSettings);
+        SyncCardSizeToPageSettings();
         HasUnsavedChanges = false;
         OnPropertyChanged(nameof(CurrentProject));
         OnPropertyChanged(nameof(ProjectName));
@@ -924,6 +949,7 @@ public class MainViewModel : ViewModelBase
             Cards = new ObservableCollection<CardModel>(project.Cards);
             SelectedCard = null;
             _selectedPagePreset = DetectPagePreset(project.PageSettings);
+        SyncCardSizeToPageSettings();
             OnPropertyChanged(nameof(CurrentProject));
             OnPropertyChanged(nameof(ProjectName));
             OnPropertyChanged(nameof(SelectedPagePreset));

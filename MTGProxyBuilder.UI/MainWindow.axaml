@@ -546,21 +546,8 @@
                             <Separator Margin="0,4"/>
 
                             <TextBlock Text="CARD SIZE" Foreground="#7A6FB0" FontSize="10" FontWeight="Bold" Margin="0,6,0,6"/>
-                            <Grid Margin="0,0,0,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="Width (mm)" Foreground="#999" FontSize="9"/>
-                                    <TextBox Text="{Binding CurrentProject.PageSettings.CardWidthMm, Converter={StaticResource FlexibleNumber}}" Padding="4" FontSize="11"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Text="Height (mm)" Foreground="#999" FontSize="9"/>
-                                    <TextBox Text="{Binding CurrentProject.PageSettings.CardHeightMm, Converter={StaticResource FlexibleNumber}}" Padding="4" FontSize="11"/>
-                                </StackPanel>
-                            </Grid>
+                            <ComboBox ItemsSource="{Binding CardSizePresets}" SelectedItem="{Binding SelectedCardSize}"
+                                      HorizontalAlignment="Stretch" Padding="4" Margin="0,0,0,4" FontSize="11"/>
 
                             <!-- Bleed: trim margin around the card. The cut line stays on the card edge;
                                  this only changes how much is trimmed (0 .. 1/8", the MPCFill maximum). -->
