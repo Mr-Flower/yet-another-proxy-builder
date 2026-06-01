@@ -25,6 +25,7 @@ public partial class ArtSelectorWindow : Window
     private readonly ArtSelectorMode _mode;
     private readonly ScryfallService _scryfall;
     private readonly MpcFillService _mpcFill;
+    private readonly YgoProDeckService? _ygo; // fork-specific: Yu-Gi-Oh! alternate artworks
     private readonly ImageCacheService _imageCache;
     private readonly BackArtLibraryService? _backLibrary;
     private readonly IReadOnlyList<CardModel>? _allCards;
@@ -62,13 +63,15 @@ public partial class ArtSelectorWindow : Window
         IReadOnlyList<CardModel>? allCards = null,
         object[][]? mpcSourcesOverride = null,
         MpcFillSearchOptions? mpcSearchOptions = null,
-        FrontArtLibraryService? frontArtLibrary = null)
+        FrontArtLibraryService? frontArtLibrary = null,
+        YgoProDeckService? ygo = null)
     {
         InitializeComponent();
         _card = card;
         _mode = mode;
         _scryfall = scryfall;
         _mpcFill = mpcFill;
+        _ygo = ygo;
         _imageCache = imageCache;
         _backLibrary = backLibrary;
         _allCards = allCards;
@@ -163,6 +166,16 @@ public partial class ArtSelectorWindow : Window
 
         // 1. Library matches (★ green-bordered tiles, loaded before the online search)
         await AddLibraryMatchesAsync(shown, libraryNames);
+
+        // Yu-Gi-Oh! cards live on YGOPRODeck, not Scryfall/MPCFill — show their alternate artworks
+        // (the API returns several card_images per card) instead of the Magic sources.
+        if (_ygo != null && _card.Source == CardSource.YgoProDeck)
+        {
+            await AddYgoArtworksAsync(shown);
+            if (_frontArtLibrary == null)
+                AddActionTile("Browse File...", () => _ = OnBrowseFileAsync());
+            return;
+        }
 
         // 2. API search
         StatusLabel.Text = $"Searching for \"{_card.Name}\"...";
@@ -306,6 +319,28 @@ public partial class ArtSelectorWindow : Window
                 deferredImages.Add(BuildLibraryTile(entry));
 
         await LoadDeferredThumbnailsAsync(deferredImages, _frontThumbnails);
+    }
+
+    /// <summary>
+    /// Adds a tile for each alternate artwork of this Yu-Gi-Oh! card. YGOPRODeck returns several
+    /// <c>card_images</c> per card; each is downloaded (or read from cache) and shown as an option.
+    /// </summary>
+    private async Task AddYgoArtworksAsync(HashSet<string> shown)
+    {
+        StatusLabel.Text = $"Searching YGOPRODeck for \"{_card.Name}\"...";
+        var (cards, _) = await _ygo!.SearchCardAsync(_card.Name, fuzzy: false);
+        var card = cards.FirstOrDefault(c => c.Name.Equals(_card.Name, StringComparison.OrdinalIgnoreCase))
+                   ?? cards.FirstOrDefault();
+        if (card?.CardImages == null || card.CardImages.Count == 0) return;
+
+        StatusLabel.Text = $"Loading {card.CardImages.Count} artwork(s)...";
+        for (int i = 0; i < card.CardImages.Count; i++)
+        {
+            string? path = _ygo.GetCachedImagePath(card, i)
+                           ?? await _ygo.DownloadAndCacheImageAsync(card, i);
+            if (path != null && shown.Add(path))
+                AddOption($"Artwork {i + 1}", path, false, $"YGOPRODeck | {card.Name}", "YGOPRODeck");
+        }
     }
 
     /// <summary>Builds one green-bordered library tile (image + name + source) wired for select /

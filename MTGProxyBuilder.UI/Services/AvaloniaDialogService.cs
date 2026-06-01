@@ -225,14 +225,15 @@ public class AvaloniaDialogService : IDialogService
         ScryfallService scryfall, MpcFillService mpcFill,
         ImageCacheService imageCache, BackArtLibraryService backLibrary,
         IReadOnlyList<CardModel> allCards, object[][]? sources,
-        MpcFillSearchOptions searchOptions, FrontArtLibraryService frontLibrary)
+        MpcFillSearchOptions searchOptions, FrontArtLibraryService frontLibrary,
+        YgoProDeckService ygo)
     {
         var owner = GetMainWindow();
         if (owner == null) return null;
 
         var dialog = new ArtSelectorWindow(
             card, mode, scryfall, mpcFill, imageCache, backLibrary,
-            allCards, sources, searchOptions, frontLibrary);
+            allCards, sources, searchOptions, frontLibrary, ygo);
         await dialog.ShowDialog(owner);
 
         if (dialog.ResultPath == null) return null;

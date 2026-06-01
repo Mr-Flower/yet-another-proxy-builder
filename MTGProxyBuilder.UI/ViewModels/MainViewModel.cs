@@ -1074,7 +1074,7 @@ public class MainViewModel : ViewModelBase
             targets.First(), ArtSelectorMode.Front,
             _scryfallService, _mpcFillService, _imageCacheService,
             _backArtLibraryService, Cards.ToList(), GetMpcFillSources(),
-            BuildMpcFillSearchOptions(), _frontArtLibraryService);
+            BuildMpcFillSearchOptions(), _frontArtLibraryService, _ygoService);
 
         if (result != null)
         {
@@ -1098,7 +1098,7 @@ public class MainViewModel : ViewModelBase
             targets.First(), ArtSelectorMode.Back,
             _scryfallService, _mpcFillService, _imageCacheService,
             _backArtLibraryService, Cards.ToList(), GetMpcFillSources(),
-            BuildMpcFillSearchOptions(), _frontArtLibraryService);
+            BuildMpcFillSearchOptions(), _frontArtLibraryService, _ygoService);
 
         if (result != null)
         {
@@ -1223,7 +1223,7 @@ public class MainViewModel : ViewModelBase
         var result = await _dialogService.ShowArtSelectorAsync(
             card, mode, _scryfallService, _mpcFillService, _imageCacheService,
             _backArtLibraryService, Cards.ToList(), GetMpcFillSources(),
-            BuildMpcFillSearchOptions(), _frontArtLibraryService);
+            BuildMpcFillSearchOptions(), _frontArtLibraryService, _ygoService);
 
         if (result == null) return;
 
@@ -1300,7 +1300,7 @@ public class MainViewModel : ViewModelBase
             targetCards.First(), ArtSelectorMode.Back,
             _scryfallService, _mpcFillService, _imageCacheService,
             _backArtLibraryService, Cards.ToList(), GetMpcFillSources(),
-            BuildMpcFillSearchOptions(), _frontArtLibraryService);
+            BuildMpcFillSearchOptions(), _frontArtLibraryService, _ygoService);
 
         if (result == null) return;
 
@@ -2130,6 +2130,14 @@ public class MainViewModel : ViewModelBase
     private void ApplyDefaultBackArt(CardModel card)
     {
         if (!string.IsNullOrEmpty(card.BackArtworkPath)) return;
+
+        // Yu-Gi-Oh! cards default to the generated Yu-Gi-Oh! back (overridable via the art selector).
+        if (card.Source == CardSource.YgoProDeck)
+        {
+            card.BackArtworkPath = YgoCardBackProvider.GetOrCreate();
+            card.IncludeBack = true;
+            return;
+        }
 
         var mostCommon = GetMostCommonBackArt();
         if (mostCommon != null) { card.BackArtworkPath = mostCommon; card.IncludeBack = true; return; }

@@ -34,7 +34,8 @@ public interface IDialogService
         ScryfallService scryfall, MpcFillService mpcFill,
         ImageCacheService imageCache, BackArtLibraryService backLibrary,
         IReadOnlyList<CardModel> allCards, object[][]? sources,
-        MpcFillSearchOptions searchOptions, FrontArtLibraryService frontLibrary);
+        MpcFillSearchOptions searchOptions, FrontArtLibraryService frontLibrary,
+        YgoProDeckService ygo);
 
     Task ShowSettingsAsync(AppSettingsService settings, MpcFillSourceManager mpcSources, MpcFillService mpcFill);
     Task ShowMpcSourceManagerAsync(MpcFillSourceManager manager, MpcFillService service);
