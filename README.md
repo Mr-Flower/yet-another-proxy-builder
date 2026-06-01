@@ -80,7 +80,7 @@ A **native** build (Avalonia + .NET, self‑contained) — **no Wine, no install
 - **MPCFill** — community high‑DPI proxy art with source management, favourites, and DPI/language/content filtering.
 - **Moxfield / Archidekt import** — paste a deck URL; the source is auto‑detected and all artwork is fetched.
 - **Paste a text decklist** — drop in lines like `2 Sol Ring` or `1x Counterspell`; section headers (`Deck`, `Sideboard`, …) are ignored automatically.
-- **Game selector (Magic / Yu‑Gi‑Oh!)** — the *Add Cards* tab has a game dropdown: Magic resolves pasted names via Scryfall, **Yu‑Gi‑Oh!** resolves them via the **YGOPRODeck** API (e.g. `3 Dark Magician`), downloading the card art automatically. (Deck‑URL and MPCFill imports remain Magic‑only.)
+- **Game selector (Magic / Yu‑Gi‑Oh!)** — the *Add Cards* tab has a game dropdown: Magic resolves pasted names via Scryfall, **Yu‑Gi‑Oh!** resolves them via the **YGOPRODeck** API (e.g. `3 Dark Magician`), downloading the card art automatically. The art selector shows every **alternate YGOPRODeck artwork** for a Yu‑Gi‑Oh! card, and new Yu‑Gi‑Oh! cards get a generated default card back (overridable). (Deck‑URL and MPCFill imports remain Magic‑only.)
 - **MPCFill `cards.xml` import** and **local image files** (multi‑select), with optional duplicate‑skipping (basic lands merge by quantity).
 
 ### Visual Page Editor
