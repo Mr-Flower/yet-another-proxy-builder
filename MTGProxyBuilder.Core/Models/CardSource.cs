@@ -2,13 +2,14 @@ namespace MTGProxyBuilder.Core.Models
 {
     /// <summary>
     /// Where a card's artwork originally came from. Used to apply image adjustments
-    /// in bulk, filtered by macro-source (Scryfall / MPCFill).
+    /// in bulk, filtered by macro-source (Scryfall / MPCFill / YGOPRODeck).
     /// Fork-specific.
     /// </summary>
     public enum CardSource
     {
         Unknown = 0,
         Scryfall = 1,
-        MpcFill = 2
+        MpcFill = 2,
+        YgoProDeck = 3
     }
 }
