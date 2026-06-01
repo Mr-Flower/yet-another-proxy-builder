@@ -89,6 +89,7 @@ public class MainViewModel : ViewModelBase
     private readonly ProjectSerializationService _serializationService;
     private readonly PdfGeneratorService _pdfGeneratorService;
     private readonly ScryfallService _scryfallService;
+    private readonly YgoProDeckService _ygoService; // fork-specific: Yu-Gi-Oh! source
     private readonly ImageCacheService _imageCacheService;
     private BackArtLibraryService _backArtLibraryService;
     private FrontArtLibraryService _frontArtLibraryService;
@@ -172,6 +173,7 @@ public class MainViewModel : ViewModelBase
         _serializationService = new ProjectSerializationService();
         _pdfGeneratorService = new PdfGeneratorService();
         _scryfallService = new ScryfallService(_imageCacheService);
+        _ygoService = new YgoProDeckService(_imageCacheService); // fork-specific: Yu-Gi-Oh! source
         _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
         _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
         _moxfieldService = new MoxfieldService();
@@ -181,7 +183,7 @@ public class MainViewModel : ViewModelBase
         _mpcFillService = new MpcFillService(_imageCacheService, MpcSourceManager);
         _mpcXmlImportService = new MpcFillXmlImportService(_mpcFillService, _imageCacheService);
         _searchCoordinator = new SearchCoordinator(_scryfallService, _mpcFillService, _appSettings, MpcSourceManager);
-        _importCoordinator = new ImportCoordinator(_searchCoordinator, _deckImportService, _mpcXmlImportService);
+        _importCoordinator = new ImportCoordinator(_searchCoordinator, _deckImportService, _mpcXmlImportService, _ygoService);
         _mpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
         _mpcAdvMinDpi = _appSettings.Settings.MpcFillDefaultMinDpi;
         _mpcFuzzySearch = _appSettings.Settings.MpcFillDefaultFuzzySearch;
@@ -626,6 +628,23 @@ public class MainViewModel : ViewModelBase
                 (ImportTextListCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
     }
+
+    // fork-specific: which trading card game the "add by name" list resolves against.
+    public List<string> GameOptions { get; } = new() { "Magic", "Yu-Gi-Oh!" };
+
+    private string _selectedGame = "Magic";
+    public string SelectedGame
+    {
+        get => _selectedGame;
+        set
+        {
+            if (SetProperty(ref _selectedGame, value))
+                OnPropertyChanged(nameof(IsYuGiOh));
+        }
+    }
+
+    /// <summary>True when the pasted-list resolver should query YGOPRODeck instead of Scryfall.</summary>
+    public bool IsYuGiOh => _selectedGame == "Yu-Gi-Oh!";
 
     public bool IgnoreDuplicates
     {
@@ -1937,10 +1956,14 @@ public class MainViewModel : ViewModelBase
         try
         {
             PushUndo();
-            var result = await _importCoordinator.ImportDeckCardsAsync(
-                deck, Cards, IgnoreDuplicates, UseMpcFill,
-                MpcAdvMinDpi, MpcFuzzySearch, MpcUseFavoritesOnly,
-                onProgress: msg => BusyMessage = msg, ct: ct);
+            var result = IsYuGiOh
+                ? await _importCoordinator.ImportYuGiOhCardsAsync(
+                    deck, Cards, IgnoreDuplicates,
+                    onProgress: msg => BusyMessage = msg, ct: ct)
+                : await _importCoordinator.ImportDeckCardsAsync(
+                    deck, Cards, IgnoreDuplicates, UseMpcFill,
+                    MpcAdvMinDpi, MpcFuzzySearch, MpcUseFavoritesOnly,
+                    onProgress: msg => BusyMessage = msg, ct: ct);
 
             Cards.CollectionChanged -= OnCardsCollectionChanged;
             foreach (var c in result.Cards) { ApplyDefaultBackArt(c); Cards.Add(c); }
@@ -1955,7 +1978,7 @@ public class MainViewModel : ViewModelBase
             string summary = ct.IsCancellationRequested
                 ? $"Import cancelled — kept {result.Cards.Count} card(s) fetched so far"
                 : $"Imported {result.Cards.Count} card(s) ({totalAdded} total) from the pasted list";
-            if (result.Failed > 0) summary += $"\n{result.Failed} card(s) not found on Scryfall";
+            if (result.Failed > 0) summary += $"\n{result.Failed} card(s) not found on {(IsYuGiOh ? "YGOPRODeck" : "Scryfall")}";
             StatusText = summary;
             await _dialogService.ShowInfoAsync(summary, ct.IsCancellationRequested ? "Import cancelled" : "Import complete");
         }

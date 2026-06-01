@@ -17,16 +17,19 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly SearchCoordinator _search;
         private readonly DeckImportService _deckImport;
         private readonly MpcFillXmlImportService _xmlImport;
+        private readonly YgoProDeckService _ygo; // fork-specific: Yu-Gi-Oh! source
         private readonly MTGProxyBuilder.UI.Services.ImageAdjustmentService _imageAdjust = new(); // fork-specific
 
         public ImportCoordinator(
             SearchCoordinator search,
             DeckImportService deckImport,
-            MpcFillXmlImportService xmlImport)
+            MpcFillXmlImportService xmlImport,
+            YgoProDeckService ygo)
         {
             _search = search;
             _deckImport = deckImport;
             _xmlImport = xmlImport;
+            _ygo = ygo;
         }
 
         private static readonly HashSet<string> BasicLands = new(StringComparer.OrdinalIgnoreCase)
@@ -240,6 +243,79 @@ namespace MTGProxyBuilder.UI.ViewModels
             string trimmed = name.TrimStart();
             int colon = trimmed.IndexOf(':');
             return colon >= 0 ? trimmed[(colon + 1)..].Trim() : trimmed.Trim();
+        }
+
+        // ================================================================
+        //  YU-GI-OH! IMPORT (YGOPRODeck)  — fork-specific
+        // ================================================================
+
+        /// <summary>
+        /// Resolves a pasted list into Yu-Gi-Oh! cards via YGOPRODeck: skips duplicates (when requested),
+        /// then resolves + downloads each card's art in parallel (bounded, cancellable), preserving order.
+        /// Mirrors <see cref="ImportDeckCardsAsync"/> but for the YGOPRODeck source.
+        /// </summary>
+        public async Task<DeckImportResult> ImportYuGiOhCardsAsync(
+            ImportedDeck deck,
+            IEnumerable<CardModel> existingCards,
+            bool ignoreDuplicates,
+            Action<string>? onProgress = null,
+            CancellationToken ct = default)
+        {
+            var toFetch = SelectEntriesToFetch(deck, existingCards, ignoreDuplicates, out int skippedDupes);
+
+            var slots = new CardModel?[toFetch.Count];
+            int failed = 0, completed = 0;
+            using var gate = new SemaphoreSlim(8);
+
+            async Task RunAsync(int idx)
+            {
+                if (ct.IsCancellationRequested) return;
+                await gate.WaitAsync(ct);
+                try
+                {
+                    var card = await FetchYuGiOhCardAsync(toFetch[idx]);
+                    if (card == null) Interlocked.Increment(ref failed);
+                    else slots[idx] = card;
+                }
+                finally
+                {
+                    gate.Release();
+                    int n = Interlocked.Increment(ref completed);
+                    onProgress?.Invoke($"Downloaded {n}/{toFetch.Count} card(s)...");
+                }
+            }
+
+            try { await Task.WhenAll(Enumerable.Range(0, toFetch.Count).Select(RunAsync)); }
+            catch (OperationCanceledException) { /* user cancelled — keep whatever was fetched so far */ }
+
+            return new DeckImportResult(AssembleCards(slots), deck.Name, "YGOPRODeck", skippedDupes, failed);
+        }
+
+        /// <summary>Resolves one entry to a Yu-Gi-Oh! card and downloads its art. Returns null only when
+        /// the name can't be resolved or its image can't be fetched (counted as a failure).</summary>
+        private async Task<CardModel?> FetchYuGiOhCardAsync(DeckImportEntry entry)
+        {
+            var card = await ResolveYuGiOhCard(entry.CardName);
+            if (card == null) return null;
+
+            var path = await _ygo.DownloadAndCacheImageAsync(card);
+            if (path == null) return null;
+
+            var model = card.ToCardModel(path);
+            model.Quantity = entry.Quantity;
+            return model;
+        }
+
+        /// <summary>Finds the best Yu-Gi-Oh! card for a name: an exact lookup first, then a fuzzy search
+        /// preferring a case-insensitive name hit before falling back to the first result.</summary>
+        private async Task<YgoProDeckCard?> ResolveYuGiOhCard(string name)
+        {
+            var (exact, _) = await _ygo.SearchCardAsync(name, fuzzy: false);
+            if (exact.Count > 0) return exact[0];
+
+            var (fuzzy, _) = await _ygo.SearchCardAsync(name, fuzzy: true);
+            return fuzzy.FirstOrDefault(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                   ?? fuzzy.FirstOrDefault();
         }
 
         // ================================================================

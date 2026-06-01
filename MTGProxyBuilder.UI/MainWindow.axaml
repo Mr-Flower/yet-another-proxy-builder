@@ -176,6 +176,14 @@
                     <TabItem Header="Add Cards" Foreground="#AAA">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Background="#2D2D30">
                             <StackPanel Margin="10,8">
+                                <!-- fork-specific: pick the game the name list resolves against. -->
+                                <TextBlock Text="Game" FontWeight="SemiBold" Foreground="#CCC"
+                                           Margin="0,0,0,6" FontSize="12"/>
+                                <ComboBox ItemsSource="{Binding GameOptions}" SelectedItem="{Binding SelectedGame}"
+                                          HorizontalAlignment="Stretch" Padding="6,4" FontSize="11" Margin="0,0,0,4"/>
+                                <TextBlock Text="Magic resolves names via Scryfall; Yu-Gi-Oh! via YGOPRODeck. Deck-URL and MPCFill imports are Magic-only."
+                                           Foreground="#666" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
                                 <!-- Add cards by name. One per line; a single line adds one card. -->
                                 <TextBlock Text="Add Cards by Name" FontWeight="SemiBold" Foreground="#CCC"
                                            Margin="0,0,0,6" FontSize="12"/>
