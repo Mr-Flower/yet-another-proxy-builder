@@ -4,40 +4,52 @@ using SkiaSharp;
 
 namespace MTGProxyBuilder.Tests.Services;
 
-public class BleedProcessorTests
+public class BleedProcessorTests : IDisposable
 {
+    // A unique cache folder per test instance (xUnit news up the class per test method) keeps the
+    // shared on-disk/in-memory cache from racing across parallel tests — see the flaky-test fix.
+    private readonly string _cacheDir =
+        Path.Combine(Path.GetTempPath(), $"bleedcache_{Guid.NewGuid():N}");
+
+    private BleedProcessor NewProc() => new(_cacheDir);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_cacheDir, true); } catch { }
+    }
+
     [Fact]
     public void GetBleedExtendedImage_NullPath_ReturnsNull()
     {
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         Assert.Null(proc.GetBleedExtendedImage(null!, 10));
     }
 
     [Fact]
     public void GetBleedExtendedImage_EmptyPath_ReturnsEmpty()
     {
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         Assert.Equal(string.Empty, proc.GetBleedExtendedImage(string.Empty, 10));
     }
 
     [Fact]
     public void GetBleedExtendedImage_ZeroBleed_ReturnsOriginal()
     {
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         Assert.Equal("/some/path.jpg", proc.GetBleedExtendedImage("/some/path.jpg", 0));
     }
 
     [Fact]
     public void GetBleedExtendedImage_NegativeBleed_ReturnsOriginal()
     {
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         Assert.Equal("/some/path.jpg", proc.GetBleedExtendedImage("/some/path.jpg", -5));
     }
 
     [Fact]
     public void GetBleedExtendedImage_NonexistentFile_ReturnsOriginal()
     {
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         string fakePath = $"/nonexistent/{Guid.NewGuid():N}.png";
         Assert.Equal(fakePath, proc.GetBleedExtendedImage(fakePath, 10));
     }
@@ -45,7 +57,7 @@ public class BleedProcessorTests
     [Fact]
     public void ClearCache_DoesNotThrow()
     {
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         var ex = Record.Exception(() => proc.ClearCache());
         Assert.Null(ex);
     }
@@ -54,7 +66,7 @@ public class BleedProcessorTests
     public void GetBleedExtendedImage_ValidImage_ReturnsProcessedPath()
     {
         // Create a tiny valid PNG-like image to test processing
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_test_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
 
@@ -80,7 +92,7 @@ public class BleedProcessorTests
     [Fact]
     public void GetBleedExtendedImage_SameInputTwice_ReturnsCached()
     {
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_test2_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
 
@@ -117,7 +129,7 @@ public class BleedProcessorTests
     {
         // MPCFill art is already full-bleed -> drawn whole (no crop, no extend), so GetDisplayImage
         // returns the original path unchanged; the cut line trims the built-in 1/8".
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"disp_mpc_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try
@@ -133,7 +145,7 @@ public class BleedProcessorTests
     [Fact]
     public void GetDisplayImage_ScryfallScan_DelegatesToBleedExtend()
     {
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"disp_scry_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try
@@ -150,14 +162,14 @@ public class BleedProcessorTests
 
     [Fact]
     public void GetDisplayImage_ZeroBleed_ReturnsOriginal()
-        => Assert.Equal("/x/mpc_a.jpg", new BleedProcessor().GetDisplayImage("/x/mpc_a.jpg", 0, 63));
+        => Assert.Equal("/x/mpc_a.jpg", NewProc().GetDisplayImage("/x/mpc_a.jpg", 0, 63));
 
     [Fact]
     public void GetDisplayImage_MpcFillReducedBleed_CropsTowardCard()
     {
         // Reducing the bleed below 1/8" trims MPCFill's native bleed: the output is smaller than the
         // full image (outer margin removed) but still larger than the bare card.
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"mpccrop_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try
@@ -177,7 +189,7 @@ public class BleedProcessorTests
     public void GetDisplayImage_MpcFillZeroBleed_CropsToCard()
     {
         // At bleed 0 the native 1/8" bleed is fully trimmed, leaving just the ~750x1050 card region.
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"mpccrop0_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try
@@ -201,7 +213,7 @@ public class BleedProcessorTests
         // independent of scan resolution — so a low- and a high-res scan of the same card get the same
         // proportional 1/8" border, matching MPCFill. (The old code added a fixed 14 px regardless of
         // resolution, so the bleed was far too thin on high-res scans and the zoom diverged.)
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         int srcH = (int)(srcW * 88.0 / 63.0);
         var tmpDir = Path.Combine(Path.GetTempPath(), $"disp_res_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
@@ -224,7 +236,7 @@ public class BleedProcessorTests
     public void GetBleedExtendedImage_BlackBorderWhiteCorners_FillsCornersDark()
     {
         // White background with a black rounded "card" -> the 4 rectangle corners are white triangles.
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_corner_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try
@@ -251,7 +263,7 @@ public class BleedProcessorTests
         // Anti-aliased rounded black card on white: the white->black arc has grey fringe pixels.
         // After square-off the whole corner region (bleed + the former white triangle) must be dark,
         // with no light/grey fringe left (the "white artefacts near the corner" the user reported).
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_aa_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try
@@ -281,7 +293,7 @@ public class BleedProcessorTests
     public void GetBleedExtendedImage_WhiteCard_KeepsCornersWhite()
     {
         // An all-white card: a white border must stay white (no recolouring to art).
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_white_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try
@@ -301,7 +313,7 @@ public class BleedProcessorTests
     public void GetBleedExtendedImage_FullArtColouredCorners_NotRecoloured()
     {
         // Full-art card (corners already coloured, no white triangle): corners must NOT be repainted.
-        var proc = new BleedProcessor();
+        var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_red_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try

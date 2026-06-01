@@ -10,11 +10,17 @@ namespace MTGProxyBuilder.Core.Services
     public class BleedProcessor
     {
         private readonly string _cacheDir;
-        private static readonly ConcurrentDictionary<string, string> _processedCache = new();
 
-        public BleedProcessor()
+        // Per-instance memo so one processor's ClearCache() can never wipe another's state. The on-disk
+        // cache (the File.Exists checks below) is still shared between instances using the same folder,
+        // so cross-instance reuse keeps working — only the in-memory fast path is instance-scoped.
+        private readonly ConcurrentDictionary<string, string> _processedCache = new();
+
+        /// <param name="cacheDir">Folder for processed-image files. Defaults to the per-user AppData
+        /// cache; tests pass a unique temp folder so parallel runs stay fully isolated.</param>
+        public BleedProcessor(string? cacheDir = null)
         {
-            _cacheDir = Path.Combine(
+            _cacheDir = cacheDir ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "MTGProxyBuilder", "BleedCache");
             Directory.CreateDirectory(_cacheDir);
