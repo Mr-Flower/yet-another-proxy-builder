@@ -110,6 +110,7 @@ A **native** build (Avalonia + .NET, self‑contained) — **no Wine, no install
 - **Card outline guides** — colour, alignment (center/inside/outside), corner radius, full vs corner‑marks, solid/dashed, corner length, line weight.
 - **Silhouette Cameo** — Type‑1 registration marks (front pages only, to save ink) + matching **SVG cut lines** exported alongside the PDF; bleed/guides/outlines auto‑suppressed in this mode.
 - **Print modes** — Duplex (mirrored back columns), Fronts Only, Backs Only — with **auto‑centering** and optional manual grid override.
+- **Card position adjustment** — nudge the whole grid by an exact horizontal/vertical offset in mm (decimals welcome, e.g. `0,45`) to compensate for a printer that prints slightly off‑centre. Bleed width and offsets are precise numeric fields where `.` and `,` are interchangeable decimal separators.
 
 ### Card Editor
 - A **layered editor** for custom cards: image and text layers with font, size, colour, opacity, rotation, stroke and positioning; live canvas preview with drag‑to‑move and selection handles; export to PNG/JPEG.
@@ -177,7 +178,8 @@ MTGProxyBuilder/
 - **Page size & print mode** (Duplex / Fronts / Backs).
 - **Cut guides** and fully configurable **card outlines** (colour picker, alignment, radius, full/corners, solid/dashed, weight).
 - **Silhouette Cameo** — enable registration marks and/or SVG cut‑line export.
-- **Card size** preset or custom mm; **grid** auto‑fit or manual; **storage** cache size + clear.
+- **Card size** preset or custom mm; **bleed width** (mm) and **card position adjustment** (horizontal/vertical offset in mm, decimals allowed) to re‑centre the print on a misaligned printer.
+- **Grid** auto‑fit or manual; **storage** cache size + clear.
 
 ### Export, save, undo
 - **Export PDF** — bleed‑extended art, cut guides behind the art, outlines on top, mirrored duplex backs, optional Cameo marks + SVG.
