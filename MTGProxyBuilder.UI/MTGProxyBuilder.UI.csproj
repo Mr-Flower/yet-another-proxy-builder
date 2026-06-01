@@ -10,7 +10,14 @@
     <Product>TCG Proxy Builder</Product>
     <Version>0.0.0-dev</Version>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- Embeds the icon into the Windows .exe. -->
+    <ApplicationIcon>Assets/icon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <!-- App assets (window icon, etc.) bundled as Avalonia resources so /Assets/... resolves at runtime. -->
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MTGProxyBuilder.Core\MTGProxyBuilder.Core.csproj" />

@@ -5,6 +5,7 @@
         x:Class="MTGProxyBuilder.UI.MainWindow"
         x:Name="Root"
         Title="TCG Proxy Builder"
+        Icon="/Assets/icon.ico"
         Height="950" Width="1600"
         WindowStartupLocation="CenterScreen"
         Background="#1E1E1E">

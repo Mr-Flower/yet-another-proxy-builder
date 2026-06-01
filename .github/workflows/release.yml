@@ -209,12 +209,9 @@ jobs:
       - name: Create icon
         run: |
           sudo apt-get install -y imagemagick
-          convert -size 256x256 xc:'#1a1a2e' \
-            -fill '#4a9eff' -font DejaVu-Sans-Bold -pointsize 52 \
-            -gravity center -annotate 0 'MTG\nProxy' \
-            AppDir/mtg-proxy-builder.png 2>/dev/null || \
-          wget -q -O AppDir/mtg-proxy-builder.png \
-            "https://via.placeholder.com/256/1a1a2e/4a9eff?text=MTG"
+          # Use the bundled app icon, normalised to the 256x256 AppImage/freedesktop standard.
+          convert MTGProxyBuilder.UI/Assets/icon.png -resize 256x256 \
+            AppDir/mtg-proxy-builder.png
 
       - name: Create desktop file
         run: |
