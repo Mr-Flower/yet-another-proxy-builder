@@ -68,7 +68,7 @@ jobs:
       run: Remove-Item publish/*.pdb -ErrorAction SilentlyContinue
 
     - name: Zip nightly build
-      run: Compress-Archive -Path publish/* -DestinationPath TCGProxyBuilder-nightly-${{ github.run_number }}-win-x64.zip
+      run: Compress-Archive -Path publish/* -DestinationPath YetAnotherProxyBuilder-nightly-${{ github.run_number }}-win-x64.zip
 
     - name: Delete previous nightly release
       env:
@@ -86,11 +86,11 @@ jobs:
           Built from commit ${{ github.sha }}.
 
           **This is a development build and may be unstable.**
-        files: TCGProxyBuilder-nightly-${{ github.run_number }}-win-x64.zip
+        files: YetAnotherProxyBuilder-nightly-${{ github.run_number }}-win-x64.zip
 
     - name: Upload nightly artifact
       uses: actions/upload-artifact@v4
       with:
-        name: TCGProxyBuilder-nightly-${{ github.run_number }}
-        path: TCGProxyBuilder-nightly-${{ github.run_number }}-win-x64.zip
+        name: YetAnotherProxyBuilder-nightly-${{ github.run_number }}
+        path: YetAnotherProxyBuilder-nightly-${{ github.run_number }}-win-x64.zip
         retention-days: 7

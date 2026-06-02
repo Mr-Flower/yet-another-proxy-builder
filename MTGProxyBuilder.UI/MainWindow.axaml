@@ -4,7 +4,7 @@
         xmlns:controls="clr-namespace:MTGProxyBuilder.UI.Controls"
         x:Class="MTGProxyBuilder.UI.MainWindow"
         x:Name="Root"
-        Title="TCG Proxy Builder"
+        Title="Yet Another Proxy Builder"
         Icon="/Assets/icon.ico"
         Height="950" Width="1600"
         WindowStartupLocation="CenterScreen"
@@ -144,7 +144,7 @@
         <Border Grid.Row="3" Background="#1E1E1E"
                 IsVisible="{Binding !HasActiveProject}">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="TCG Proxy Builder" Foreground="#555" FontSize="36"
+                <TextBlock Text="Yet Another Proxy Builder" Foreground="#555" FontSize="36"
                            FontWeight="Light" HorizontalAlignment="Center"/>
                 <TextBlock Text="Create or open a project to get started" Foreground="#444"
                            FontSize="14" HorizontalAlignment="Center" Margin="0,8,0,24"/>

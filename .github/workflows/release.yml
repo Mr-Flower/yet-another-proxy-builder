@@ -68,13 +68,13 @@ jobs:
         run: Remove-Item publish/*.pdb -ErrorAction SilentlyContinue
 
       - name: Create Windows ZIP
-        run: Compress-Archive -Path publish/* -DestinationPath "TCGProxyBuilder-${{ github.ref_name }}-win-x64.zip"
+        run: Compress-Archive -Path publish/* -DestinationPath "YetAnotherProxyBuilder-${{ github.ref_name }}-win-x64.zip"
 
       - name: Upload Windows ZIP artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-zip
-          path: "TCGProxyBuilder-${{ github.ref_name }}-win-x64.zip"
+          path: "YetAnotherProxyBuilder-${{ github.ref_name }}-win-x64.zip"
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -217,7 +217,7 @@ jobs:
         run: |
           cat > AppDir/mtg-proxy-builder.desktop << 'EOF'
           [Desktop Entry]
-          Name=TCG Proxy Builder
+          Name=Yet Another Proxy Builder
           Comment=Create printable TCG proxy cards
           Exec=AppRun
           Icon=mtg-proxy-builder
@@ -247,13 +247,13 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool AppDir \
-            "TCGProxyBuilder-v${VERSION}-linux-x86_64.AppImage"
+            "YetAnotherProxyBuilder-v${VERSION}-linux-x86_64.AppImage"
 
       - name: Upload Linux AppImage artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-appimage
-          path: "TCGProxyBuilder-v${{ steps.version.outputs.version }}-linux-x86_64.AppImage"
+          path: "YetAnotherProxyBuilder-v${{ steps.version.outputs.version }}-linux-x86_64.AppImage"
 
   create-release:
     runs-on: ubuntu-latest

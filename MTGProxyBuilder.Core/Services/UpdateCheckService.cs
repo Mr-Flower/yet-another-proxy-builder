@@ -19,7 +19,7 @@ namespace MTGProxyBuilder.Core.Services
         public UpdateCheckService()
         {
             _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "TCGProxyBuilder/1.0");
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "YetAnotherProxyBuilder/1.0");
             _httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
         }
 

@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🃏 TCG Proxy Builder
+# 🃏 Yet Another Proxy Builder
 
 **Turn a decklist into a clean, print‑ready PDF of proxy cards — in minutes.**
 
@@ -42,16 +42,16 @@ cards are fetched automatically; 25+ more games are supported by size + your own
 Grab the latest build from the [**Releases**](../../releases) page.
 
 ### 🪟 Windows
-1. Download `TCGProxyBuilder-vX.X.X-win-x64.zip`
+1. Download `YetAnotherProxyBuilder-vX.X.X-win-x64.zip`
 2. Extract anywhere
 3. Run `tcg-proxy-builder.exe`
 
 Self‑contained single executable — **no install, no .NET runtime required** (Windows 10/11, 64‑bit).
 
 ### 🐧 Linux (AppImage)
-1. Download `TCGProxyBuilder-vX.X.X-linux-x86_64.AppImage`
-2. `chmod +x TCGProxyBuilder-*.AppImage`
-3. `./TCGProxyBuilder-*.AppImage`
+1. Download `YetAnotherProxyBuilder-vX.X.X-linux-x86_64.AppImage`
+2. `chmod +x YetAnotherProxyBuilder-*.AppImage`
+3. `./YetAnotherProxyBuilder-*.AppImage`
 
 A **native** Avalonia + .NET build, self‑contained — **no Wine, no install**. Requires a 64‑bit distro with a reasonably recent kernel.
 
