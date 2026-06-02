@@ -8,8 +8,8 @@ Pick a game, fetch the cards by name, choose the exact artwork, arrange them on 
 and export with true bleed, cut guides and Silhouette Cameo cut lines. **Magic** and **Yu‑Gi‑Oh!**
 cards are fetched automatically; 25+ more games are supported by size + your own art.
 
-[![CI](https://github.com/Mr-Flower/mtg-proxy-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/Mr-Flower/mtg-proxy-builder/actions/workflows/ci.yml)
-[![Release](https://github.com/Mr-Flower/mtg-proxy-builder/actions/workflows/release.yml/badge.svg)](https://github.com/Mr-Flower/mtg-proxy-builder/releases)
+[![CI](https://github.com/Mr-Flower/yet-another-proxy-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/Mr-Flower/yet-another-proxy-builder/actions/workflows/ci.yml)
+[![Release](https://github.com/Mr-Flower/yet-another-proxy-builder/actions/workflows/release.yml/badge.svg)](https://github.com/Mr-Flower/yet-another-proxy-builder/releases)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-2D2D30)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4)
 ![Avalonia](https://img.shields.io/badge/UI-Avalonia%2011-8A7FC0)
@@ -44,7 +44,7 @@ Grab the latest build from the [**Releases**](../../releases) page.
 ### 🪟 Windows
 1. Download `YetAnotherProxyBuilder-vX.X.X-win-x64.zip`
 2. Extract anywhere
-3. Run `tcg-proxy-builder.exe`
+3. Run `yet-another-proxy-builder.exe`
 
 Self‑contained single executable — **no install, no .NET runtime required** (Windows 10/11, 64‑bit).
 

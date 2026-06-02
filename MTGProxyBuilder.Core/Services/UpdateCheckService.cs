@@ -13,7 +13,7 @@ namespace MTGProxyBuilder.Core.Services
 
     public class UpdateCheckService
     {
-        private const string GitHubRepo = "anubisascends/mtg-proxy-builder";
+        private const string GitHubRepo = "Mr-Flower/yet-another-proxy-builder";
         private readonly HttpClient _httpClient;
 
         public UpdateCheckService()

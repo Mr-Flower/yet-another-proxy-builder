@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <AssemblyName>tcg-proxy-builder</AssemblyName>
+    <AssemblyName>yet-another-proxy-builder</AssemblyName>
     <Product>Yet Another Proxy Builder</Product>
     <Version>0.0.0-dev</Version>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>

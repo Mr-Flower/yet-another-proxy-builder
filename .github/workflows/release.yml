@@ -199,7 +199,7 @@ jobs:
           # Patch RPATH on libSkiaSharp.so so it resolves ITS OWN deps from AppDir.
           # Also patch the app host and CLR so bare dlopen("libSkiaSharp") finds AppDir first.
           for f in AppDir/libSkiaSharp.so AppDir/libHarfBuzzSharp.so \
-                    AppDir/tcg-proxy-builder AppDir/libcoreclr.so; do
+                    AppDir/yet-another-proxy-builder AppDir/libcoreclr.so; do
             [ -f "$f" ] && patchelf --force-rpath --set-rpath '$ORIGIN' "$f" && \
               echo "Patched RPATH: $(basename $f)"
           done
@@ -211,16 +211,16 @@ jobs:
           sudo apt-get install -y imagemagick
           # Use the bundled app icon, normalised to the 256x256 AppImage/freedesktop standard.
           convert MTGProxyBuilder.UI/Assets/icon.png -resize 256x256 \
-            AppDir/mtg-proxy-builder.png
+            AppDir/yet-another-proxy-builder.png
 
       - name: Create desktop file
         run: |
-          cat > AppDir/mtg-proxy-builder.desktop << 'EOF'
+          cat > AppDir/yet-another-proxy-builder.desktop << 'EOF'
           [Desktop Entry]
           Name=Yet Another Proxy Builder
           Comment=Create printable TCG proxy cards
           Exec=AppRun
-          Icon=mtg-proxy-builder
+          Icon=yet-another-proxy-builder
           Type=Application
           Categories=Graphics;Game;
           StartupNotify=true
@@ -237,7 +237,7 @@ jobs:
           # Force-preload bundled libSkiaSharp.so so the system version
           # (e.g. Arch/CachyOS libSkiaSharp.so.88) is never picked up.
           export LD_PRELOAD="${APPDIR}/libSkiaSharp.so${LD_PRELOAD:+:$LD_PRELOAD}"
-          exec "${APPDIR}/tcg-proxy-builder" "$@"
+          exec "${APPDIR}/yet-another-proxy-builder" "$@"
           APPRUN
           chmod +x AppDir/AppRun
 
