@@ -4,9 +4,9 @@
 
 **Turn a decklist into a clean, print‑ready PDF of proxy cards — in minutes.**
 
-Search the card you want, pick the exact artwork, arrange it on any paper size, and export
-with true bleed, cut guides and Silhouette Cameo cut lines. Magic and Yu‑Gi‑Oh! cards are
-fetched by name automatically; 25+ more games are supported by size + your own art.
+Pick a game, fetch the cards by name, choose the exact artwork, arrange them on any paper size,
+and export with true bleed, cut guides and Silhouette Cameo cut lines. **Magic** and **Yu‑Gi‑Oh!**
+cards are fetched automatically; 25+ more games are supported by size + your own art.
 
 [![CI](https://github.com/Mr-Flower/mtg-proxy-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/Mr-Flower/mtg-proxy-builder/actions/workflows/ci.yml)
 [![Release](https://github.com/Mr-Flower/mtg-proxy-builder/actions/workflows/release.yml/badge.svg)](https://github.com/Mr-Flower/mtg-proxy-builder/releases)
@@ -26,8 +26,8 @@ fetched by name automatically; 25+ more games are supported by size + your own a
 
 ## ✨ Highlights
 
-- 🔎 **Fetch cards by name** — **Magic** via the full Scryfall query language, **Yu‑Gi‑Oh!** via YGOPRODeck. Pick the game and paste a list.
-- 🎨 **Pick the exact artwork** — browse every printing / alternate art in a thumbnail gallery with a big live preview, plus community high‑DPI art from **MPCFill**.
+- 🎮 **Two‑game by‑name fetch** — a game selector switches name resolution between **Magic** (Scryfall) and **Yu‑Gi‑Oh!** (YGOPRODeck). Pick the game and the card size follows automatically.
+- 🔎 **Find any printing** — full Scryfall query language for Magic; every alternate YGOPRODeck artwork for Yu‑Gi‑Oh!; plus community high‑DPI art from **MPCFill**.
 - 📋 **Import whole decks** — a **Moxfield** or **Archidekt** URL, an **MPCFill `cards.xml`**, or a plain text decklist.
 - 🖼️ **WYSIWYG canvas** — the multi‑page editor shows cards exactly as they'll print, **bleed included**, so the PDF holds no surprises.
 - ✂️ **Print‑ready output** — true edge bleed, cut guides, configurable card outlines, duplex layout, and **Silhouette Cameo** registration marks + SVG cut lines.
@@ -60,9 +60,9 @@ A **native** Avalonia + .NET build, self‑contained — **no Wine, no install**
 ## 🎴 What it does
 
 ### Find & add cards
-- **Game selector (Magic / Yu‑Gi‑Oh!)** — the *Add Cards* tab has a game dropdown that decides how pasted names resolve:
-  - **Magic** → **Scryfall**, with full query syntax (name, type, colour, mana cost, set, rarity, artist, format legality) and a visual advanced‑search builder.
-  - **Yu‑Gi‑Oh!** → **YGOPRODeck**: paste lines like `3 Dark Magician` and the card art is fetched automatically.
+- **Game selector (Magic / Yu‑Gi‑Oh!)** — at the top of the *Add Cards* tab. It decides how pasted names resolve **and** sets the sheet card size:
+  - **Magic** → **Scryfall** (full query syntax + a visual advanced‑search builder), card size 63 × 88 mm.
+  - **Yu‑Gi‑Oh!** → **YGOPRODeck** (e.g. `3 Dark Magician`, art fetched automatically), card size 59 × 86 mm.
 - **Paste a text decklist** — `2 Sol Ring`, `1x Counterspell`, or a bare name per line; section headers (`Deck`, `Sideboard`, …) are ignored. Prefix `t:` to add a Magic token.
 - **Deck URL import** — paste a **Moxfield** or **Archidekt** link; the source is auto‑detected and every card's art is fetched *(Magic only)*.
 - **MPCFill `cards.xml`** and **local image files** (multi‑select), with optional duplicate‑skipping (basic lands top up by quantity).
@@ -93,11 +93,12 @@ A **native** Avalonia + .NET build, self‑contained — **no Wine, no install**
 - **Brightness / contrast / saturation**, applied **per card** or in **bulk** (all / Scryfall‑only / MPCFill‑only), with save‑as‑default and auto‑apply to new cards.
 
 ### Print & PDF
-- **25+ card‑size presets** (or custom mm) and **page presets** — A4, A3, Letter, Legal, Tabloid (+ landscape).
+- **Card‑size dropdown** — Magic/Poker (63 × 88), Yu‑Gi‑Oh!/Japanese (59 × 86), Bridge, Mini American/European, Tarot, Oversized. It follows the game selector automatically.
+- **Page presets** — A4, A3, Letter, Legal, Tabloid (+ landscape).
 - **True bleed** — edge pixels are *extended* (not stretched), and **rounded scan corners are squared off** to the border colour so no white slivers survive the cut.
 - **Cut guides** drawn *behind* the art (won't show through light cards).
 - **Card outline guides** — colour, alignment (center/inside/outside), corner radius, full vs corner‑marks, solid/dashed, corner length, line weight.
-- **Card position adjustment** — shift the whole grid by an exact horizontal/vertical offset in mm (decimals welcome, e.g. `0,45`) to compensate for an off‑centre printer. Card size, bleed width and offsets are precise numeric fields where **`.` and `,` are interchangeable** decimal separators.
+- **Card position adjustment** — shift the whole grid by an exact horizontal/vertical offset in mm (decimals welcome, e.g. `0,45`) to compensate for an off‑centre printer. Bleed width and offsets are precise numeric fields where **`.` and `,` are interchangeable** decimal separators.
 - **Silhouette Cameo** — Type‑1 registration marks (front pages only, to save ink) + matching **SVG cut lines** exported alongside the PDF; bleed/guides/outlines auto‑suppressed in this mode.
 - **Print modes** — Duplex (mirrored back columns), Fronts Only, Backs Only — with **auto‑centering** or manual grid override.
 
@@ -113,7 +114,7 @@ A **native** Avalonia + .NET build, self‑contained — **no Wine, no install**
 
 ### Getting started
 1. Launch the app and create a **New Project** (Ctrl+N) or **Open** one (Ctrl+O).
-2. In the **Add Cards** tab, pick the **Game** (Magic / Yu‑Gi‑Oh!).
+2. In the **Add Cards** tab, pick the **Game** (Magic / Yu‑Gi‑Oh!) — the card size switches to match.
 3. Add cards (below), tune the **Layout** tab, then **Export PDF** (Ctrl+E).
 4. Open more projects in new tabs — each is independent.
 
@@ -131,7 +132,8 @@ A **native** Avalonia + .NET build, self‑contained — **no Wine, no install**
 
 ### Layout & print (Layout tab)
 - **Page size & print mode** (Duplex / Fronts / Backs).
-- **Card size** preset or custom mm; **bleed width** (mm) and **card position adjustment** (horizontal/vertical offset, mm) to re‑centre the print.
+- **Card size** — choose a preset from the dropdown (it also follows the game selector).
+- **Bleed width** (mm) and **card position adjustment** (horizontal/vertical offset, mm) to re‑centre the print.
 - **Cut guides** and fully configurable **card outlines** (colour, alignment, radius, full/corners, solid/dashed, weight).
 - **Silhouette Cameo** — registration marks and/or SVG cut‑line export.
 - **Grid** auto‑fit or manual; **storage** cache size + clear.
@@ -151,11 +153,9 @@ A **native** Avalonia + .NET build, self‑contained — **no Wine, no install**
 | Board‑game | Mini American · Mini European | 41 × 63 · 44 × 68 |
 | Large | Tarot · Oversized MTG / Commander | 70 × 120 · 89 × 127 |
 
-…plus custom width / height / bleed for anything else.
-
-> **By‑name fetching** is available for **Magic** (Scryfall) and **Yu‑Gi‑Oh!** (YGOPRODeck). Every
-> other game is fully supported for layout and printing — bring your own art via local files,
-> MPCFill or the libraries.
+> **By‑name fetching** is available for **Magic** (Scryfall) and **Yu‑Gi‑Oh!** (YGOPRODeck). Every other
+> game is supported for layout and printing — pick its size from the dropdown and bring your own art via
+> local files, MPCFill or the libraries.
 
 ## ⌨️ Keyboard Shortcuts
 
@@ -182,7 +182,7 @@ A **native** Avalonia + .NET build, self‑contained — **no Wine, no install**
 | Proxy art | **MPCFill** API |
 | Deck import | Moxfield (via curl) · Archidekt |
 | Architecture | MVVM (Shell + per‑project ViewModels) |
-| Tests | xUnit — 430+ unit/integration tests, run in CI |
+| Tests | xUnit — 440+ unit/integration tests, run in CI |
 
 ## 🛠 Building from Source
 
@@ -208,12 +208,13 @@ MTGProxyBuilder/
 │   └── Services/                # Scryfall, YGOPRODeck, MPCFill, Moxfield, Archidekt,
 │                                # PDF, Bleed, image cache, libraries, undo…
 ├── MTGProxyBuilder.UI/          # Avalonia presentation layer
+│   ├── Assets/                  # App icon (icon.ico / icon.png)
 │   ├── MainWindow.axaml         # Shell: tabs, 3‑column layout, dark theme
 │   ├── Controls/                # GridEditorCanvas, CardEditorCanvas, panels…
 │   ├── Converters/              # incl. ImageLoader (async remote/local images)
 │   ├── Dialogs/                 # Art selector, libraries, settings, editor…
 │   └── ViewModels/              # Shell + per‑project view models, coordinators
-└── MTGProxyBuilder.Tests/       # 430+ unit/integration tests
+└── MTGProxyBuilder.Tests/       # 440+ unit/integration tests
 ```
 
 ## 📂 File Locations
