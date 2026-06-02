@@ -18,7 +18,7 @@ namespace MTGProxyBuilder.Core.Services
         {
             string dir = cacheDir ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MTGProxyBuilder", "Generated");
+                "YetAnotherProxyBuilder", "Generated");
             Directory.CreateDirectory(dir);
 
             string path = Path.Combine(dir, "ygo_back_v1.png");

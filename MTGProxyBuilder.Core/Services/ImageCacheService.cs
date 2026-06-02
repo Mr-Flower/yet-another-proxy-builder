@@ -16,7 +16,7 @@ namespace MTGProxyBuilder.Core.Services
         public ImageCacheService()
         {
             _cacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MTGProxyBuilder", "ImageCache");
+                "YetAnotherProxyBuilder", "ImageCache");
             Directory.CreateDirectory(_cacheDirectory);
             _metadataPath = Path.Combine(_cacheDirectory, "metadata.json");
             RebuildIndex();

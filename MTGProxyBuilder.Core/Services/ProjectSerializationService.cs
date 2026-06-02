@@ -23,7 +23,7 @@ namespace MTGProxyBuilder.Core.Services
         {
             _extractRoot = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MTGProxyBuilder", "ExtractedProjects");
+                "YetAnotherProxyBuilder", "ExtractedProjects");
             Directory.CreateDirectory(_extractRoot);
         }
 

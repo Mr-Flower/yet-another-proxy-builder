@@ -28,7 +28,7 @@ namespace MTGProxyBuilder.Core.Services
         {
             _libraryDirectory = customDirectory ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MTGProxyBuilder", defaultSubfolder);
+                "YetAnotherProxyBuilder", defaultSubfolder);
             Directory.CreateDirectory(_libraryDirectory);
             _catalogPath = Path.Combine(_libraryDirectory, "catalog.json");
             Load();

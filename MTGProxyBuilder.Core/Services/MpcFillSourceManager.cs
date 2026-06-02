@@ -25,7 +25,7 @@ namespace MTGProxyBuilder.Core.Services
         public MpcFillSourceManager()
         {
             var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MTGProxyBuilder");
+                "YetAnotherProxyBuilder");
             Directory.CreateDirectory(dir);
             _favoritesPath = Path.Combine(dir, "mpcfill_favorite_sources.json");
             LoadFavorites();

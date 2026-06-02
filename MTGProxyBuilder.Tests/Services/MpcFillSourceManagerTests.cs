@@ -11,7 +11,7 @@ public class MpcFillSourceManagerTests : IDisposable
     {
         // Back up the real favorites file so tests don't pollute it
         _origFavPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MTGProxyBuilder", "mpcfill_favorite_sources.json");
+            "YetAnotherProxyBuilder", "mpcfill_favorite_sources.json");
         _backupPath = _origFavPath + ".test_backup";
         if (File.Exists(_origFavPath))
             File.Copy(_origFavPath, _backupPath, true);

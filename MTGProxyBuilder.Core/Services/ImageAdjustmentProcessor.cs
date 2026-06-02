@@ -22,7 +22,7 @@ namespace MTGProxyBuilder.Core.Services
         {
             _cacheDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MTGProxyBuilder", "AdjustCache");
+                "YetAnotherProxyBuilder", "AdjustCache");
             Directory.CreateDirectory(_cacheDir);
         }
 

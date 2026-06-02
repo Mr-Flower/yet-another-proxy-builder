@@ -26,7 +26,7 @@ namespace MTGProxyBuilder.Core.Services
         {
             var dir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MTGProxyBuilder");
+                "YetAnotherProxyBuilder");
             Directory.CreateDirectory(dir);
             _path = Path.Combine(dir, "image_adjustments.json");
             _data = Load();

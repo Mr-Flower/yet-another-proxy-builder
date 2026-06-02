@@ -9,6 +9,10 @@ internal sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Carry over data from the pre-rebrand folder name. Must run before any service
+        // (settings, caches, libraries) computes its data path.
+        MTGProxyBuilder.Core.Services.AppDataMigration.Run();
+
         // On Linux, guarantee the bundled libSkiaSharp.so is used instead of any
         // system-installed copy (e.g. Arch/CachyOS libSkiaSharp.so.88).
         // Two layers of defence:

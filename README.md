@@ -219,7 +219,7 @@ MTGProxyBuilder/
 
 ## 📂 File Locations
 
-Data lives under the per‑user app‑data folder — `%AppData%\MTGProxyBuilder\` on Windows, `~/.config/MTGProxyBuilder/` on Linux:
+Data lives under the per‑user app‑data folder — `%AppData%\YetAnotherProxyBuilder\` on Windows, `~/.config/YetAnotherProxyBuilder/` on Linux (data from the previous folder name is migrated automatically on first launch):
 
 | Item | Path | Notes |
 |------|------|-------|

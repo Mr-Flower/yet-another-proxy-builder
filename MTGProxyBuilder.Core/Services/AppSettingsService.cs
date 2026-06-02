@@ -80,7 +80,7 @@ namespace MTGProxyBuilder.Core.Services
         public AppSettingsService()
         {
             var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MTGProxyBuilder");
+                "YetAnotherProxyBuilder");
             Directory.CreateDirectory(dir);
             _settingsPath = Path.Combine(dir, "app_settings.json");
             _settings = Load();

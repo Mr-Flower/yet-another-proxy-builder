@@ -17,7 +17,7 @@ namespace MTGProxyBuilder.Core.Services
         public CacheManager()
         {
             _rootDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MTGProxyBuilder");
+                "YetAnotherProxyBuilder");
 
             _imageCacheDir = Path.Combine(_rootDir, "ImageCache");
             _extractedProjectsDir = Path.Combine(_rootDir, "ExtractedProjects");
