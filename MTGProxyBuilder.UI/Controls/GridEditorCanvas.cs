@@ -82,7 +82,10 @@ namespace MTGProxyBuilder.UI.Controls
             Focusable = true;
             // Stop the parent ScrollViewer from scrolling the (huge) canvas to its top when it gains
             // keyboard focus on click — that was the "scroll, then click jumps back to the start" bug.
+            // The attached flag below covers focus; the RequestBringIntoView handler is the robust
+            // catch-all (regardless of timing/source) that keeps the offset put when clicking a card.
             ScrollViewer.SetBringIntoViewOnFocusChange(this, false);
+            AddHandler(Control.RequestBringIntoViewEvent, (_, e) => e.Handled = true);
 
             _redrawTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
             _redrawTimer.Tick += (_, _) => { _redrawTimer.Stop(); _ = RedrawAsync(); };
