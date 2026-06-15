@@ -80,7 +80,7 @@ public class BleedProcessorTests : IDisposable
             Assert.NotNull(result);
             Assert.NotEqual(inputPath, result); // Should return a different (processed) path
             Assert.True(File.Exists(result), "Processed file should exist on disk");
-            Assert.EndsWith(".jpg", result!); // Should be JPEG
+            Assert.EndsWith(".png", result!); // Scryfall bleed output is lossless PNG
         }
         finally
         {

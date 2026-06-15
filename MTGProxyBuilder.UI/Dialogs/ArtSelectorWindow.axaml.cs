@@ -928,12 +928,14 @@ public partial class ArtSelectorWindow : Window
 
     private async void OnOk(object? sender, RoutedEventArgs e)
     {
-        // Upgrade normal-size Scryfall thumbnail to full-size
+        // Upgrade normal-size Scryfall thumbnail to the highest-resolution asset ("png", 745x1040
+        // lossless — the max Scryfall serves). Picking art here nulls FullResFrontUrl, so this
+        // download is what ends up in the PDF: it must be the full-res png, not "large".
         if (ResultPath != null && _scryfallCardsByPath.TryGetValue(ResultPath, out var sc))
         {
             OkBtn.IsEnabled = false;
             StatusLabel.Text = "Downloading full resolution...";
-            var fullPath = await _scryfall.DownloadAndCacheImageAsync(sc, size: "large");
+            var fullPath = await _scryfall.DownloadAndCacheImageAsync(sc, size: "png");
             if (fullPath != null) ResultPath = fullPath;
             OkBtn.IsEnabled = true;
         }

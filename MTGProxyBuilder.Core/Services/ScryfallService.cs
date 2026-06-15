@@ -139,8 +139,11 @@ namespace MTGProxyBuilder.Core.Services
                 BackArtworkPath = backArtworkPath,
                 OriginalBackArtworkPath = backArtworkPath,
                 // Full-res URLs for on-demand download at PDF export (ArtworkPath holds a compressed copy).
-                FullResFrontUrl = GetImageUrl("large"),
-                FullResBackUrl = GetBackImageUrl("large"),
+                // "png" is the highest-resolution asset Scryfall serves (745x1040, lossless) — "large"
+                // is only 672x936 JPEG. Falls back to null if a card lacks a png (export then keeps the
+                // cached copy).
+                FullResFrontUrl = GetImageUrl("png"),
+                FullResBackUrl = GetBackImageUrl("png"),
                 IncludeBack = hasBack,
                 ManaCost = manaCost,
                 CMC = CMC,

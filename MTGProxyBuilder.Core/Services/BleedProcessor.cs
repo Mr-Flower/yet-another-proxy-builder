@@ -57,8 +57,10 @@ namespace MTGProxyBuilder.Core.Services
                 // algorithm changes so stale cached results (e.g. the broken coloured corners) are
                 // regenerated instead of reused. v5 = corner square-off that also swallows the
                 // anti-aliased grey fringe (luma-based fill to the dark border).
-                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{StableHash.Hex(sourcePath)}_b{bleedPixels}_v6";
-                string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
+                // v7: lossless PNG output. The Scryfall source is now a lossless "png" (745x1040), so
+                // re-encoding as JPEG would throw away quality for no reason — PNG keeps it pixel-exact.
+                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{StableHash.Hex(sourcePath)}_b{bleedPixels}_v7";
+                string outputPath = Path.Combine(_cacheDir, $"{hash}.png");
 
                 if (File.Exists(outputPath))
                 {
@@ -71,9 +73,8 @@ namespace MTGProxyBuilder.Core.Services
 
                 using var output = RenderBleed(source, bleedPixels);
 
-                // Save as JPEG (much faster than PNG, fine for print)
                 using var stream = File.OpenWrite(outputPath);
-                output.Encode(stream, SKEncodedImageFormat.Jpeg, 95);
+                output.Encode(stream, SKEncodedImageFormat.Png, 100);
 
                 _processedCache[cacheKey] = outputPath;
                 return outputPath;
@@ -136,7 +137,9 @@ namespace MTGProxyBuilder.Core.Services
 
             try
             {
-                string hash = $"crop_{Path.GetFileNameWithoutExtension(sourcePath)}_{StableHash.Hex(sourcePath)}_b{bleedKey}_v6";
+                // v7: JPEG quality 100. The MPCFill source is already a JPEG, so PNG would only bloat the
+                // file without recovering detail; q100 re-encodes the crop with no visible generational loss.
+                string hash = $"crop_{Path.GetFileNameWithoutExtension(sourcePath)}_{StableHash.Hex(sourcePath)}_b{bleedKey}_v7";
                 string outputPath = Path.Combine(_cacheDir, $"{hash}.jpg");
                 if (File.Exists(outputPath)) { _processedCache[cacheKey] = outputPath; return outputPath; }
 
@@ -156,7 +159,7 @@ namespace MTGProxyBuilder.Core.Services
                         new SKRect(0, 0, w, h));
 
                 using var stream = File.OpenWrite(outputPath);
-                output.Encode(stream, SKEncodedImageFormat.Jpeg, 95);
+                output.Encode(stream, SKEncodedImageFormat.Jpeg, 100);
                 _processedCache[cacheKey] = outputPath;
                 return outputPath;
             }

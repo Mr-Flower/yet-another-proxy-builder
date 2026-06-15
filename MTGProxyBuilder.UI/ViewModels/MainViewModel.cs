@@ -1618,14 +1618,16 @@ public class MainViewModel : ViewModelBase
             if (!string.IsNullOrEmpty(card.FullResFrontUrl))
             {
                 bool isMpc = BleedProcessor.ImageAlreadyHasBleed(origFront);
-                string key = (isMpc ? "mpc_full_" : "full_") + (card.ScryfallId ?? card.CardId);
+                // "fullpng_" (not the old "full_") so caches from the previous "large" Scryfall export
+                // are not reused — the key is size-agnostic, so the prefix is what busts them.
+                string key = (isMpc ? "mpc_full_" : "fullpng_") + (card.ScryfallId ?? card.CardId);
                 var full = await _scryfallService.DownloadUrlToCacheAsync(card.FullResFrontUrl, key);
                 if (!string.IsNullOrEmpty(full) && File.Exists(full)) { card.ArtworkPath = full; changed = true; }
             }
             if (!string.IsNullOrEmpty(card.FullResBackUrl) && !string.IsNullOrEmpty(origBack))
             {
                 bool isMpc = BleedProcessor.ImageAlreadyHasBleed(origBack);
-                string key = (isMpc ? "mpc_full_" : "full_") + (card.ScryfallId ?? card.CardId) + "_back";
+                string key = (isMpc ? "mpc_full_" : "fullpng_") + (card.ScryfallId ?? card.CardId) + "_back";
                 var full = await _scryfallService.DownloadUrlToCacheAsync(card.FullResBackUrl, key);
                 if (!string.IsNullOrEmpty(full) && File.Exists(full)) { card.BackArtworkPath = full; changed = true; }
             }
