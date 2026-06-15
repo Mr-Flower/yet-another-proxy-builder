@@ -2,27 +2,28 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
-using Avalonia.Collections;
 using Avalonia.Controls;
-using Avalonia.Controls.Shapes;
 using Avalonia.Data;
 using Avalonia.Input;
-using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using MTGProxyBuilder.Core;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
 
 namespace MTGProxyBuilder.UI.Controls
 {
+    // Retained-mode editor surface: a single Render(DrawingContext) paints every page, card, guide and
+    // overlay from cached state. Previously this materialised hundreds of Avalonia controls per redraw;
+    // drawing directly removes that churn and the layout work that came with it. Selection, the drop
+    // highlight and the drag ghost are state that Render draws, updated with InvalidateVisual().
     public class GridEditorCanvas : Canvas
     {
         private const float MmToPx = 96f / 25.4f;
@@ -33,38 +34,39 @@ namespace MTGProxyBuilder.UI.Controls
         private int _dragSourceCardIndex = -1;
         private int _pendingSelectSlot = -1;
         private Point _dragStart;
-        private Control? _dragGhost;
-        private Rectangle? _dropHighlight;
+        private Point _dragGhostCenter;
+        private Bitmap? _dragGhostBitmap;
+        private int _dropHighlightSlot = -1;
 
         // Pointer capture
         private IPointer? _capturedPointer;
 
         // Selection state
         private readonly HashSet<int> _selectedSlots = new();
-        // Selection highlight overlays, updated independently of the full redraw
-        private readonly List<Control> _selectionRects = new();
         private int _lastSelectedSlot = -1;
 
         // Flip state
         private readonly HashSet<int> _flippedCardIndices = new();
         private bool _allFlipped;
 
-        // Cached layout info for hit testing
-        private float _pageW, _pageH, _cellW, _cellH, _marginL, _marginT;
+        // Cached layout info for hit testing and rendering
+        private float _pageW, _pageH, _cellW, _cellH, _marginL, _marginT, _marginR, _marginB;
+        private float _bleed, _cardW, _cardH;
         private int _cols, _rows, _perPage, _totalPages;
+        private bool _regMarksActive;
         private List<ExpandedSlot> _expandedSlots = new();
 
         // Image cache. Shared (static) across all canvas instances and bounded FIFO: without a cap it grew
         // for the whole session. Evicted entries are only dropped from the dictionary, never Disposed —
-        // a bitmap may still be assigned to an on-screen Image, so we let the GC reclaim it once the UI
-        // releases it (disposing an in-use bitmap would blank/crash the render).
+        // a bitmap may still be drawn in the current frame, so we let the GC reclaim it once it is no
+        // longer referenced.
         private const int MaxCachedImages = 512;
         private static readonly ConcurrentDictionary<string, Bitmap?> _imageCache = new();
         private static readonly ConcurrentQueue<string> _imageCacheOrder = new();
 
-        // Bleed-extended images for a WYSIWYG preview matching the PDF. The bled JPEGs are produced
+        // Bleed-extended images for a WYSIWYG preview matching the PDF. The bled images are produced
         // and disk-cached by BleedProcessor (shared with PDF export); here we additionally map
-        // (sourcePath|bleedMm|useBleed) -> display path so PlaceCardVisual can look them up cheaply.
+        // (sourcePath|bleedMm|useBleed) -> display path so the card painter can look them up cheaply.
         private static readonly BleedProcessor _bleedProcessor = new();
         private static readonly ConcurrentDictionary<string, string> _displayPathCache = new();
         private double _bleedMm;
@@ -74,7 +76,20 @@ namespace MTGProxyBuilder.UI.Controls
         private static string DisplayKey(string raw, double bleedMm, bool useBleed, double cardWmm)
             => $"{raw}|{bleedMm}|{useBleed}|{cardWmm}";
 
-        // Debounce + async redraw
+        // Reusable brushes/pens for the static chrome.
+        private static readonly IBrush PageFill = Brushes.White;
+        private static readonly Pen PagePen = new(Brushes.Black, 0.5);
+        private static readonly Pen MarginPen = new(Brushes.LightBlue, 0.5, new DashStyle(new double[] { 4, 4 }, 0));
+        private static readonly IBrush SlotFill = new SolidColorBrush(Color.FromArgb(15, 0, 0, 0));
+        private static readonly Pen SlotPen = new(new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)), 0.5, new DashStyle(new double[] { 2, 2 }, 0));
+        private static readonly IBrush PageNumBrush = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0));
+        private static readonly Pen SelectionPen = new(Brushes.DodgerBlue, 3);
+        private static readonly IBrush DropFill = new SolidColorBrush(Color.FromArgb(50, 0, 120, 255));
+        private static readonly Pen DropPen = new(Brushes.DodgerBlue, 2);
+        private static readonly IBrush GhostFill = new SolidColorBrush(Color.FromArgb(180, 70, 130, 200));
+        private static readonly Pen GhostPen = new(Brushes.DodgerBlue, 2);
+
+        // Debounce + async image load
         private DispatcherTimer? _redrawTimer;
         private CancellationTokenSource? _redrawCts;
 
@@ -87,8 +102,6 @@ namespace MTGProxyBuilder.UI.Controls
             Focusable = true;
             // Stop the parent ScrollViewer from scrolling the (huge) canvas to its top when it gains
             // keyboard focus on click — that was the "scroll, then click jumps back to the start" bug.
-            // The attached flag below covers focus; the RequestBringIntoView handler is the robust
-            // catch-all (regardless of timing/source) that keeps the offset put when clicking a card.
             ScrollViewer.SetBringIntoViewOnFocusChange(this, false);
             AddHandler(Control.RequestBringIntoViewEvent, (_, e) => e.Handled = true);
 
@@ -146,7 +159,6 @@ namespace MTGProxyBuilder.UI.Controls
             AvaloniaProperty.Register<GridEditorCanvas, UndoService?>(nameof(UndoSvc));
 
         // ZoomLevel: multiplier applied to MmToPx so ScrollViewer sees the zoomed extent.
-        // Avalonia has no LayoutTransform; scaling the coordinate system is the portable workaround.
         public static readonly StyledProperty<double> ZoomLevelProperty =
             AvaloniaProperty.Register<GridEditorCanvas, double>(nameof(ZoomLevel), defaultValue: 1.0);
 
@@ -210,7 +222,7 @@ namespace MTGProxyBuilder.UI.Controls
         }
 
         // ================================================================
-        //  ASYNC RENDERING
+        //  STATE PREP + ASYNC IMAGE LOAD
         // ================================================================
 
         // Fire-and-forget entry point for the timer/flip callers: RedrawAsync runs background image work,
@@ -234,7 +246,7 @@ namespace MTGProxyBuilder.UI.Controls
             var token = _redrawCts.Token;
 
             var settings = PageSettings;
-            if (settings == null) { Children.Clear(); return; }
+            if (settings == null) { ClearContent(); return; }
 
             // Apply zoom by scaling the pixel-per-mm conversion factor.
             float mmPx = MmToPx * (float)ZoomLevel;
@@ -247,10 +259,6 @@ namespace MTGProxyBuilder.UI.Controls
             float marginT = (settings.MarginTopMm  + settings.OffsetYmm) * mmPx;
             float marginR = settings.MarginRightMm * mmPx;
             float marginB = settings.MarginBottomMm* mmPx;
-            // WYSIWYG bleed (same as the PDF): every image is normalized to "card + 2*bleed" — Scryfall
-            // scans extended up to the chosen bleed, MPCFill art cropped from its native 1/8" down to it
-            // — so the card stays the same size for both sources. The cut line sits on the card edge.
-            // Registration-marks mode draws cards bare (no bleed processing).
             float effectiveBleedMm = settings.EffectiveBleedMm;
             float cellW   = (settings.CardWidthMm  + 2 * effectiveBleedMm) * mmPx;
             float cellH   = (settings.CardHeightMm + 2 * effectiveBleedMm) * mmPx;
@@ -270,7 +278,7 @@ namespace MTGProxyBuilder.UI.Controls
             int rows = settings.CardsPerColumn;
             int perPage  = settings.CardsPerPage;
 
-            if (cols <= 0 || rows <= 0 || perPage <= 0) { Children.Clear(); return; }
+            if (cols <= 0 || rows <= 0 || perPage <= 0) { ClearContent(); return; }
 
             var slots = BuildExpandedSlots();
             var pathsToLoad = CollectPathsToLoad(slots);
@@ -283,114 +291,34 @@ namespace MTGProxyBuilder.UI.Controls
             if (token.IsCancellationRequested) { IsRendering = false; return; }
 
             _pageW = pageW; _pageH = pageH; _cellW = cellW; _cellH = cellH;
-            _marginL = marginL; _marginT = marginT;
+            _marginL = marginL; _marginT = marginT; _marginR = marginR; _marginB = marginB;
+            _bleed = bleed; _cardW = cardW; _cardH = cardH;
             _cols = cols; _rows = rows; _perPage = perPage;
+            _regMarksActive = regMarksActive;
             _expandedSlots = slots;
 
             int totalSlots = slots.Count;
             _totalPages = totalSlots > 0 ? (int)Math.Ceiling((double)totalSlots / perPage) : 1;
             if (_totalPages < 1) _totalPages = 1;
 
-            Children.Clear();
-            _isDragging = false; _dragGhost = null; _dropHighlight = null;
+            _isDragging = false; _dragGhostBitmap = null; _dropHighlightSlot = -1;
 
             Width  = pageW;
             Height = _totalPages * pageH + (_totalPages - 1) * PageGapPx;
 
-            IsRendering = true;
-            for (int page = 0; page < _totalPages; page++)
-            {
-                if (token.IsCancellationRequested) { IsRendering = false; return; }
-                RenderProgress = _totalPages > 1
-                    ? $"Rendering page {page + 1} of {_totalPages}..."
-                    : "Rendering page...";
-                float pageTop = page * (pageH + PageGapPx);
-
-                if (page > 0)
-                {
-                    var lbl = new TextBlock
-                    {
-                        Text = $"Page {page + 1} of {_totalPages}",
-                        FontSize = 12, Foreground = Brushes.Gray, FontWeight = FontWeight.SemiBold
-                    };
-                    SetLeft(lbl, 4); SetTop(lbl, pageTop - 18); Children.Add(lbl);
-                }
-
-                var bg = new Rectangle { Width = pageW, Height = pageH, Fill = Brushes.White, Stroke = Brushes.Black, StrokeThickness = 0.5 };
-                SetLeft(bg, 0); SetTop(bg, pageTop); Children.Add(bg);
-
-                var mr = new Rectangle
-                {
-                    Width = pageW - marginL - marginR, Height = pageH - marginT - marginB,
-                    Stroke = Brushes.LightBlue, StrokeThickness = 0.5,
-                    StrokeDashArray = new AvaloniaList<double> { 4, 4 }
-                };
-                SetLeft(mr, marginL); SetTop(mr, pageTop + marginT); Children.Add(mr);
-
-                int pageStart = page * perPage;
-
-                // Pass 1: cut guides BEHIND the cards (matches the PDF) — drawn before the card art so
-                // the lines sit under the cards, visible only in the gaps/bleed margins.
-                if (ShowCutGuides && !regMarksActive)
-                {
-                    for (int r = 0; r < rows; r++)
-                        for (int c = 0; c < cols; c++)
-                        {
-                            int flat = pageStart + r * cols + c;
-                            if (flat >= slots.Count) continue;
-                            float gx = marginL + c * cellW;
-                            float gy = pageTop + marginT + r * cellH;
-                            CardVisualRenderer.DrawCutGuides(this, gx, gy, bleed, cardW, cardH, pageTop, pageW, pageH);
-                        }
-                }
-
-                // Pass 2: slot backgrounds + card art (on top of the guides).
-                for (int r = 0; r < rows; r++)
-                {
-                    for (int c = 0; c < cols; c++)
-                    {
-                        int flat = pageStart + r * cols + c;
-                        float x = marginL + c * cellW;
-                        float y = pageTop + marginT + r * cellH;
-
-                        var slot = new Rectangle
-                        {
-                            Width = cellW, Height = cellH,
-                            Fill = new SolidColorBrush(Color.FromArgb(15, 0, 0, 0)),
-                            Stroke = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
-                            StrokeThickness = 0.5, StrokeDashArray = new AvaloniaList<double> { 2, 2 }
-                        };
-                        SetLeft(slot, x); SetTop(slot, y); Children.Add(slot);
-
-                        if (flat < slots.Count)
-                        {
-                            var es = slots[flat];
-                            bool flipped  = IsCardFlipped(es.CardIndex);
-                            bool selected = false; // selection drawn via UpdateSelectionHighlight overlay
-                            PlaceCardVisual(es.Card, x, y, cellW, cellH, bleed, cardW, cardH, pageTop, pageW, pageH, flipped, selected);
-                        }
-                    }
-                }
-
-                var pn = new TextBlock
-                {
-                    Text = $"{page + 1}", FontSize = 14,
-                    Foreground = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)),
-                    FontWeight = FontWeight.Bold
-                };
-                SetLeft(pn, pageW - 30); SetTop(pn, pageTop + pageH - 25); Children.Add(pn);
-
-                var regPs = PrintSettingsSource;
-                if (regPs?.ShowRegistrationMarks == true)
-                    DrawRegistrationMarksPreview(pageTop, pageW, pageH, regPs);
-
-                if (_totalPages > 1)
-                    await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
-            }
-
-            UpdateSelectionHighlight();
             IsRendering = false;
             RenderProgress = null;
+            InvalidateVisual();
+        }
+
+        private void ClearContent()
+        {
+            _expandedSlots = new();
+            _totalPages = 0;
+            _cols = _rows = _perPage = 0;
+            IsRendering = false;
+            RenderProgress = null;
+            InvalidateVisual();
         }
 
         /// <summary>Expands the card list into one slot per physical copy (Quantity).</summary>
@@ -448,34 +376,158 @@ namespace MTGProxyBuilder.UI.Controls
                 }, token);
                 loaded++;
                 RenderProgress = $"Loading images ({loaded}/{total})...";
-                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
             }
             return true;
         }
 
+        private bool IsCardFlipped(int cardIndex) => _allFlipped ^ _flippedCardIndices.Contains(cardIndex);
+
+        // ================================================================
+        //  RENDER
+        // ================================================================
+
+        private static readonly Typeface ChromeTypeface = new("Segoe UI");
+
+        public override void Render(DrawingContext context)
+        {
+            base.Render(context); // paints the gray Background
+
+            if (_cols <= 0 || _rows <= 0 || _perPage <= 0 || _expandedSlots == null) return;
+
+            var slots = _expandedSlots;
+
+            for (int page = 0; page < _totalPages; page++)
+            {
+                float pageTop = page * (_pageH + PageGapPx);
+
+                if (page > 0)
+                {
+                    var lbl = ChromeText($"Page {page + 1} of {_totalPages}", 12, Brushes.Gray, FontWeight.SemiBold);
+                    context.DrawText(lbl, new Point(4, pageTop - 18));
+                }
+
+                // Page background + margin box.
+                context.DrawRectangle(PageFill, PagePen, new Rect(0, pageTop, _pageW, _pageH));
+                context.DrawRectangle(null, MarginPen,
+                    new Rect(_marginL, pageTop + _marginT, _pageW - _marginL - _marginR, _pageH - _marginT - _marginB));
+
+                int pageStart = page * _perPage;
+
+                // Pass 1: cut guides BEHIND the cards (matches the PDF) — only for occupied cells.
+                if (ShowCutGuides && !_regMarksActive)
+                {
+                    for (int r = 0; r < _rows; r++)
+                        for (int c = 0; c < _cols; c++)
+                        {
+                            int flat = pageStart + r * _cols + c;
+                            if (flat >= slots.Count) continue;
+                            float gx = _marginL + c * _cellW;
+                            float gy = pageTop + _marginT + r * _cellH;
+                            CardVisualRenderer.PaintCutGuides(context, gx, gy, _bleed, _cardW, _cardH, pageTop, _pageW, _pageH);
+                        }
+                }
+
+                // Pass 2: slot backgrounds + card art.
+                for (int r = 0; r < _rows; r++)
+                {
+                    for (int c = 0; c < _cols; c++)
+                    {
+                        int flat = pageStart + r * _cols + c;
+                        float x = _marginL + c * _cellW;
+                        float y = pageTop + _marginT + r * _cellH;
+
+                        context.DrawRectangle(SlotFill, SlotPen, new Rect(x, y, _cellW, _cellH));
+
+                        if (flat < slots.Count)
+                        {
+                            var es = slots[flat];
+                            PaintCard(context, es.Card, x, y, IsCardFlipped(es.CardIndex));
+                        }
+                    }
+                }
+
+                // Page number (bottom-right).
+                var pn = ChromeText($"{page + 1}", 14, PageNumBrush, FontWeight.Bold);
+                context.DrawText(pn, new Point(_pageW - 30, pageTop + _pageH - 25));
+
+                if (_regMarksActive && PrintSettingsSource is { } regPs)
+                    DrawRegistrationMarksPreview(context, pageTop, _pageW, _pageH, regPs);
+            }
+
+            // Selection outlines.
+            if (_cellW > 0 && _cellH > 0)
+                foreach (int slot in _selectedSlots)
+                {
+                    if (slot < 0 || slot >= slots.Count) continue;
+                    var (sx, sy) = SlotToPosition(slot);
+                    context.DrawRectangle(null, SelectionPen, new Rect(sx, sy, _cellW, _cellH));
+                }
+
+            // Drop highlight + drag ghost (only while dragging).
+            if (_isDragging)
+            {
+                if (_dropHighlightSlot >= 0)
+                {
+                    var (dx, dy) = SlotToPosition(_dropHighlightSlot);
+                    context.DrawRectangle(DropFill, DropPen, new Rect(dx, dy, _cellW, _cellH), 3, 3);
+                }
+
+                var ghostRect = new Rect(_dragGhostCenter.X - _cellW / 2, _dragGhostCenter.Y - _cellH / 2, _cellW, _cellH);
+                using (context.PushOpacity(0.7))
+                {
+                    if (_dragGhostBitmap != null)
+                        context.DrawImage(_dragGhostBitmap, ghostRect);
+                    else
+                        context.DrawRectangle(GhostFill, GhostPen, ghostRect, 4, 4);
+                }
+            }
+        }
+
+        private static FormattedText ChromeText(string text, double size, IBrush brush, FontWeight weight)
+            => new(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                new Typeface(ChromeTypeface.FontFamily, FontStyle.Normal, weight), size, brush);
+
         private const float InToPx = 96f;
 
-        private void DrawRegistrationMarksPreview(float pageTop, float pageW, float pageH, PrintSettings ps)
+        private void DrawRegistrationMarksPreview(DrawingContext ctx, float pageTop, float pageW, float pageH, PrintSettings ps)
         {
             float zoom   = (float)ZoomLevel;
             float inset  = ps.RegMarkInsetIn    * InToPx * zoom;
             float length = ps.RegMarkLengthIn   * InToPx * zoom;
             float thick  = ps.RegMarkThicknessIn* InToPx * zoom;
 
-            void AddMark(float rx, float ry, float rw, float rh)
-            {
-                var r = new Rectangle { Width = rw, Height = rh, Fill = Brushes.Black, IsHitTestVisible = false };
-                SetLeft(r, rx); SetTop(r, ry); Children.Add(r);
-            }
+            void Mark(float rx, float ry, float rw, float rh)
+                => ctx.DrawRectangle(Brushes.Black, null, new Rect(rx, ry, rw, rh));
 
-            AddMark(inset,                  pageTop + inset,             length, length);
-            AddMark(pageW - inset - length, pageTop + inset,             length, thick);
-            AddMark(pageW - inset - thick,  pageTop + inset + thick,     thick,  length - thick);
-            AddMark(inset,                  pageTop + pageH - inset - length, thick, length - thick);
-            AddMark(inset,                  pageTop + pageH - inset - thick,  length, thick);
+            Mark(inset,                  pageTop + inset,             length, length);
+            Mark(pageW - inset - length, pageTop + inset,             length, thick);
+            Mark(pageW - inset - thick,  pageTop + inset + thick,     thick,  length - thick);
+            Mark(inset,                  pageTop + pageH - inset - length, thick, length - thick);
+            Mark(inset,                  pageTop + pageH - inset - thick,  length, thick);
         }
 
-        private bool IsCardFlipped(int cardIndex) => _allFlipped ^ _flippedCardIndices.Contains(cardIndex);
+        private void PaintCard(DrawingContext ctx, CardModel card, float x, float y, bool flipped)
+        {
+            bool hasBackArt = !string.IsNullOrEmpty(card.BackArtworkPath);
+            string? imagePath = flipped ? (hasBackArt ? card.BackArtworkPath : null) : card.ArtworkPath;
+
+            Bitmap? bmp = null;
+            bool bledImage = false;
+            if (!(flipped && !hasBackArt) && !string.IsNullOrEmpty(imagePath))
+            {
+                string disp = _displayPathCache.TryGetValue(DisplayKey(imagePath, _bleedMm, _processBleed, _cardWmm), out var d)
+                    ? d : imagePath;
+                bmp = GetCachedImage(disp);
+                bledImage = _useBleed && bmp != null
+                    && (!string.Equals(disp, imagePath, StringComparison.Ordinal)
+                        || BleedProcessor.ImageAlreadyHasBleed(imagePath));
+            }
+
+            CardVisualRenderer.PaintCard(ctx, card, bmp,
+                x, y, _cellW, _cellH, _bleed, _cardW, _cardH,
+                flipped, selected: false, PrintSettingsSource, bledImage);
+        }
 
         // ================================================================
         //  IMAGE CACHE
@@ -595,10 +647,13 @@ namespace MTGProxyBuilder.UI.Controls
             {
                 if (Math.Abs(delta.X) < 5 && Math.Abs(delta.Y) < 5) return;
                 _isDragging = true;
-                CreateDragGhost();
+                _dragGhostBitmap = CardsSource != null && _dragSourceCardIndex < CardsSource.Count
+                    ? GetCachedImage(CardsSource[_dragSourceCardIndex].ArtworkPath)
+                    : null;
             }
-            if (_dragGhost != null) { SetLeft(_dragGhost, pos.X - _cellW / 2); SetTop(_dragGhost, pos.Y - _cellH / 2); }
-            UpdateDropHighlight(pos);
+            _dragGhostCenter = pos;
+            _dropHighlightSlot = HitTestSlot(pos);
+            InvalidateVisual();
         }
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -620,10 +675,10 @@ namespace MTGProxyBuilder.UI.Controls
                 UpdateSelectionHighlight();
             }
 
-            if (_dragGhost    != null) Children.Remove(_dragGhost);
-            if (_dropHighlight != null) Children.Remove(_dropHighlight);
-            _dragGhost = null; _dropHighlight = null;
+            bool wasDragging = _isDragging;
+            _dragGhostBitmap = null; _dropHighlightSlot = -1;
             _isDragging = false; _dragSourceCardIndex = -1; _pendingSelectSlot = -1;
+            if (wasDragging) InvalidateVisual();
         }
 
         protected override void OnKeyDown(KeyEventArgs e)
@@ -728,22 +783,6 @@ namespace MTGProxyBuilder.UI.Controls
         //  DRAG AND DROP
         // ================================================================
 
-        private void CreateDragGhost()
-        {
-            if (CardsSource == null || _dragSourceCardIndex < 0) return;
-            var card = CardsSource[_dragSourceCardIndex];
-            var ghost = new Border
-            {
-                Width = _cellW, Height = _cellH, Opacity = 0.7,
-                Background = new SolidColorBrush(Color.FromArgb(180, 70, 130, 200)),
-                BorderBrush = Brushes.DodgerBlue, BorderThickness = new Thickness(2),
-                CornerRadius = new CornerRadius(4), IsHitTestVisible = false
-            };
-            var bmp = GetCachedImage(card.ArtworkPath);
-            if (bmp != null) ghost.Background = new ImageBrush { Source = bmp, Stretch = Stretch.Fill };
-            _dragGhost = ghost; Children.Add(_dragGhost);
-        }
-
         private void SyncSelectedCard()
         {
             if (_selectedSlots.Count == 0 || _expandedSlots.Count == 0) { SelectedCard = null; return; }
@@ -753,22 +792,6 @@ namespace MTGProxyBuilder.UI.Controls
                 ? _lastSelectedSlot
                 : _selectedSlots.First();
             SelectedCard = (slot >= 0 && slot < _expandedSlots.Count) ? _expandedSlots[slot].Card : null;
-        }
-
-        private void UpdateDropHighlight(Point pos)
-        {
-            if (_dropHighlight != null) Children.Remove(_dropHighlight);
-            int slot = HitTestSlot(pos);
-            if (slot < 0) return;
-            var (x, y) = SlotToPosition(slot);
-            _dropHighlight = new Rectangle
-            {
-                Width = _cellW, Height = _cellH,
-                Fill = new SolidColorBrush(Color.FromArgb(50, 0, 120, 255)),
-                Stroke = Brushes.DodgerBlue, StrokeThickness = 2,
-                RadiusX = 3, RadiusY = 3, IsHitTestVisible = false
-            };
-            SetLeft(_dropHighlight, x); SetTop(_dropHighlight, y); Children.Add(_dropHighlight);
         }
 
         private void PerformDrop(int targetFlatSlot)
@@ -811,64 +834,9 @@ namespace MTGProxyBuilder.UI.Controls
             return (_marginL + (slotOnPage % _cols) * _cellW, pageTop + _marginT + (slotOnPage / _cols) * _cellH);
         }
 
-        // Lightweight selection update: add/remove blue highlight rectangles without
-        // tearing down and rebuilding the whole canvas. Rebuilding (RedrawAsync) reloads
-        // every image and resets the Canvas size, which made the view flash and the
-        // ScrollViewer jump back to the top on every click.
-        private void UpdateSelectionHighlight()
-        {
-            foreach (var r in _selectionRects)
-                Children.Remove(r);
-            _selectionRects.Clear();
-
-            if (_cellW <= 0 || _cellH <= 0) return;
-
-            foreach (int slot in _selectedSlots)
-            {
-                if (slot < 0 || slot >= _expandedSlots.Count) continue;
-                var (x, y) = SlotToPosition(slot);
-                var selRect = new Rectangle
-                {
-                    Width = _cellW, Height = _cellH,
-                    Stroke = Brushes.DodgerBlue, StrokeThickness = 3,
-                    IsHitTestVisible = false
-                };
-                SetLeft(selRect, x); SetTop(selRect, y);
-                Children.Add(selRect);
-                _selectionRects.Add(selRect);
-            }
-        }
-
-        // ================================================================
-        //  CARD VISUAL
-        // ================================================================
-
-        private void PlaceCardVisual(CardModel card, float x, float y,
-            float cellW, float cellH, float bleed, float cardW, float cardH,
-            float pageTop, float pageW, float pageH, bool flipped, bool selected)
-        {
-            bool hasBackArt = !string.IsNullOrEmpty(card.BackArtworkPath);
-            string? imagePath = flipped ? (hasBackArt ? card.BackArtworkPath : null) : card.ArtworkPath;
-
-            Bitmap? bmp = null;
-            bool bledImage = false;
-            if (!(flipped && !hasBackArt) && !string.IsNullOrEmpty(imagePath))
-            {
-                string disp = _displayPathCache.TryGetValue(DisplayKey(imagePath, _bleedMm, _processBleed, _cardWmm), out var d)
-                    ? d : imagePath;
-                bmp = GetCachedImage(disp);
-                // Fill the whole cell when the drawn image carries the bleed: either a Scryfall scan was
-                // edge-extended (disp != raw), or it's MPCFill art that already includes its own bleed
-                // and is drawn whole.
-                bledImage = _useBleed && bmp != null
-                    && (!string.Equals(disp, imagePath, StringComparison.Ordinal)
-                        || BleedProcessor.ImageAlreadyHasBleed(imagePath));
-            }
-
-            CardVisualRenderer.PlaceCard(this, card, bmp,
-                x, y, cellW, cellH, bleed, cardW, cardH,
-                pageTop, pageW, pageH, flipped, selected,
-                ShowCutGuides, PrintSettingsSource, bledImage);
-        }
+        // Selection changed: just repaint. With retained rendering the selection outlines are drawn from
+        // _selectedSlots in Render, so there are no overlay controls to add/remove, and no full rebuild
+        // (which would reload images and could jump the ScrollViewer).
+        private void UpdateSelectionHighlight() => InvalidateVisual();
     }
 }
