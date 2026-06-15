@@ -10,30 +10,12 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
 using MTGProxyBuilder.UI.Services;
 
 namespace MTGProxyBuilder.UI.ViewModels;
-
-public class RelayCommand : ICommand
-{
-    private readonly Action<object?> _execute;
-    private readonly Predicate<object?>? _canExecute;
-
-    public RelayCommand(Action<object?> execute, Predicate<object?>? canExecute = null)
-    {
-        _execute = execute ?? throw new ArgumentNullException(nameof(execute));
-        _canExecute = canExecute;
-    }
-
-    public event EventHandler? CanExecuteChanged;
-
-    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
-
-    public bool CanExecute(object? parameter) => _canExecute?.Invoke(parameter) ?? true;
-    public void Execute(object? parameter) => _execute(parameter);
-}
 
 // Base for all view-models. ObservableObject (CommunityToolkit.Mvvm) supplies INotifyPropertyChanged,
 // SetProperty and OnPropertyChanged with the same signatures the hand-rolled base used.
@@ -140,22 +122,22 @@ public class MainViewModel : ViewModelBase
     private DispatcherTimer? _layoutBusyTimer;
 
     // Commands stored as RelayCommand for RaiseCanExecuteChanged
-    private readonly RelayCommand _removeCardCmd;
-    private readonly RelayCommand _browseFrontArtworkCmd;
-    private readonly RelayCommand _browseBackArtworkCmd;
-    private readonly RelayCommand _selectBackArtForAllCmd;
-    private readonly RelayCommand _applyBackArtToSelectedCmd;
-    private readonly RelayCommand _applyBackArtToAllCmd;
-    private readonly RelayCommand _clearBackArtFromAllCmd;
-    private readonly RelayCommand _removeBackArtFromLibraryCmd;
-    private readonly RelayCommand _scryfallSearchCmd;
-    private readonly RelayCommand _addScryfallCardCmd;
-    private readonly RelayCommand _adjustImageCmd; // fork-specific
-    private readonly RelayCommand _unlinkCardCopyCmd; // fork-specific
-    private readonly RelayCommand _addMpcFillCardCmd;
-    private readonly RelayCommand _clearAllCardsCmd;
-    private readonly RelayCommand _undoCmd;
-    private readonly RelayCommand _redoCmd;
+    private readonly IRelayCommand _removeCardCmd;
+    private readonly IRelayCommand _browseFrontArtworkCmd;
+    private readonly IRelayCommand _browseBackArtworkCmd;
+    private readonly IRelayCommand _selectBackArtForAllCmd;
+    private readonly IRelayCommand _applyBackArtToSelectedCmd;
+    private readonly IRelayCommand _applyBackArtToAllCmd;
+    private readonly IRelayCommand _clearBackArtFromAllCmd;
+    private readonly IRelayCommand _removeBackArtFromLibraryCmd;
+    private readonly IRelayCommand _scryfallSearchCmd;
+    private readonly IRelayCommand _addScryfallCardCmd;
+    private readonly IRelayCommand _adjustImageCmd; // fork-specific
+    private readonly IRelayCommand _unlinkCardCopyCmd; // fork-specific
+    private readonly IRelayCommand _addMpcFillCardCmd;
+    private readonly IRelayCommand _clearAllCardsCmd;
+    private readonly IRelayCommand _undoCmd;
+    private readonly IRelayCommand _redoCmd;
 
     public MainViewModel(IDialogService dialogService, AppServices services)
     {
@@ -192,81 +174,81 @@ public class MainViewModel : ViewModelBase
         _cards = new ObservableCollection<CardModel>();
         _cards.CollectionChanged += OnCardsCollectionChanged;
 
-        NewProjectCommand = new RelayCommand(_ => NewProject());
-        OpenProjectCommand = new RelayCommand(_ => _ = OpenProjectAsync());
-        SaveProjectCommand = new RelayCommand(_ => _ = SaveProjectAsync());
-        SaveProjectAsCommand = new RelayCommand(_ => _ = SaveProjectAsAsync());
-        _undoCmd = new RelayCommand(_ => Undo(), _ => _undoService.CanUndo);
+        NewProjectCommand = new RelayCommand(() => NewProject());
+        OpenProjectCommand = new AsyncRelayCommand(() => OpenProjectAsync());
+        SaveProjectCommand = new AsyncRelayCommand(() => SaveProjectAsync());
+        SaveProjectAsCommand = new AsyncRelayCommand(() => SaveProjectAsAsync());
+        _undoCmd = new RelayCommand(() => Undo(), () => _undoService.CanUndo);
         UndoCommand = _undoCmd;
-        _redoCmd = new RelayCommand(_ => Redo(), _ => _undoService.CanRedo);
+        _redoCmd = new RelayCommand(() => Redo(), () => _undoService.CanRedo);
         RedoCommand = _redoCmd;
         // RelayCommand has no auto-requery, so the Undo/Redo buttons stayed disabled after PushUndo.
         // Re-evaluate them whenever the undo/redo stacks change (SaveState/Undo/Redo/Clear).
         _undoService.StateChanged += () =>
         {
-            _undoCmd.RaiseCanExecuteChanged();
-            _redoCmd.RaiseCanExecuteChanged();
+            _undoCmd.NotifyCanExecuteChanged();
+            _redoCmd.NotifyCanExecuteChanged();
         };
-        ExitCommand = new RelayCommand(_ => _dialogService.Shutdown());
+        ExitCommand = new RelayCommand(() => _dialogService.Shutdown());
 
-        _removeCardCmd = new RelayCommand(_ => RemoveCard(), _ => SelectedCard != null);
+        _removeCardCmd = new RelayCommand(() => RemoveCard(), () => SelectedCard != null);
         RemoveCardCommand = _removeCardCmd;
-        _browseFrontArtworkCmd = new RelayCommand(_ => _ = BrowseFrontArtworkAsync(), _ => SelectedCard != null);
+        _browseFrontArtworkCmd = new AsyncRelayCommand(() => BrowseFrontArtworkAsync(), () => SelectedCard != null);
         BrowseFrontArtworkCommand = _browseFrontArtworkCmd;
-        _browseBackArtworkCmd = new RelayCommand(_ => _ = BrowseBackArtworkAsync(), _ => SelectedCard != null);
+        _browseBackArtworkCmd = new AsyncRelayCommand(() => BrowseBackArtworkAsync(), () => SelectedCard != null);
         BrowseBackArtworkCommand = _browseBackArtworkCmd;
-        _selectBackArtForAllCmd = new RelayCommand(_ => _ = SelectBackArtForAllAsync(), _ => Cards.Count > 0);
+        _selectBackArtForAllCmd = new AsyncRelayCommand(() => SelectBackArtForAllAsync(), () => Cards.Count > 0);
         SelectBackArtForAllCommand = _selectBackArtForAllCmd;
 
-        _scryfallSearchCmd = new RelayCommand(_ => _ = ScryfallSearchAsync(), _ => !string.IsNullOrWhiteSpace(ScryfallSearchQuery));
+        _scryfallSearchCmd = new AsyncRelayCommand(() => ScryfallSearchAsync(), () => !string.IsNullOrWhiteSpace(ScryfallSearchQuery));
         ScryfallSearchCommand = _scryfallSearchCmd;
-        _addScryfallCardCmd = new RelayCommand(_ => _ = AddScryfallCardAsync(), _ => SelectedScryfallCard != null);
+        _addScryfallCardCmd = new AsyncRelayCommand(() => AddScryfallCardAsync(), () => SelectedScryfallCard != null);
         AddScryfallCardCommand = _addScryfallCardCmd;
-        _adjustImageCmd = new RelayCommand(_ => _ = AdjustImageAsync(), _ => SelectedCard != null); // fork-specific
+        _adjustImageCmd = new AsyncRelayCommand(() => AdjustImageAsync(), () => SelectedCard != null); // fork-specific
         AdjustImageCommand = _adjustImageCmd;
-        _unlinkCardCopyCmd = new RelayCommand(_ => UnlinkCardCopy(), _ => SelectedCard != null && SelectedCard.Quantity > 1); // fork-specific
+        _unlinkCardCopyCmd = new RelayCommand(() => UnlinkCardCopy(), () => SelectedCard != null && SelectedCard.Quantity > 1); // fork-specific
         UnlinkCardCopyCommand = _unlinkCardCopyCmd;
 
-        AddCardFromFileCommand = new RelayCommand(_ => _ = AddCardFromFileAsync());
-        ExportPdfCommand = new RelayCommand(_ => _ = ExportPdfAsync());
-        ExportSvgCommand = new RelayCommand(_ => _ = ExportSvgOnlyAsync());
+        AddCardFromFileCommand = new AsyncRelayCommand(() => AddCardFromFileAsync());
+        ExportPdfCommand = new AsyncRelayCommand(() => ExportPdfAsync());
+        ExportSvgCommand = new AsyncRelayCommand(() => ExportSvgOnlyAsync());
 
-        _removeBackArtFromLibraryCmd = new RelayCommand(_ => _ = RemoveBackArtFromLibraryAsync(), _ => SelectedBackArt != null);
+        _removeBackArtFromLibraryCmd = new AsyncRelayCommand(() => RemoveBackArtFromLibraryAsync(), () => SelectedBackArt != null);
         RemoveBackArtFromLibraryCommand = _removeBackArtFromLibraryCmd;
-        AddBackArtToLibraryCommand = new RelayCommand(_ => _ = AddBackArtToLibraryAsync());
-        _applyBackArtToSelectedCmd = new RelayCommand(_ => ApplyBackArtToSelected(), _ => SelectedBackArt != null && SelectedCard != null);
+        AddBackArtToLibraryCommand = new AsyncRelayCommand(() => AddBackArtToLibraryAsync());
+        _applyBackArtToSelectedCmd = new RelayCommand(() => ApplyBackArtToSelected(), () => SelectedBackArt != null && SelectedCard != null);
         ApplyBackArtToSelectedCommand = _applyBackArtToSelectedCmd;
-        _applyBackArtToAllCmd = new RelayCommand(_ => _ = ApplyBackArtToAllAsync(), _ => SelectedBackArt != null && Cards.Count > 0);
+        _applyBackArtToAllCmd = new AsyncRelayCommand(() => ApplyBackArtToAllAsync(), () => SelectedBackArt != null && Cards.Count > 0);
         ApplyBackArtToAllCommand = _applyBackArtToAllCmd;
-        _clearBackArtFromAllCmd = new RelayCommand(_ => _ = ClearBackArtFromAllAsync(), _ => Cards.Count > 0);
+        _clearBackArtFromAllCmd = new AsyncRelayCommand(() => ClearBackArtFromAllAsync(), () => Cards.Count > 0);
         ClearBackArtFromAllCommand = _clearBackArtFromAllCmd;
 
-        SetPagePresetCommand = new RelayCommand(p => SetPagePreset(p as string));
-        ToggleLandscapeCommand = new RelayCommand(_ => ToggleLandscape());
+        SetPagePresetCommand = new RelayCommand<object?>(p => SetPagePreset(p as string));
+        ToggleLandscapeCommand = new RelayCommand(() => ToggleLandscape());
 
-        ApplySortToProjectCommand = new RelayCommand(_ => ApplySortToProject());
-        ClearFilterCommand = new RelayCommand(_ => ClearFilter());
+        ApplySortToProjectCommand = new RelayCommand(() => ApplySortToProject());
+        ClearFilterCommand = new RelayCommand(() => ClearFilter());
 
-        ImportDeckCommand = new RelayCommand(_ => _ = ImportDeckAsync(), _ => !string.IsNullOrWhiteSpace(ImportDeckUrl));
-        ImportTextListCommand = new RelayCommand(_ => _ = ImportTextListAsync(), _ => !string.IsNullOrWhiteSpace(ImportDeckText));
-        BuildAdvancedQueryCommand = new RelayCommand(_ => ApplyAdvancedQuery());
-        ClearAdvancedSearchCommand = new RelayCommand(_ => ClearAdvancedSearch());
+        ImportDeckCommand = new AsyncRelayCommand(() => ImportDeckAsync(), () => !string.IsNullOrWhiteSpace(ImportDeckUrl));
+        ImportTextListCommand = new AsyncRelayCommand(() => ImportTextListAsync(), () => !string.IsNullOrWhiteSpace(ImportDeckText));
+        BuildAdvancedQueryCommand = new RelayCommand(() => ApplyAdvancedQuery());
+        ClearAdvancedSearchCommand = new RelayCommand(() => ClearAdvancedSearch());
 
-        LoadMpcSourcesCommand = new RelayCommand(_ => _ = LoadMpcSourcesAsync());
-        ToggleMpcFavoriteFromResultCommand = new RelayCommand(p => ToggleFavoriteFromResult(p));
-        ManageMpcSourcesCommand = new RelayCommand(_ => _ = ManageMpcSourcesAsync());
-        ImportMpcFillXmlCommand = new RelayCommand(_ => _ = ImportMpcFillXmlAsync());
-        ClearCacheCommand = new RelayCommand(_ => _ = ClearCacheAsync());
-        ManageBackArtLibraryCommand = new RelayCommand(_ => _ = ManageBackArtLibraryAsync());
-        ManageFrontArtLibraryCommand = new RelayCommand(_ => _ = ManageFrontArtLibraryAsync());
-        DownloadUpdateCommand = new RelayCommand(_ => DownloadUpdate());
-        DismissUpdateCommand = new RelayCommand(_ => UpdateAvailable = false);
-        OpenSettingsCommand = new RelayCommand(_ => _ = OpenSettingsAsync());
-        CancelBusyCommand = new RelayCommand(_ => { BusyMessage = "Cancelling…"; _busyCts?.Cancel(); });
+        LoadMpcSourcesCommand = new AsyncRelayCommand(() => LoadMpcSourcesAsync());
+        ToggleMpcFavoriteFromResultCommand = new RelayCommand<object?>(p => ToggleFavoriteFromResult(p));
+        ManageMpcSourcesCommand = new AsyncRelayCommand(() => ManageMpcSourcesAsync());
+        ImportMpcFillXmlCommand = new AsyncRelayCommand(() => ImportMpcFillXmlAsync());
+        ClearCacheCommand = new AsyncRelayCommand(() => ClearCacheAsync());
+        ManageBackArtLibraryCommand = new AsyncRelayCommand(() => ManageBackArtLibraryAsync());
+        ManageFrontArtLibraryCommand = new AsyncRelayCommand(() => ManageFrontArtLibraryAsync());
+        DownloadUpdateCommand = new RelayCommand(() => DownloadUpdate());
+        DismissUpdateCommand = new RelayCommand(() => UpdateAvailable = false);
+        OpenSettingsCommand = new AsyncRelayCommand(() => OpenSettingsAsync());
+        CancelBusyCommand = new RelayCommand(() => { BusyMessage = "Cancelling…"; _busyCts?.Cancel(); });
 
-        _addMpcFillCardCmd = new RelayCommand(_ => _ = AddMpcFillCardAsync(), _ => SelectedMpcFillCard != null);
+        _addMpcFillCardCmd = new AsyncRelayCommand(() => AddMpcFillCardAsync(), () => SelectedMpcFillCard != null);
         AddMpcFillCardCommand = _addMpcFillCardCmd;
-        _clearAllCardsCmd = new RelayCommand(_ => _ = ClearAllCardsAsync(), _ => Cards.Count > 0);
+        _clearAllCardsCmd = new AsyncRelayCommand(() => ClearAllCardsAsync(), () => Cards.Count > 0);
         ClearAllCardsCommand = _clearAllCardsCmd;
 
         PrintModeValues = new ObservableCollection<PrintMode>(Enum.GetValues<PrintMode>());
@@ -342,10 +324,10 @@ public class MainViewModel : ViewModelBase
     {
         _currentProject.PageSettings.CenterGrid();
         ApplyFilterAndSort();
-        _selectBackArtForAllCmd.RaiseCanExecuteChanged();
-        _applyBackArtToAllCmd.RaiseCanExecuteChanged();
-        _clearBackArtFromAllCmd.RaiseCanExecuteChanged();
-        _clearAllCardsCmd.RaiseCanExecuteChanged();
+        _selectBackArtForAllCmd.NotifyCanExecuteChanged();
+        _applyBackArtToAllCmd.NotifyCanExecuteChanged();
+        _clearBackArtFromAllCmd.NotifyCanExecuteChanged();
+        _clearAllCardsCmd.NotifyCanExecuteChanged();
     }
 
     private void OnPageSettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -370,12 +352,12 @@ public class MainViewModel : ViewModelBase
         {
             if (SetProperty(ref _selectedCard, value))
             {
-                _removeCardCmd.RaiseCanExecuteChanged();
-                _browseFrontArtworkCmd.RaiseCanExecuteChanged();
-                _browseBackArtworkCmd.RaiseCanExecuteChanged();
-                _applyBackArtToSelectedCmd.RaiseCanExecuteChanged();
-                _adjustImageCmd.RaiseCanExecuteChanged(); // fork-specific
-                _unlinkCardCopyCmd.RaiseCanExecuteChanged(); // fork-specific
+                _removeCardCmd.NotifyCanExecuteChanged();
+                _browseFrontArtworkCmd.NotifyCanExecuteChanged();
+                _browseBackArtworkCmd.NotifyCanExecuteChanged();
+                _applyBackArtToSelectedCmd.NotifyCanExecuteChanged();
+                _adjustImageCmd.NotifyCanExecuteChanged(); // fork-specific
+                _unlinkCardCopyCmd.NotifyCanExecuteChanged(); // fork-specific
             }
         }
     }
@@ -428,7 +410,7 @@ public class MainViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _scryfallSearchQuery, value))
-                _scryfallSearchCmd.RaiseCanExecuteChanged();
+                _scryfallSearchCmd.NotifyCanExecuteChanged();
         }
     }
 
@@ -446,7 +428,7 @@ public class MainViewModel : ViewModelBase
             if (SetProperty(ref _selectedScryfallCard, value))
             {
                 SearchPreviewUrl = value?.GetImageUrl("normal");
-                _addScryfallCardCmd.RaiseCanExecuteChanged();
+                _addScryfallCardCmd.NotifyCanExecuteChanged();
             }
         }
     }
@@ -540,9 +522,9 @@ public class MainViewModel : ViewModelBase
         {
             if (SetProperty(ref _selectedBackArt, value))
             {
-                _removeBackArtFromLibraryCmd.RaiseCanExecuteChanged();
-                _applyBackArtToSelectedCmd.RaiseCanExecuteChanged();
-                _applyBackArtToAllCmd.RaiseCanExecuteChanged();
+                _removeBackArtFromLibraryCmd.NotifyCanExecuteChanged();
+                _applyBackArtToSelectedCmd.NotifyCanExecuteChanged();
+                _applyBackArtToAllCmd.NotifyCanExecuteChanged();
             }
         }
     }
@@ -611,7 +593,7 @@ public class MainViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _importDeckUrl, value))
-                (ImportDeckCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (ImportDeckCommand as IRelayCommand)?.NotifyCanExecuteChanged();
         }
     }
 
@@ -622,7 +604,7 @@ public class MainViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _importDeckText, value))
-                (ImportTextListCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (ImportTextListCommand as IRelayCommand)?.NotifyCanExecuteChanged();
         }
     }
 
@@ -684,7 +666,7 @@ public class MainViewModel : ViewModelBase
             if (SetProperty(ref _selectedMpcFillCard, value))
             {
                 SearchPreviewUrl = value?.MediumThumbnailUrl;
-                _addMpcFillCardCmd.RaiseCanExecuteChanged();
+                _addMpcFillCardCmd.NotifyCanExecuteChanged();
             }
         }
     }
@@ -883,8 +865,8 @@ public class MainViewModel : ViewModelBase
         ApplyFilterAndSort();
         SelectedCard = null;
         StatusText = "Undo/Redo applied";
-        _undoCmd.RaiseCanExecuteChanged();
-        _redoCmd.RaiseCanExecuteChanged();
+        _undoCmd.NotifyCanExecuteChanged();
+        _redoCmd.NotifyCanExecuteChanged();
     }
 
     // --- Command Implementations ---
@@ -1451,7 +1433,7 @@ public class MainViewModel : ViewModelBase
         if (copy == null) return;
 
         SelectedCard = copy; // edits now affect only this single copy
-        _unlinkCardCopyCmd.RaiseCanExecuteChanged();
+        _unlinkCardCopyCmd.NotifyCanExecuteChanged();
         RefreshCanvas();
         StatusText = $"Unlinked 1 copy of \"{copy.Name}\" — now editable separately.";
     }

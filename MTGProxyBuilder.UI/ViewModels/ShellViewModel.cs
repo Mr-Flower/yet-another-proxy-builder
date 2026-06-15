@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
@@ -28,8 +29,8 @@ public class ShellViewModel : ObservableObject
     private readonly UpdateCheckService _updateService;
     private readonly IDialogService _dialogService;
     private readonly IServiceProvider _provider;
-    private readonly RelayCommand _closeProjectCmd;
-    private readonly RelayCommand _closeAllProjectsCmd;
+    private readonly IRelayCommand _closeProjectCmd;
+    private readonly IRelayCommand _closeAllProjectsCmd;
     private bool _updateAvailable;
     private string _updateMessage = string.Empty;
     private string _updateDownloadUrl = string.Empty;
@@ -50,19 +51,19 @@ public class ShellViewModel : ObservableObject
         _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
         Projects = new ObservableCollection<ProjectViewModel>();
 
-        _closeProjectCmd = new RelayCommand(_ => _ = CloseActiveProjectAsync(), _ => ActiveProject != null);
-        _closeAllProjectsCmd = new RelayCommand(_ => _ = CloseAllProjectsAsync(), _ => Projects.Count > 0);
+        _closeProjectCmd = new AsyncRelayCommand(() => CloseActiveProjectAsync(), () => ActiveProject != null);
+        _closeAllProjectsCmd = new AsyncRelayCommand(() => CloseAllProjectsAsync(), () => Projects.Count > 0);
 
-        NewProjectCommand = new RelayCommand(_ => NewProject());
-        OpenProjectCommand = new RelayCommand(_ => _ = OpenProjectAsync());
+        NewProjectCommand = new RelayCommand(() => NewProject());
+        OpenProjectCommand = new AsyncRelayCommand(() => OpenProjectAsync());
         CloseProjectCommand = _closeProjectCmd;
         CloseAllProjectsCommand = _closeAllProjectsCmd;
-        OpenSettingsCommand = new RelayCommand(_ => _ = OpenSettingsAsync());
-        ExitCommand = new RelayCommand(_ => _dialogService.Shutdown());
-        DownloadUpdateCommand = new RelayCommand(_ => DownloadUpdate());
-        DismissUpdateCommand = new RelayCommand(_ => UpdateAvailable = false);
-        ManageFrontArtLibraryCommand = new RelayCommand(_ => _ = ManageFrontArtLibraryAsync());
-        ManageBackArtLibraryCommand = new RelayCommand(_ => _ = ManageBackArtLibraryAsync());
+        OpenSettingsCommand = new AsyncRelayCommand(() => OpenSettingsAsync());
+        ExitCommand = new RelayCommand(() => _dialogService.Shutdown());
+        DownloadUpdateCommand = new RelayCommand(() => DownloadUpdate());
+        DismissUpdateCommand = new RelayCommand(() => UpdateAvailable = false);
+        ManageFrontArtLibraryCommand = new AsyncRelayCommand(() => ManageFrontArtLibraryAsync());
+        ManageBackArtLibraryCommand = new AsyncRelayCommand(() => ManageBackArtLibraryAsync());
 
         _ = CheckForUpdateAsync();
     }
@@ -76,7 +77,7 @@ public class ShellViewModel : ObservableObject
         {
             SetProperty(ref _activeProject, value);
             OnPropertyChanged(nameof(HasActiveProject));
-            _closeProjectCmd.RaiseCanExecuteChanged();
+            _closeProjectCmd.NotifyCanExecuteChanged();
         }
     }
 
@@ -138,7 +139,7 @@ public class ShellViewModel : ObservableObject
         var tab = new ProjectViewModel(vm);
         Projects.Add(tab);
         ActiveProject = tab;
-        _closeAllProjectsCmd.RaiseCanExecuteChanged();
+        _closeAllProjectsCmd.NotifyCanExecuteChanged();
     }
 
     private void ApplyDefaults(MainViewModel vm)
@@ -187,7 +188,7 @@ public class ShellViewModel : ObservableObject
             var tab = new ProjectViewModel(vm) { FilePath = path };
             Projects.Add(tab);
             ActiveProject = tab;
-            _closeAllProjectsCmd.RaiseCanExecuteChanged();
+            _closeAllProjectsCmd.NotifyCanExecuteChanged();
         }
         finally
         {
@@ -220,7 +221,7 @@ public class ShellViewModel : ObservableObject
 
         int idx = Projects.IndexOf(project);
         Projects.Remove(project);
-        _closeAllProjectsCmd.RaiseCanExecuteChanged();
+        _closeAllProjectsCmd.NotifyCanExecuteChanged();
 
         if (ActiveProject == project)
         {
@@ -252,7 +253,7 @@ public class ShellViewModel : ObservableObject
             Projects.RemoveAt(i);
         }
         ActiveProject = null;
-        _closeAllProjectsCmd.RaiseCanExecuteChanged();
+        _closeAllProjectsCmd.NotifyCanExecuteChanged();
     }
 
     private async Task OpenSettingsAsync()
