@@ -24,7 +24,9 @@ namespace MTGProxyBuilder.UI.Controls
     // overlay from cached state. Previously this materialised hundreds of Avalonia controls per redraw;
     // drawing directly removes that churn and the layout work that came with it. Selection, the drop
     // highlight and the drag ghost are state that Render draws, updated with InvalidateVisual().
-    public class GridEditorCanvas : Canvas
+    // Extends Control (not Panel/Canvas): Panel.Render is sealed, so retained-mode drawing needs the
+    // plain Control.Render override. The page surface has no child controls anymore.
+    public class GridEditorCanvas : Control
     {
         private const float MmToPx = 96f / 25.4f;
         private const float PageGapPx = 30f;
@@ -77,6 +79,7 @@ namespace MTGProxyBuilder.UI.Controls
             => $"{raw}|{bleedMm}|{useBleed}|{cardWmm}";
 
         // Reusable brushes/pens for the static chrome.
+        private static readonly IBrush CanvasBg = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
         private static readonly IBrush PageFill = Brushes.White;
         private static readonly Pen PagePen = new(Brushes.Black, 0.5);
         private static readonly Pen MarginPen = new(Brushes.LightBlue, 0.5, new DashStyle(new double[] { 4, 4 }, 0));
@@ -97,7 +100,6 @@ namespace MTGProxyBuilder.UI.Controls
 
         public GridEditorCanvas()
         {
-            Background = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
             ClipToBounds = true;
             Focusable = true;
             // Stop the parent ScrollViewer from scrolling the (huge) canvas to its top when it gains
@@ -391,7 +393,9 @@ namespace MTGProxyBuilder.UI.Controls
 
         public override void Render(DrawingContext context)
         {
-            base.Render(context); // paints the gray Background
+            base.Render(context);
+            // Control has no Background; paint the gray editor backdrop across the whole extent.
+            context.FillRectangle(CanvasBg, new Rect(Bounds.Size));
 
             if (_cols <= 0 || _rows <= 0 || _perPage <= 0 || _expandedSlots == null) return;
 
