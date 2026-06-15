@@ -100,11 +100,11 @@ public class MainViewModel : ViewModelBase
     private readonly MpcFillXmlImportService _mpcXmlImportService;
     private readonly SearchCoordinator _searchCoordinator;
     private readonly ImportCoordinator _importCoordinator;
-    private readonly UndoService _undoService = new();
-    private readonly CacheManager _cacheManager = new();
-    private readonly UpdateCheckService _updateService = new();
-    private readonly AppSettingsService _appSettings = new();
-    private readonly ImageAdjustmentService _imageAdjust = new(); // fork-specific
+    private readonly UndoService _undoService = new(); // per-project: its own undo/redo stack
+    private readonly CacheManager _cacheManager;
+    private readonly UpdateCheckService _updateService;
+    private readonly AppSettingsService _appSettings;
+    private readonly ImageAdjustmentService _imageAdjust; // fork-specific
     private bool _updateAvailable;
     private string _updateMessage = string.Empty;
     private string _updateDownloadUrl = string.Empty;
@@ -166,24 +166,30 @@ public class MainViewModel : ViewModelBase
     private readonly RelayCommand _undoCmd;
     private readonly RelayCommand _redoCmd;
 
-    public MainViewModel(IDialogService dialogService)
+    public MainViewModel(IDialogService dialogService, AppServices services)
     {
         _dialogService = dialogService;
-        _imageCacheService = new ImageCacheService();
-        _serializationService = new ProjectSerializationService();
-        _pdfGeneratorService = new PdfGeneratorService();
-        _scryfallService = new ScryfallService(_imageCacheService);
-        _ygoService = new YgoProDeckService(_imageCacheService); // fork-specific: Yu-Gi-Oh! source
+        // Shared singletons from the DI container — every project tab reuses these instances.
+        _imageCacheService = services.ImageCache;
+        _serializationService = services.Serialization;
+        _pdfGeneratorService = services.Pdf;
+        _scryfallService = services.Scryfall;
+        _ygoService = services.Ygo; // fork-specific: Yu-Gi-Oh! source
+        _appSettings = services.Settings;
+        _cacheManager = services.CacheManager;
+        _updateService = services.UpdateCheck;
+        _imageAdjust = services.ImageAdjust;
+        _moxfieldService = services.Moxfield;
+        _archidektService = services.Archidekt;
+        _deckImportService = services.DeckImport;
+        MpcSourceManager = services.MpcSources;
+        _mpcFillService = services.MpcFill;
+        _mpcXmlImportService = services.MpcXmlImport;
+        _searchCoordinator = services.Search;
+        _importCoordinator = services.Import;
+        // Per-project, settings-derived: kept local (recreated when the library path changes).
         _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
         _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
-        _moxfieldService = new MoxfieldService();
-        _archidektService = new ArchidektService();
-        _deckImportService = new DeckImportService(_moxfieldService, _archidektService);
-        MpcSourceManager = new MpcFillSourceManager();
-        _mpcFillService = new MpcFillService(_imageCacheService, MpcSourceManager);
-        _mpcXmlImportService = new MpcFillXmlImportService(_mpcFillService, _imageCacheService);
-        _searchCoordinator = new SearchCoordinator(_scryfallService, _mpcFillService, _appSettings, MpcSourceManager);
-        _importCoordinator = new ImportCoordinator(_searchCoordinator, _deckImportService, _mpcXmlImportService, _ygoService);
         _mpcUseFavoritesOnly = _appSettings.Settings.MpcFillUseFavoritesOnly;
         _mpcAdvMinDpi = _appSettings.Settings.MpcFillDefaultMinDpi;
         _mpcFuzzySearch = _appSettings.Settings.MpcFillDefaultFuzzySearch;

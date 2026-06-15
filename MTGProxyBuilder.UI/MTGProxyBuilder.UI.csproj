@@ -32,6 +32,7 @@
          Native lib (libSkiaSharp.so) is v88 regardless of NativeAssets package
          version; managed 2.88.9 accepts native v88. -->
     <PackageReference Include="SkiaSharp" Version="2.88.9" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.*" />
   </ItemGroup>
 
   <!-- Legacy WPF AssemblyInfo (kept on disk, excluded so the SDK auto-generates assembly attributes

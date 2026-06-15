@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
 using MTGProxyBuilder.UI.Services;
@@ -16,15 +17,16 @@ namespace MTGProxyBuilder.UI.ViewModels;
 public class ShellViewModel : INotifyPropertyChanged
 {
     private ProjectViewModel? _activeProject;
-    private readonly AppSettingsService _appSettings = new();
-    private readonly MpcFillSourceManager _mpcSourceManager = new();
+    private readonly AppSettingsService _appSettings;
+    private readonly MpcFillSourceManager _mpcSourceManager;
     private readonly ImageCacheService _imageCacheService;
     private readonly ScryfallService _scryfallService;
     private readonly MpcFillService _mpcFillService;
     private BackArtLibraryService _backArtLibraryService;
     private FrontArtLibraryService _frontArtLibraryService;
-    private readonly UpdateCheckService _updateService = new();
+    private readonly UpdateCheckService _updateService;
     private readonly IDialogService _dialogService;
+    private readonly IServiceProvider _provider;
     private readonly RelayCommand _closeProjectCmd;
     private readonly RelayCommand _closeAllProjectsCmd;
     private bool _updateAvailable;
@@ -33,12 +35,16 @@ public class ShellViewModel : INotifyPropertyChanged
     private bool _isLoading;
     private string _loadingMessage = string.Empty;
 
-    public ShellViewModel(IDialogService dialogService)
+    public ShellViewModel(IDialogService dialogService, AppServices services, IServiceProvider provider)
     {
         _dialogService = dialogService;
-        _imageCacheService = new ImageCacheService();
-        _scryfallService = new ScryfallService(_imageCacheService);
-        _mpcFillService = new MpcFillService(_imageCacheService, _mpcSourceManager);
+        _provider = provider;
+        _appSettings = services.Settings;
+        _mpcSourceManager = services.MpcSources;
+        _imageCacheService = services.ImageCache;
+        _scryfallService = services.Scryfall;
+        _mpcFillService = services.MpcFill;
+        _updateService = services.UpdateCheck;
         _backArtLibraryService = new BackArtLibraryService(_appSettings.Settings.BackArtLibraryPath);
         _frontArtLibraryService = new FrontArtLibraryService(_appSettings.Settings.FrontArtLibraryPath);
         Projects = new ObservableCollection<ProjectViewModel>();
@@ -125,7 +131,7 @@ public class ShellViewModel : INotifyPropertyChanged
 
     public void NewProject()
     {
-        var vm = new MainViewModel(_dialogService);
+        var vm = _provider.GetRequiredService<MainViewModel>();
         vm.UseSharedLibraries(_frontArtLibraryService, _backArtLibraryService);
         ApplyDefaults(vm);
         var tab = new ProjectViewModel(vm);
@@ -164,7 +170,7 @@ public class ShellViewModel : INotifyPropertyChanged
         LoadingMessage = "Opening project...";
         try
         {
-            var vm = new MainViewModel(_dialogService);
+            var vm = _provider.GetRequiredService<MainViewModel>();
             vm.UseSharedLibraries(_frontArtLibraryService, _backArtLibraryService);
             var serializer = new ProjectSerializationService();
             var project = await serializer.LoadProjectAsync(path,

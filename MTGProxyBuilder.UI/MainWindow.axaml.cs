@@ -25,7 +25,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = new ShellViewModel(new AvaloniaDialogService());
+        DataContext = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+            .GetRequiredService<ShellViewModel>(App.Services);
 
         Closing += OnWindowClosing;
         KeyDown += OnKeyDown;
