@@ -93,6 +93,21 @@ namespace MTGProxyBuilder.UI.Controls
             ContextRequested += OnContextRequested;
         }
 
+        // Detach all model subscriptions and stop the timer when the control leaves the visual tree
+        // (e.g. its project tab is closed). Without this the bound PageSettings/PrintSettings/Cards keep
+        // a reference to a dead canvas, leaking it and triggering redraws on a control nobody can see.
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnDetachedFromVisualTree(e);
+
+            if (PageSettings is { } ps) ps.PropertyChanged -= OnSettingsPropChanged;
+            if (PrintSettingsSource is { } prs) prs.PropertyChanged -= OnPrintSettingsPropChanged;
+            if (CardsSource is { } cards) cards.CollectionChanged -= OnCollectionChanged;
+
+            _redrawTimer?.Stop();
+            _redrawCts?.Cancel();
+        }
+
         // ================================================================
         //  STYLED PROPERTIES
         // ================================================================
@@ -469,29 +484,15 @@ namespace MTGProxyBuilder.UI.Controls
         //  POINTER EVENTS
         // ================================================================
 
-        // Focusing the canvas (needed for keyboard shortcuts) makes the parent
-        // ScrollViewer "bring it into view", which scrolls back to the top on the very
-        // first click. Capture and restore the scroll offset around the Focus() call.
-        private void FocusPreservingScroll()
-        {
-            if (IsFocused) { Focus(); return; }
-
-            var scroll = this.FindAncestorOfType<ScrollViewer>();
-            if (scroll == null) { Focus(); return; }
-
-            var offset = scroll.Offset;
-            Focus();
-            // Restore now and again after the bring-into-view pass runs post-layout.
-            scroll.Offset = offset;
-            Dispatcher.UIThread.Post(() => scroll.Offset = offset, DispatcherPriority.Render);
-        }
-
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             base.OnPointerPressed(e);
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
 
-            FocusPreservingScroll();
+            // Focus is needed for keyboard shortcuts. The scroll-to-top that this used to cause is
+            // suppressed deterministically by BringIntoViewOnFocusChange=false plus the
+            // RequestBringIntoView handler set in the constructor — no offset save/restore needed.
+            Focus();
             var pos = e.GetPosition(this);
             int flatSlot = HitTestSlot(pos);
 
@@ -711,7 +712,11 @@ namespace MTGProxyBuilder.UI.Controls
         private void SyncSelectedCard()
         {
             if (_selectedSlots.Count == 0 || _expandedSlots.Count == 0) { SelectedCard = null; return; }
-            int slot = _selectedSlots.First();
+            // Show the last-clicked slot, not _selectedSlots.First() — a HashSet has no defined order,
+            // so with a multi-selection that would surface an arbitrary card in the property panel.
+            int slot = (_lastSelectedSlot >= 0 && _selectedSlots.Contains(_lastSelectedSlot))
+                ? _lastSelectedSlot
+                : _selectedSlots.First();
             SelectedCard = (slot >= 0 && slot < _expandedSlots.Count) ? _expandedSlots[slot].Card : null;
         }
 
