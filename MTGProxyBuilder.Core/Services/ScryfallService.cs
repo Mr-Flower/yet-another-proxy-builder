@@ -219,8 +219,8 @@ namespace MTGProxyBuilder.Core.Services
 
         public ScryfallService(ImageCacheService imageCache)
         {
-            _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "MTGProxyBuilder/1.0");
+            // Shared connection pool + Scryfall-specific throttling and 429 retry.
+            _httpClient = SharedHttp.CreateScryfallClient();
             _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
             _imageCache = imageCache;
         }

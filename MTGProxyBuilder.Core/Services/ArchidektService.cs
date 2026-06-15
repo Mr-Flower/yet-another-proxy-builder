@@ -26,8 +26,7 @@ namespace MTGProxyBuilder.Core.Services
 
         public ArchidektService()
         {
-            _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "MTGProxyBuilder/1.0");
+            _httpClient = SharedHttp.CreateClient();
             _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         }
 

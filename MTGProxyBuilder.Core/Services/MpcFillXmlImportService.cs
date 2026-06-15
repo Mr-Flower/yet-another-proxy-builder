@@ -144,8 +144,8 @@ namespace MTGProxyBuilder.Core.Services
             // Google Drive download URL
             string url = $"https://drive.google.com/uc?id={identifier}&export=download";
 
-            using var http = new HttpClient();
-            http.DefaultRequestHeaders.Add("User-Agent", "MTGProxyBuilder/1.0");
+            // Shared pool; disposing this client is cheap and leaves the pool intact.
+            using var http = SharedHttp.CreateClient();
 
             return await _imageCache.CacheImageFromUrlAsync(http, url, $"mpc_{identifier}");
         }
