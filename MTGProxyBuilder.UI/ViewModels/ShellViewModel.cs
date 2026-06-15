@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
@@ -14,7 +15,7 @@ using MTGProxyBuilder.UI.Services;
 
 namespace MTGProxyBuilder.UI.ViewModels;
 
-public class ShellViewModel : INotifyPropertyChanged
+public class ShellViewModel : ObservableObject
 {
     private ProjectViewModel? _activeProject;
     private readonly AppSettingsService _appSettings;
@@ -341,19 +342,6 @@ public class ShellViewModel : INotifyPropertyChanged
                     return false;
             }
         }
-        return true;
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-
-    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
-    {
-        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
-        field = value;
-        OnPropertyChanged(propertyName);
         return true;
     }
 }

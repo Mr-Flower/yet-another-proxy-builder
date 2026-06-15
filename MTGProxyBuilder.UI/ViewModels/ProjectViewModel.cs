@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using CommunityToolkit.Mvvm.ComponentModel;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
 
@@ -10,7 +11,7 @@ namespace MTGProxyBuilder.UI.ViewModels
     /// Represents a single open project tab. Wraps a MainViewModel instance
     /// (which contains all per-project state and commands) with tab metadata.
     /// </summary>
-    public class ProjectViewModel : INotifyPropertyChanged
+    public class ProjectViewModel : ObservableObject
     {
         private string _tabTitle = "Untitled Project";
         private string? _filePath;
@@ -58,11 +59,5 @@ namespace MTGProxyBuilder.UI.ViewModels
             TabTitle = _inner.HasUnsavedChanges ? $"{name} *" : name;
         }
 
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
     }
 }

@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.Core.Services;
 using MTGProxyBuilder.UI.Services;
@@ -34,20 +35,10 @@ public class RelayCommand : ICommand
     public void Execute(object? parameter) => _execute(parameter);
 }
 
-public class ViewModelBase : INotifyPropertyChanged
+// Base for all view-models. ObservableObject (CommunityToolkit.Mvvm) supplies INotifyPropertyChanged,
+// SetProperty and OnPropertyChanged with the same signatures the hand-rolled base used.
+public class ViewModelBase : ObservableObject
 {
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-
-    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
-    {
-        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
-        field = value;
-        OnPropertyChanged(propertyName);
-        return true;
-    }
 }
 
 public class MainViewModel : ViewModelBase
