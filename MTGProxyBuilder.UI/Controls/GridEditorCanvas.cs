@@ -54,8 +54,13 @@ namespace MTGProxyBuilder.UI.Controls
         private int _cols, _rows, _perPage, _totalPages;
         private List<ExpandedSlot> _expandedSlots = new();
 
-        // Image cache
+        // Image cache. Shared (static) across all canvas instances and bounded FIFO: without a cap it grew
+        // for the whole session. Evicted entries are only dropped from the dictionary, never Disposed —
+        // a bitmap may still be assigned to an on-screen Image, so we let the GC reclaim it once the UI
+        // releases it (disposing an in-use bitmap would blank/crash the render).
+        private const int MaxCachedImages = 512;
         private static readonly ConcurrentDictionary<string, Bitmap?> _imageCache = new();
+        private static readonly ConcurrentQueue<string> _imageCacheOrder = new();
 
         // Bleed-extended images for a WYSIWYG preview matching the PDF. The bled JPEGs are produced
         // and disk-cached by BleedProcessor (shared with PDF export); here we additionally map
@@ -88,7 +93,7 @@ namespace MTGProxyBuilder.UI.Controls
             AddHandler(Control.RequestBringIntoViewEvent, (_, e) => e.Handled = true);
 
             _redrawTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
-            _redrawTimer.Tick += (_, _) => { _redrawTimer.Stop(); _ = RedrawAsync(); };
+            _redrawTimer.Tick += (_, _) => { _redrawTimer.Stop(); RedrawSafe(); };
 
             ContextRequested += OnContextRequested;
         }
@@ -207,6 +212,20 @@ namespace MTGProxyBuilder.UI.Controls
         // ================================================================
         //  ASYNC RENDERING
         // ================================================================
+
+        // Fire-and-forget entry point for the timer/flip callers: RedrawAsync runs background image work,
+        // so an exception there would otherwise be swallowed by `_ = RedrawAsync()` and leave the canvas
+        // stuck showing "Rendering...". Observe it, log it, and clear the busy state.
+        private async void RedrawSafe()
+        {
+            try { await RedrawAsync(); }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Canvas redraw error: {ex.Message}");
+                IsRendering = false;
+                RenderProgress = null;
+            }
+        }
 
         private async Task RedrawAsync()
         {
@@ -465,13 +484,29 @@ namespace MTGProxyBuilder.UI.Controls
         private static void LoadImageToCache(string path, int decodeWidth)
         {
             if (_imageCache.ContainsKey(path)) return;
+
+            Bitmap? bmp = null;
             try
             {
-                if (!File.Exists(path)) { _imageCache[path] = null; return; }
-                using var stream = File.OpenRead(path);
-                _imageCache[path] = Bitmap.DecodeToWidth(stream, decodeWidth);
+                if (File.Exists(path))
+                {
+                    using var stream = File.OpenRead(path);
+                    bmp = Bitmap.DecodeToWidth(stream, decodeWidth);
+                }
             }
-            catch { _imageCache[path] = null; }
+            catch { bmp = null; }
+
+            // TryAdd so two threads decoding the same path don't both insert. If we lost the race the
+            // bitmap we just decoded isn't on screen, so it's safe to dispose right away.
+            if (!_imageCache.TryAdd(path, bmp))
+            {
+                bmp?.Dispose();
+                return;
+            }
+
+            _imageCacheOrder.Enqueue(path);
+            while (_imageCache.Count > MaxCachedImages && _imageCacheOrder.TryDequeue(out var oldest))
+                _imageCache.TryRemove(oldest, out _);
         }
 
         private static Bitmap? GetCachedImage(string? path)
@@ -686,8 +721,8 @@ namespace MTGProxyBuilder.UI.Controls
             _selectedSlots.Clear(); SyncSelectedCard();
         }
 
-        private void FlipCards(List<int> idx) { CanvasOperations.FlipCards(_flippedCardIndices, idx); _ = RedrawAsync(); }
-        private void FlipAll()                 { CanvasOperations.FlipAll(ref _allFlipped, _flippedCardIndices); _ = RedrawAsync(); }
+        private void FlipCards(List<int> idx) { CanvasOperations.FlipCards(_flippedCardIndices, idx); RedrawSafe(); }
+        private void FlipAll()                 { CanvasOperations.FlipAll(ref _allFlipped, _flippedCardIndices); RedrawSafe(); }
 
         // ================================================================
         //  DRAG AND DROP
