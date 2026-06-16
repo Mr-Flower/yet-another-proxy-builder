@@ -59,7 +59,7 @@ namespace MTGProxyBuilder.Core.Services
                 // anti-aliased grey fringe (luma-based fill to the dark border).
                 // v7: lossless PNG output. The Scryfall source is now a lossless "png" (745x1040), so
                 // re-encoding as JPEG would throw away quality for no reason — PNG keeps it pixel-exact.
-                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{StableHash.Hex(sourcePath)}_b{bleedPixels}_v7";
+                string hash = $"{Path.GetFileNameWithoutExtension(sourcePath)}_{StableHash.Hex(sourcePath)}_b{bleedPixels}_v8";
                 string outputPath = Path.Combine(_cacheDir, $"{hash}.png");
 
                 if (File.Exists(outputPath))
@@ -113,10 +113,50 @@ namespace MTGProxyBuilder.Core.Services
                 return GetMpcCroppedImage(sourcePath, bleedMm) ?? sourcePath;
             }
 
-            // Scryfall: extend the bare card by the requested bleed.
-            if (bleedMm <= 0) return sourcePath;
-            int bleedPx = ScryfallBleedPixels(sourcePath, bleedMm, cardWmm);
-            return bleedPx > 0 ? GetBleedExtendedImage(sourcePath, bleedPx) : sourcePath;
+            // Scryfall: square off the rounded corners (consistent border colour), then extend the bleed.
+            // GetBleedExtendedImage normalizes corners as part of RenderBleed; with no bleed we still need
+            // the corner fix on its own so the transparent png / black-jpg corners don't show through.
+            int bleedPx = bleedMm > 0 ? ScryfallBleedPixels(sourcePath, bleedMm, cardWmm) : 0;
+            return bleedPx > 0
+                ? GetBleedExtendedImage(sourcePath, bleedPx)
+                : (GetCornerNormalizedImage(sourcePath) ?? sourcePath);
+        }
+
+        /// <summary>
+        /// Returns a corner-normalized copy of a bare Scryfall scan (no bleed): the rounded corners are
+        /// squared off to the border colour. Cached on disk. Used when bleed is 0, so corners are still
+        /// consistent even without a bleed margin.
+        /// </summary>
+        public string? GetCornerNormalizedImage(string sourcePath)
+        {
+            if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath))
+                return sourcePath;
+
+            string cacheKey = $"{sourcePath}|corners";
+            if (_processedCache.TryGetValue(cacheKey, out var cached) && File.Exists(cached))
+                return cached;
+
+            try
+            {
+                string hash = $"corners_{Path.GetFileNameWithoutExtension(sourcePath)}_{StableHash.Hex(sourcePath)}_v8";
+                string outputPath = Path.Combine(_cacheDir, $"{hash}.png");
+                if (File.Exists(outputPath)) { _processedCache[cacheKey] = outputPath; return outputPath; }
+
+                using var source = SKBitmap.Decode(sourcePath);
+                if (source == null) return sourcePath;
+
+                NormalizeCorners(source);
+
+                using var stream = File.OpenWrite(outputPath);
+                source.Encode(stream, SKEncodedImageFormat.Png, 100);
+                _processedCache[cacheKey] = outputPath;
+                return outputPath;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Corner normalization error");
+                return sourcePath;
+            }
         }
 
         /// <summary>
@@ -195,7 +235,7 @@ namespace MTGProxyBuilder.Core.Services
         /// </summary>
         private static SKBitmap RenderBleed(SKBitmap source, int bleedPixels)
         {
-            SquareOffAllWhiteCorners(source);
+            NormalizeCorners(source);
 
             var output = new SKBitmap(source.Width + 2 * bleedPixels, source.Height + 2 * bleedPixels);
             using (var canvas = new SKCanvas(output))
@@ -207,15 +247,78 @@ namespace MTGProxyBuilder.Core.Services
             return output;
         }
 
-        /// <summary>Squares off all four white corners of a (rounded) Scryfall-style scan. No-op for
-        /// coloured/full-art corners and for full-bleed MPCFill art.</summary>
-        private static void SquareOffAllWhiteCorners(SKBitmap source)
+        // The rounded-corner radius is a small % of the card. Bound the corner flood to a box this big so
+        // it can never run along the whole border (e.g. a black corner-fill on a black-bordered card).
+        private const double CornerBoxFraction = 0.14;
+
+        /// <summary>
+        /// Squares off all four rounded corners so the border reaches the corner consistently. Keys on
+        /// TRANSPARENCY (Scryfall's png corners, including the anti-aliased rounding fringe) and repaints
+        /// that region with the EXACT colour of the card border sampled just inside it — black border →
+        /// black corner, white → white, coloured/silver kept. Opaque corners (full-art/borderless, or the
+        /// flat-colour jpg scans) are left untouched: matching them by colour would risk eating a border
+        /// of the same colour, and the printed output uses the transparent png anyway.
+        /// </summary>
+        private static void NormalizeCorners(SKBitmap source)
         {
             int w = source.Width, h = source.Height;
-            SquareOffWhiteCorner(source, w, h, 0,     0,      1,  1);
-            SquareOffWhiteCorner(source, w, h, w - 1, 0,     -1,  1);
-            SquareOffWhiteCorner(source, w, h, 0,     h - 1,  1, -1);
-            SquareOffWhiteCorner(source, w, h, w - 1, h - 1, -1, -1);
+            if (w < 8 || h < 8) return;
+
+            var px = source.Pixels;
+            int box = Math.Max(4, (int)(Math.Min(w, h) * CornerBoxFraction));
+
+            NormalizeCorner(px, w, h, box, 0,     0);
+            NormalizeCorner(px, w, h, box, w - 1, 0);
+            NormalizeCorner(px, w, h, box, 0,     h - 1);
+            NormalizeCorner(px, w, h, box, w - 1, h - 1);
+
+            source.Pixels = px;
+        }
+
+        private static bool Transparent(SKColor c) => c.Alpha < 250;
+
+        private static void NormalizeCorner(SKColor[] px, int w, int h, int box, int cx, int cy)
+        {
+            // Only act on a transparent (rounded png) corner. Opaque corners are left as-is.
+            if (!Transparent(px[cy * w + cx])) return;
+
+            // The corner-fill is the transparent region (plus the semi-transparent rounding fringe).
+            bool IsFill(SKColor c) => Transparent(c);
+
+            var inRegion = new HashSet<int>();
+            var stack = new Stack<int>();
+            var region = new List<int>();
+            long sr = 0, sg = 0, sb = 0; int sn = 0; // border-colour accumulator
+
+            void Visit(int x, int y)
+            {
+                if (x < 0 || x >= w || y < 0 || y >= h) return;
+                if (Math.Abs(x - cx) > box || Math.Abs(y - cy) > box) return; // stay in the corner box
+                int idx = y * w + x;
+                if (!inRegion.Add(idx)) return;
+                if (IsFill(px[idx])) { stack.Push(idx); }
+                else if (px[idx].Alpha >= 250)
+                {
+                    // solid pixel just inside the fill = the card border; sample its colour
+                    var c = px[idx]; sr += c.Red; sg += c.Green; sb += c.Blue; sn++;
+                }
+            }
+
+            int seedIdx = cy * w + cx;
+            inRegion.Add(seedIdx);
+            stack.Push(seedIdx); // seed is transparent (checked above)
+            while (stack.Count > 0)
+            {
+                int idx = stack.Pop();
+                region.Add(idx);
+                int x = idx % w, y = idx / w;
+                Visit(x - 1, y); Visit(x + 1, y); Visit(x, y - 1); Visit(x, y + 1);
+            }
+
+            if (region.Count == 0 || sn == 0) return; // nothing to fill, or no border found to match
+
+            var border = new SKColor((byte)(sr / sn), (byte)(sg / sn), (byte)(sb / sn), 255);
+            foreach (int idx in region) px[idx] = border;
         }
 
         /// <summary>Fills the four bleed margins by stretching the card's outermost edge pixels outward.</summary>
@@ -267,80 +370,6 @@ namespace MTGProxyBuilder.Core.Services
         {
             paint.Color = color;
             canvas.DrawRect(x, y, size, size, paint);
-        }
-
-        private static bool IsNearWhite(SKColor c) => c.Red >= 235 && c.Green >= 235 && c.Blue >= 235;
-
-        private static int Luma(SKColor c) => (c.Red * 30 + c.Green * 59 + c.Blue * 11) / 100;
-
-        /// <summary>
-        /// Squares off one rectangular corner of a (rounded) card scan by replacing the white triangle
-        /// (and the anti-aliased grey fringe along the rounding) outside the card with the card's border
-        /// colour, so the border extends all the way to the corner — exactly like the straight edges do.
-        /// (cx,cy) is the extreme corner pixel; (dx,dy) point inward (±1). No-op when the corner isn't
-        /// near-white (coloured/full-art) or when the border itself is white/light (white-bordered cards
-        /// keep their white corners).
-        /// </summary>
-        private static void SquareOffWhiteCorner(SKBitmap bmp, int w, int h, int cx, int cy, int dx, int dy)
-        {
-            if (!IsNearWhite(bmp.GetPixel(cx, cy))) return;
-
-            // Generous band — the rounded-corner radius is only a few % of the card, so 1/6 of the
-            // shorter side covers it comfortably regardless of image resolution.
-            int band = Math.Max(4, Math.Min(w, h) / 6);
-
-            var border = FindCornerBorderColor(bmp, cx, cy, dx, dy, band, out int borderLuma);
-            if (border == null) return; // diagonal stayed white -> white/light border, leave it
-
-            FillCornerFringe(bmp, w, h, cx, cy, dx, dy, band, border.Value, borderLuma);
-        }
-
-        /// <summary>
-        /// Scans diagonally inward from a corner to where the white ends, then returns the DARKEST pixel
-        /// in the next few (the card's black edge, skipping the anti-aliased fringe). Returns null if the
-        /// diagonal stays near-white across the whole band (a white/light-bordered card).
-        /// </summary>
-        private static SKColor? FindCornerBorderColor(SKBitmap bmp, int cx, int cy, int dx, int dy,
-            int band, out int borderLuma)
-        {
-            borderLuma = int.MaxValue;
-            for (int d = 1; d <= band; d++)
-            {
-                if (IsNearWhite(bmp.GetPixel(cx + dx * d, cy + dy * d))) continue;
-
-                SKColor? darkest = null;
-                for (int e = 0; e <= 4 && d + e <= band; e++)
-                {
-                    var q = bmp.GetPixel(cx + dx * (d + e), cy + dy * (d + e));
-                    int lu = Luma(q);
-                    if (lu < borderLuma) { borderLuma = lu; darkest = q; }
-                }
-                return darkest;
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// Fills each row from the corner inward with the border colour while pixels are clearly LIGHTER
-        /// than the border — swallowing the white triangle and the grey anti-alias fringe — stopping at
-        /// the dark border so the card art is never touched.
-        /// </summary>
-        private static void FillCornerFringe(SKBitmap bmp, int w, int h, int cx, int cy, int dx, int dy,
-            int band, SKColor border, int borderLuma)
-        {
-            int fillAbove = Math.Min(borderLuma + 50, 200);
-            for (int iy = 0; iy <= band; iy++)
-            {
-                int y = cy + dy * iy;
-                if (y < 0 || y >= h) break;
-                for (int ix = 0; ix <= band; ix++)
-                {
-                    int x = cx + dx * ix;
-                    if (x < 0 || x >= w) break;
-                    if (Luma(bmp.GetPixel(x, y)) <= fillAbove) break; // reached the dark border
-                    bmp.SetPixel(x, y, border);
-                }
-            }
         }
 
         public void ClearCache()

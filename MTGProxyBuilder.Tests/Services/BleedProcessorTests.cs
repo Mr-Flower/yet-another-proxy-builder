@@ -235,14 +235,15 @@ public class BleedProcessorTests : IDisposable
     [Fact]
     public void GetBleedExtendedImage_BlackBorderWhiteCorners_FillsCornersDark()
     {
-        // White background with a black rounded "card" -> the 4 rectangle corners are white triangles.
+        // Transparent background with a black rounded "card" -> the 4 corners are transparent (the png
+        // reality). The corner normalizer must fill them with the dark border colour.
         var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_corner_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try
         {
             string input = Path.Combine(tmpDir, "blackcard.png");
-            CreateRoundedCardImage(input, 60, 84, radius: 5, card: SKColors.Black, bg: SKColors.White);
+            CreateRoundedCardImage(input, 60, 84, radius: 5, card: SKColors.Black, bg: SKColors.Transparent);
 
             var result = proc.GetBleedExtendedImage(input, 6);
             Assert.NotNull(result);
@@ -260,16 +261,16 @@ public class BleedProcessorTests : IDisposable
     [Fact]
     public void GetBleedExtendedImage_AntiAliasedBlackBorder_NoLightFringeNearCorner()
     {
-        // Anti-aliased rounded black card on white: the white->black arc has grey fringe pixels.
-        // After square-off the whole corner region (bleed + the former white triangle) must be dark,
-        // with no light/grey fringe left (the "white artefacts near the corner" the user reported).
+        // Anti-aliased rounded black card on a transparent background: the arc has semi-transparent
+        // fringe pixels. After normalization the whole corner region (bleed + the transparent triangle +
+        // the fringe) must be dark — no light/grey artefacts left (what the user reported).
         var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_aa_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try
         {
             string input = Path.Combine(tmpDir, "aacard.png");
-            CreateRoundedCardImage(input, 120, 168, radius: 12, card: SKColors.Black, bg: SKColors.White, antiAlias: true);
+            CreateRoundedCardImage(input, 120, 168, radius: 12, card: SKColors.Black, bg: SKColors.Transparent, antiAlias: true);
 
             int bleed = 8;
             var result = proc.GetBleedExtendedImage(input, bleed);
@@ -292,14 +293,15 @@ public class BleedProcessorTests : IDisposable
     [Fact]
     public void GetBleedExtendedImage_WhiteCard_KeepsCornersWhite()
     {
-        // An all-white card: a white border must stay white (no recolouring to art).
+        // White-bordered card with transparent corners: the corners must be filled white (the sampled
+        // border colour), never recoloured to the art.
         var proc = NewProc();
         var tmpDir = Path.Combine(Path.GetTempPath(), $"bleed_white_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try
         {
             string input = Path.Combine(tmpDir, "whitecard.png");
-            CreateRoundedCardImage(input, 60, 84, radius: 5, card: SKColors.White, bg: SKColors.White);
+            CreateRoundedCardImage(input, 60, 84, radius: 5, card: SKColors.White, bg: SKColors.Transparent);
 
             var result = proc.GetBleedExtendedImage(input, 6);
             using var outBmp = SKBitmap.Decode(result);
