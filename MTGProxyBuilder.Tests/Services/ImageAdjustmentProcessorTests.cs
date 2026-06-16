@@ -8,88 +8,92 @@ namespace MTGProxyBuilder.Tests.Services;
 
 public class ImageAdjustmentProcessorTests
 {
-    private static SKBitmap SolidBitmap(byte r, byte g, byte b, int w = 8, int h = 8)
+    private static SKBitmap SolidBitmap(byte v, int w = 16, int h = 16)
     {
         var bmp = new SKBitmap(w, h);
         using var canvas = new SKCanvas(bmp);
-        canvas.Clear(new SKColor(r, g, b));
+        canvas.Clear(new SKColor(v, v, v));
         return bmp;
     }
+
+    /// <summary>A bright bitmap with a dark frame of <paramref name="border"/> px on every side.</summary>
+    private static SKBitmap BorderedBitmap(int size = 20, int border = 4, byte borderVal = 26, byte centerVal = 200)
+    {
+        var bmp = new SKBitmap(size, size);
+        using var canvas = new SKCanvas(bmp);
+        canvas.Clear(new SKColor(centerVal, centerVal, centerVal));
+        using var paint = new SKPaint { Color = new SKColor(borderVal, borderVal, borderVal) };
+        canvas.DrawRect(0, 0, size, border, paint);              // top
+        canvas.DrawRect(0, size - border, size, border, paint);  // bottom
+        canvas.DrawRect(0, 0, border, size, paint);              // left
+        canvas.DrawRect(size - border, 0, border, size, paint);  // right
+        return bmp;
+    }
+
+    private static ImageAdjustmentSettings Blacken(int threshold = 64) =>
+        new() { BlackenBorder = true, BorderThreshold = threshold };
 
     [Fact]
     public void Apply_NoOpSettings_LeavesPixelsUnchanged()
     {
         var proc = new ImageAdjustmentProcessor();
-        using var src = SolidBitmap(120, 130, 140);
-        using var outp = proc.Apply(src, new ImageAdjustmentSettings()); // all neutral
+        using var src = SolidBitmap(26);
+        using var outp = proc.Apply(src, new ImageAdjustmentSettings()); // BlackenBorder off => no-op
 
         var p = outp.GetPixel(0, 0);
-        Assert.Equal(120, p.Red);
-        Assert.Equal(130, p.Green);
-        Assert.Equal(140, p.Blue);
+        Assert.Equal(26, p.Red);
     }
 
     [Fact]
     public void Apply_Disabled_LeavesPixelsUnchanged()
     {
         var proc = new ImageAdjustmentProcessor();
-        using var src = SolidBitmap(26, 26, 26);
-        var s = new ImageAdjustmentSettings { Enabled = false, BlackPoint = 200 };
-        using var outp = proc.Apply(src, s);
+        using var src = SolidBitmap(26);
+        using var outp = proc.Apply(src, new ImageAdjustmentSettings { Enabled = false, BlackenBorder = true, BorderThreshold = 200 });
 
-        var p = outp.GetPixel(0, 0);
-        Assert.Equal(26, p.Red); // disabled => no change despite black point
+        Assert.Equal(26, outp.GetPixel(0, 0).Red); // disabled => no change
     }
 
     [Fact]
-    public void Apply_BlackPoint_CrushesDarkGreyToBlack()
+    public void Apply_BlackenBorder_DarkEdgeBecomesBlack_BrightCenterKept()
     {
         var proc = new ImageAdjustmentProcessor();
-        using var src = SolidBitmap(26, 26, 26); // typical Scryfall border grey
-        var s = new ImageAdjustmentSettings { BlackPoint = 40 };
-        using var outp = proc.Apply(src, s);
+        using var src = BorderedBitmap();
+        using var outp = proc.Apply(src, Blacken(64));
 
-        var p = outp.GetPixel(0, 0);
-        Assert.Equal(0, p.Red);
-        Assert.Equal(0, p.Green);
-        Assert.Equal(0, p.Blue);
+        var corner = outp.GetPixel(0, 0);   // in the dark frame
+        var center = outp.GetPixel(10, 10); // bright interior
+        Assert.Equal(0, corner.Red);
+        Assert.Equal(0, corner.Green);
+        Assert.Equal(0, corner.Blue);
+        Assert.True(center.Red > 0, "Bright interior should be untouched");
     }
 
     [Fact]
-    public void Apply_BlackPoint_KeepsBrightPixelNonBlack()
+    public void Apply_BlackenBorder_LeavesIsolatedInteriorDarkSpotUntouched()
     {
-        var proc = new ImageAdjustmentProcessor();
-        using var src = SolidBitmap(200, 200, 200);
-        var s = new ImageAdjustmentSettings { BlackPoint = 40 };
-        using var outp = proc.Apply(src, s);
+        // A dark spot in the middle, surrounded by bright pixels, is NOT connected to the edge through
+        // dark pixels — the flood must not reach it (proves this is border-only, not a global crush).
+        using var src = SolidBitmap(200, 21, 21);
+        using (var canvas = new SKCanvas(src))
+        using (var paint = new SKPaint { Color = new SKColor(20, 20, 20) })
+            canvas.DrawRect(9, 9, 3, 3, paint); // central dark spot, away from all edges
 
-        var p = outp.GetPixel(0, 0);
-        Assert.True(p.Red > 0, "A bright pixel should not be crushed to black");
+        var proc = new ImageAdjustmentProcessor();
+        using var outp = proc.Apply(src, Blacken(64));
+
+        var spot = outp.GetPixel(10, 10);
+        Assert.Equal(20, spot.Red); // unchanged — interior art is preserved
     }
 
     [Fact]
-    public void Apply_PositiveBrightness_IncreasesChannels()
+    public void Apply_BlackenBorder_BrightImageUnchanged()
     {
         var proc = new ImageAdjustmentProcessor();
-        using var src = SolidBitmap(100, 100, 100);
-        var s = new ImageAdjustmentSettings { Brightness = 50 };
-        using var outp = proc.Apply(src, s);
+        using var src = SolidBitmap(200);
+        using var outp = proc.Apply(src, Blacken(64));
 
-        var p = outp.GetPixel(0, 0);
-        Assert.True(p.Red > 100, "Positive brightness should raise channel values");
-    }
-
-    [Fact]
-    public void Apply_FullNegativeSaturation_ProducesGrey()
-    {
-        var proc = new ImageAdjustmentProcessor();
-        using var src = SolidBitmap(200, 50, 50);
-        var s = new ImageAdjustmentSettings { Saturation = -100 };
-        using var outp = proc.Apply(src, s);
-
-        var p = outp.GetPixel(0, 0);
-        Assert.Equal(p.Red, p.Green);
-        Assert.Equal(p.Green, p.Blue); // grayscale => all channels equal
+        Assert.Equal(200, outp.GetPixel(0, 0).Red); // no dark border to fill
     }
 
     [Fact]
@@ -101,7 +105,7 @@ public class ImageAdjustmentProcessorTests
         try
         {
             string input = Path.Combine(tmpDir, "card.png");
-            SaveBitmap(SolidBitmap(100, 100, 100), input);
+            SaveBitmap(SolidBitmap(100), input);
 
             var result = proc.GetAdjustedImage(input, new ImageAdjustmentSettings());
             Assert.Equal(input, result); // no-op returns the original unchanged
@@ -118,9 +122,9 @@ public class ImageAdjustmentProcessorTests
         try
         {
             string input = Path.Combine(tmpDir, "card.png");
-            SaveBitmap(SolidBitmap(26, 26, 26), input);
+            SaveBitmap(BorderedBitmap(), input);
 
-            var s = new ImageAdjustmentSettings { BlackPoint = 40 };
+            var s = Blacken(64);
             var result = proc.GetAdjustedImage(input, s);
 
             Assert.NotNull(result);
@@ -140,7 +144,7 @@ public class ImageAdjustmentProcessorTests
     {
         var proc = new ImageAdjustmentProcessor();
         string fake = Path.Combine(Path.GetTempPath(), $"nope_{Guid.NewGuid():N}.png");
-        var result = proc.GetAdjustedImage(fake, new ImageAdjustmentSettings { BlackPoint = 40 });
+        var result = proc.GetAdjustedImage(fake, Blacken(64));
         Assert.Equal(fake, result);
     }
 

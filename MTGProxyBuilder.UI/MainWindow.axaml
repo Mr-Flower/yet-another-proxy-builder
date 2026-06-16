@@ -14,6 +14,18 @@
         <converters:NullToCollapsedConverter x:Key="NullToCollapsed"/>
         <converters:InverseBoolToVisibilityConverter x:Key="InverseBool"/>
         <converters:FlexibleNumberConverter x:Key="FlexibleNumber"/>
+
+        <!-- Toolbar icons: Material Design Icons vector paths (24x24), monochrome and crisp on every
+             platform — unlike the colour emoji that Linux substitutes for the old glyphs. -->
+        <StreamGeometry x:Key="IconNew">M6,2A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2H6M13,3.5L18.5,9H13V3.5Z</StreamGeometry>
+        <StreamGeometry x:Key="IconOpen">M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21L4,8V18L6.14,10H23.21L20.93,18.5C20.7,19.37 19.92,20 19,20Z</StreamGeometry>
+        <StreamGeometry x:Key="IconSave">M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z</StreamGeometry>
+        <StreamGeometry x:Key="IconUndo">M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z</StreamGeometry>
+        <StreamGeometry x:Key="IconRedo">M18.4,10.6C16.55,9 14.15,8 11.5,8C6.85,8 2.92,11.03 1.54,15.22L3.9,16C4.95,12.81 7.95,10.5 11.5,10.5C13.45,10.5 15.23,11.22 16.62,12.38L13,16H22V7L18.4,10.6Z</StreamGeometry>
+        <StreamGeometry x:Key="IconAddImage">M18,15V18H15V20H18V23H20V20H23V18H20V15H18M13.3,21H4A2,2 0 0,1 2,19V5A2,2 0 0,1 4,3H18A2,2 0 0,1 20,5V13.3C19.4,13.1 18.7,13 18,13A5,5 0 0,0 13,18C13,19.1 13.3,20.1 13.8,21H13.3M14.14,11.86L11.14,15.73L9,13.14L6,17H13.42C13.13,16.36 13,15.69 13,15A5,5 0 0,1 14.14,11.86Z</StreamGeometry>
+        <StreamGeometry x:Key="IconDelete">M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z</StreamGeometry>
+        <StreamGeometry x:Key="IconPalette">M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z</StreamGeometry>
+        <StreamGeometry x:Key="IconSettings">M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z</StreamGeometry>
     </Window.Resources>
 
     <Window.Styles>
@@ -100,15 +112,29 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="1">
-                    <Button Classes="icon" Command="{Binding #Root.DataContext.NewProjectCommand}" Content="🗋" ToolTip.Tip="New Project (Ctrl+N)"/>
-                    <Button Classes="icon" Command="{Binding #Root.DataContext.OpenProjectCommand}" Content="📂" ToolTip.Tip="Open Project (Ctrl+O)"/>
-                    <Button Classes="icon" Command="{Binding SaveProjectCommand}" Content="💾" ToolTip.Tip="Save (Ctrl+S)"/>
+                    <Button Classes="icon" Command="{Binding #Root.DataContext.NewProjectCommand}" ToolTip.Tip="New Project (Ctrl+N)">
+                        <PathIcon Data="{StaticResource IconNew}" Width="17" Height="17" Foreground="#CCC"/>
+                    </Button>
+                    <Button Classes="icon" Command="{Binding #Root.DataContext.OpenProjectCommand}" ToolTip.Tip="Open Project (Ctrl+O)">
+                        <PathIcon Data="{StaticResource IconOpen}" Width="17" Height="17" Foreground="#CCC"/>
+                    </Button>
+                    <Button Classes="icon" Command="{Binding SaveProjectCommand}" ToolTip.Tip="Save (Ctrl+S)">
+                        <PathIcon Data="{StaticResource IconSave}" Width="17" Height="17" Foreground="#CCC"/>
+                    </Button>
                     <Border Width="1" Background="#444" Margin="5,3"/>
-                    <Button Classes="icon" Command="{Binding UndoCommand}" Content="↶" ToolTip.Tip="Undo (Ctrl+Z)"/>
-                    <Button Classes="icon" Command="{Binding RedoCommand}" Content="↷" ToolTip.Tip="Redo (Ctrl+Y)"/>
+                    <Button Classes="icon" Command="{Binding UndoCommand}" ToolTip.Tip="Undo (Ctrl+Z)">
+                        <PathIcon Data="{StaticResource IconUndo}" Width="17" Height="17" Foreground="#CCC"/>
+                    </Button>
+                    <Button Classes="icon" Command="{Binding RedoCommand}" ToolTip.Tip="Redo (Ctrl+Y)">
+                        <PathIcon Data="{StaticResource IconRedo}" Width="17" Height="17" Foreground="#CCC"/>
+                    </Button>
                     <Border Width="1" Background="#444" Margin="5,3"/>
-                    <Button Classes="icon" Command="{Binding AddCardFromFileCommand}" Content="🖼" ToolTip.Tip="Add Card from File"/>
-                    <Button Classes="icon" Command="{Binding ClearAllCardsCommand}" Content="🗑" Foreground="#E06060" ToolTip.Tip="Clear All Cards"/>
+                    <Button Classes="icon" Command="{Binding AddCardFromFileCommand}" ToolTip.Tip="Add Card from File">
+                        <PathIcon Data="{StaticResource IconAddImage}" Width="17" Height="17" Foreground="#CCC"/>
+                    </Button>
+                    <Button Classes="icon" Command="{Binding ClearAllCardsCommand}" ToolTip.Tip="Clear All Cards">
+                        <PathIcon Data="{StaticResource IconDelete}" Width="17" Height="17" Foreground="#E06060"/>
+                    </Button>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0" VerticalAlignment="Center">
@@ -119,8 +145,12 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="1">
-                    <Button Classes="icon" Command="{Binding #Root.DataContext.ManageFrontArtLibraryCommand}" Content="🎨" ToolTip.Tip="Art Library"/>
-                    <Button Classes="icon" Command="{Binding #Root.DataContext.OpenSettingsCommand}" Content="⚙" ToolTip.Tip="Settings"/>
+                    <Button Classes="icon" Command="{Binding #Root.DataContext.ManageFrontArtLibraryCommand}" ToolTip.Tip="Art Library">
+                        <PathIcon Data="{StaticResource IconPalette}" Width="17" Height="17" Foreground="#CCC"/>
+                    </Button>
+                    <Button Classes="icon" Command="{Binding #Root.DataContext.OpenSettingsCommand}" ToolTip.Tip="Settings">
+                        <PathIcon Data="{StaticResource IconSettings}" Width="17" Height="17" Foreground="#CCC"/>
+                    </Button>
                     <Border Width="1" Background="#444" Margin="5,3"/>
                     <Button Theme="{StaticResource AccentBtn}" Command="{Binding ExportPdfCommand}" Content="Export PDF" Margin="4,0" Padding="10,5"/>
                 </StackPanel>
@@ -398,7 +428,7 @@
 
                                 <Button Theme="{StaticResource AccentBtn}"
                                         Command="{Binding AdjustImageCommand}"
-                                        Content="Adjust Image…" Margin="0,0,0,12"
+                                        Content="Blacken Border…" Margin="0,0,0,12"
                                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                         Padding="8,8" FontWeight="SemiBold"/>
 

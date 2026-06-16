@@ -21,43 +21,35 @@ namespace MTGProxyBuilder.Core.Models
         [JsonProperty("autoApplyToScryfall")]
         public bool AutoApplyToScryfall { get; set; }
 
-        /// <summary>-100..100, 0 = unchanged. Additive luminance offset.</summary>
-        [JsonProperty("brightness")]
-        public int Brightness { get; set; }
-
-        /// <summary>-100..100, 0 = unchanged.</summary>
-        [JsonProperty("contrast")]
-        public int Contrast { get; set; }
-
-        /// <summary>-100..100, 0 = unchanged. -100 = grayscale, +100 = doubled saturation.</summary>
-        [JsonProperty("saturation")]
-        public int Saturation { get; set; }
+        /// <summary>
+        /// Force the card's dark border to pure black. Implemented as an edge flood-fill (see
+        /// ImageAdjustmentProcessor): only the dark region connected to the image edges is blackened,
+        /// so grey/grainy scan borders go to #000 while the artwork's own dark areas are left alone.
+        /// </summary>
+        [JsonProperty("blackenBorder")]
+        public bool BlackenBorder { get; set; }
 
         /// <summary>
-        /// 0..255, 0 = unchanged. The "black point": every channel value at or below this
-        /// threshold is pushed to pure black and the remaining range is stretched back up.
-        /// This is what turns Scryfall's dark-grey scan borders into absolute black.
+        /// 0..255 luminance threshold. An edge-connected pixel at or below this brightness counts as
+        /// "border" and is flooded to black; the flood stops at the lighter card frame/art. Higher =
+        /// blackens greyer borders, but risks creeping into the card.
         /// </summary>
-        [JsonProperty("blackPoint")]
-        public int BlackPoint { get; set; }
+        [JsonProperty("borderThreshold")]
+        public int BorderThreshold { get; set; } = 64;
 
         /// <summary>True when applying this would visibly change nothing.</summary>
         [JsonIgnore]
-        public bool IsNoOp =>
-            !Enabled || (Brightness == 0 && Contrast == 0 && Saturation == 0 && BlackPoint == 0);
+        public bool IsNoOp => !Enabled || !BlackenBorder;
 
         public ImageAdjustmentSettings Clone() => new()
         {
             Enabled = Enabled,
             AutoApplyToScryfall = AutoApplyToScryfall,
-            Brightness = Brightness,
-            Contrast = Contrast,
-            Saturation = Saturation,
-            BlackPoint = BlackPoint
+            BlackenBorder = BlackenBorder,
+            BorderThreshold = BorderThreshold
         };
 
         /// <summary>Stable short signature used to name cached adjusted files.</summary>
-        public string Signature() =>
-            $"b{Brightness}_c{Contrast}_s{Saturation}_k{BlackPoint}";
+        public string Signature() => $"bb{(BlackenBorder ? 1 : 0)}_t{BorderThreshold}";
     }
 }

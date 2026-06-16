@@ -74,7 +74,7 @@ namespace MTGProxyBuilder.Core.Services
         }
 
         /// <summary>
-        /// Produces a new bitmap with the adjustments applied. Caller owns the result.
+        /// Produces a new bitmap with the card's border blackened. Caller owns the result.
         /// Used directly by the adjustment dialog for live preview on a downscaled copy.
         /// </summary>
         public SKBitmap Apply(SKBitmap source, ImageAdjustmentSettings settings)
@@ -83,63 +83,60 @@ namespace MTGProxyBuilder.Core.Services
             if (settings.IsNoOp)
                 return result;
 
-            // Precompute the channel transfer pieces once.
-            float brightnessOffset = settings.Brightness / 100f * 255f;     // additive
-            float c = settings.Contrast * 2.55f;                            // -255..255
-            float contrastFactor = (259f * (c + 255f)) / (255f * (259f - c));
-            float satMult = 1f + settings.Saturation / 100f;               // 0..2
-            int blackPoint = Math.Clamp(settings.BlackPoint, 0, 254);
-            float blackScale = blackPoint > 0 ? 255f / (255f - blackPoint) : 1f;
-
-            var pixels = result.Pixels;
-            for (int i = 0; i < pixels.Length; i++)
-            {
-                var px = pixels[i];
-                float r = px.Red;
-                float g = px.Green;
-                float b = px.Blue;
-
-                // 1. Brightness (additive offset)
-                if (brightnessOffset != 0f)
-                {
-                    r += brightnessOffset;
-                    g += brightnessOffset;
-                    b += brightnessOffset;
-                }
-
-                // 2. Contrast (around mid-grey)
-                if (settings.Contrast != 0)
-                {
-                    r = contrastFactor * (r - 128f) + 128f;
-                    g = contrastFactor * (g - 128f) + 128f;
-                    b = contrastFactor * (b - 128f) + 128f;
-                }
-
-                // 3. Saturation (lerp around perceived luminance)
-                if (settings.Saturation != 0)
-                {
-                    float gray = 0.299f * r + 0.587f * g + 0.114f * b;
-                    r = gray + (r - gray) * satMult;
-                    g = gray + (g - gray) * satMult;
-                    b = gray + (b - gray) * satMult;
-                }
-
-                // 4. Black point: crush everything <= threshold to black, stretch the rest.
-                if (blackPoint > 0)
-                {
-                    r = (r - blackPoint) * blackScale;
-                    g = (g - blackPoint) * blackScale;
-                    b = (b - blackPoint) * blackScale;
-                }
-
-                pixels[i] = new SKColor(ClampByte(r), ClampByte(g), ClampByte(b), px.Alpha);
-            }
-
-            result.Pixels = pixels;
+            BlackenBorder(result, Math.Clamp(settings.BorderThreshold, 0, 255));
             return result;
         }
 
-        private static byte ClampByte(float v) =>
-            v <= 0f ? (byte)0 : v >= 255f ? (byte)255 : (byte)(v + 0.5f);
+        /// <summary>
+        /// Floods inward from the four edges over connected pixels whose luminance is at or below
+        /// <paramref name="threshold"/>, setting each to pure black. This blackens only the dark border
+        /// that touches the image edge — it stops at the lighter card frame/art, so dark areas inside the
+        /// artwork (which aren't edge-connected through dark pixels) are left untouched.
+        /// </summary>
+        private static void BlackenBorder(SKBitmap bmp, int threshold)
+        {
+            int w = bmp.Width, h = bmp.Height;
+            if (w == 0 || h == 0) return;
+
+            var px = bmp.Pixels;
+            var visited = new bool[px.Length];
+            var queue = new Queue<int>();
+
+            bool IsBorderDark(int idx)
+            {
+                var c = px[idx];
+                // Rec.601 luma; cheap and matches how the eye weights the channels.
+                float luma = 0.299f * c.Red + 0.587f * c.Green + 0.114f * c.Blue;
+                return luma <= threshold;
+            }
+
+            void Seed(int idx)
+            {
+                if (!visited[idx] && IsBorderDark(idx))
+                {
+                    visited[idx] = true;
+                    queue.Enqueue(idx);
+                }
+            }
+
+            // Seed from every edge pixel.
+            for (int x = 0; x < w; x++) { Seed(x); Seed((h - 1) * w + x); }
+            for (int y = 0; y < h; y++) { Seed(y * w); Seed(y * w + (w - 1)); }
+
+            while (queue.Count > 0)
+            {
+                int idx = queue.Dequeue();
+                int x = idx % w, y = idx / w;
+                var a = px[idx].Alpha;
+                px[idx] = new SKColor(0, 0, 0, a); // pure black, keep alpha
+
+                if (x > 0)     Seed(idx - 1);
+                if (x < w - 1) Seed(idx + 1);
+                if (y > 0)     Seed(idx - w);
+                if (y < h - 1) Seed(idx + w);
+            }
+
+            bmp.Pixels = px;
+        }
     }
 }

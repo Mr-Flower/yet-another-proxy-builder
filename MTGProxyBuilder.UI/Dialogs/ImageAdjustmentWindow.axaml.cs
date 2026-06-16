@@ -11,9 +11,9 @@ using SkiaSharp;
 namespace MTGProxyBuilder.UI.Dialogs;
 
 /// <summary>
-/// Live image-adjustment editor: brightness / contrast / saturation and a black-point
-/// slider that crushes Scryfall's dark-grey scan borders to absolute black. Shows the
-/// original next to a live preview and returns the chosen settings via <see cref="Result"/>.
+/// "Blacken Border" editor: an edge flood-fill that turns a card's grey/grainy scan border into
+/// pure black, with a threshold slider and a live original-vs-result preview. Returns the chosen
+/// settings via <see cref="Result"/>.
 ///
 /// Fork-specific dialog — self-contained, never touched by upstream.
 /// </summary>
@@ -79,29 +79,23 @@ public partial class ImageAdjustmentWindow : Window
     private void ApplySettingsToControls(ImageAdjustmentSettings s)
     {
         AutoApplyCheck.IsChecked = s.AutoApplyToScryfall;
-        BrightnessSlider.Value = s.Brightness;
-        ContrastSlider.Value = s.Contrast;
-        SaturationSlider.Value = s.Saturation;
-        BlackPointSlider.Value = s.BlackPoint;
+        // Pre-check the box for a card that hasn't been adjusted yet (IsNoOp), so the user just clicks Apply.
+        BlackenBorderCheck.IsChecked = s.BlackenBorder || s.IsNoOp;
+        ThresholdSlider.Value = s.BorderThreshold > 0 ? s.BorderThreshold : 64;
         UpdateLabels();
     }
 
     private ImageAdjustmentSettings BuildSettings() => new()
     {
-        Enabled = true, // the adjustment applies whenever the user clicks Apply (no separate toggle)
+        Enabled = true,
         AutoApplyToScryfall = AutoApplyCheck.IsChecked == true,
-        Brightness = (int)BrightnessSlider.Value,
-        Contrast = (int)ContrastSlider.Value,
-        Saturation = (int)SaturationSlider.Value,
-        BlackPoint = (int)BlackPointSlider.Value
+        BlackenBorder = BlackenBorderCheck.IsChecked == true,
+        BorderThreshold = (int)ThresholdSlider.Value
     };
 
     private void UpdateLabels()
     {
-        BrightnessLabel.Text = ((int)BrightnessSlider.Value).ToString();
-        ContrastLabel.Text = ((int)ContrastSlider.Value).ToString();
-        SaturationLabel.Text = ((int)SaturationSlider.Value).ToString();
-        BlackPointLabel.Text = ((int)BlackPointSlider.Value).ToString();
+        ThresholdLabel.Text = ((int)ThresholdSlider.Value).ToString();
     }
 
     private void Refresh()
@@ -133,6 +127,8 @@ public partial class ImageAdjustmentWindow : Window
     // ---- event handlers ----
 
     private void OnSliderChanged(object? sender, RangeBaseValueChangedEventArgs e) => Refresh();
+
+    private void OnToggle(object? sender, RoutedEventArgs e) => Refresh();
 
     private void OnReset(object? sender, RoutedEventArgs e)
     {

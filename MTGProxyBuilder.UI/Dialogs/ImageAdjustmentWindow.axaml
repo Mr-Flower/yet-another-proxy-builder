@@ -1,8 +1,8 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="MTGProxyBuilder.UI.Dialogs.ImageAdjustmentWindow"
-        Title="Adjust Image"
-        Width="760" Height="560" MinWidth="680" MinHeight="500"
+        Title="Blacken Border"
+        Width="760" Height="520" MinWidth="680" MinHeight="460"
         Background="#2D2D30"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
@@ -26,43 +26,22 @@
         <ScrollViewer Grid.Row="0" Grid.Column="1" VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="2">
 
-            <!-- Brightness -->
-            <Grid ColumnDefinitions="*,44">
-                <TextBlock Text="Brightness" Foreground="#CCC" FontSize="12"/>
-                <TextBlock x:Name="BrightnessLabel" Grid.Column="1" Text="0"
-                           Foreground="#999" FontSize="12" TextAlignment="Right"/>
-            </Grid>
-            <Slider x:Name="BrightnessSlider" Minimum="-100" Maximum="100" Value="0"
-                    SmallChange="1" LargeChange="10" ValueChanged="OnSliderChanged" Margin="0,0,0,6"/>
+            <!-- Blacken border -->
+            <CheckBox x:Name="BlackenBorderCheck" Content="Blacken card border"
+                      Foreground="#CCC" FontWeight="SemiBold" Margin="0,0,0,2"
+                      IsCheckedChanged="OnToggle"/>
+            <TextBlock Text="Floods the dark border inward from the image edges to pure black — fixes grey / grainy scan borders. The card art is left untouched."
+                       Foreground="#777" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,12"/>
 
-            <!-- Contrast -->
             <Grid ColumnDefinitions="*,44">
-                <TextBlock Text="Contrast" Foreground="#CCC" FontSize="12"/>
-                <TextBlock x:Name="ContrastLabel" Grid.Column="1" Text="0"
-                           Foreground="#999" FontSize="12" TextAlignment="Right"/>
+                <TextBlock Text="Border threshold" Foreground="#CCC" FontSize="12"/>
+                <TextBlock x:Name="ThresholdLabel" Grid.Column="1" Text="64"
+                           Foreground="#4a9eff" FontSize="12" TextAlignment="Right"/>
             </Grid>
-            <Slider x:Name="ContrastSlider" Minimum="-100" Maximum="100" Value="0"
-                    SmallChange="1" LargeChange="10" ValueChanged="OnSliderChanged" Margin="0,0,0,6"/>
-
-            <!-- Saturation -->
-            <Grid ColumnDefinitions="*,44">
-                <TextBlock Text="Saturation" Foreground="#CCC" FontSize="12"/>
-                <TextBlock x:Name="SaturationLabel" Grid.Column="1" Text="0"
-                           Foreground="#999" FontSize="12" TextAlignment="Right"/>
-            </Grid>
-            <Slider x:Name="SaturationSlider" Minimum="-100" Maximum="100" Value="0"
-                    SmallChange="1" LargeChange="10" ValueChanged="OnSliderChanged" Margin="0,0,0,12"/>
-
-            <!-- Black Threshold -->
-            <Grid ColumnDefinitions="*,44">
-                <TextBlock Text="Black Threshold" Foreground="#CCC" FontSize="12" FontWeight="SemiBold"/>
-                <TextBlock x:Name="BlackPointLabel" Grid.Column="1" Text="0"
-                           Foreground="#4a9eff" FontSize="12" FontWeight="SemiBold" TextAlignment="Right"/>
-            </Grid>
-            <TextBlock Text="Crush every grey below this threshold to pure black (grainy Scryfall scan borders)."
+            <TextBlock Text="How grey still counts as border. Higher blackens more; too high can creep into the card."
                        Foreground="#777" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,2"/>
-            <Slider x:Name="BlackPointSlider" Minimum="0" Maximum="50" Value="0"
-                    SmallChange="1" LargeChange="5" ValueChanged="OnSliderChanged" Margin="0,0,0,12"/>
+            <Slider x:Name="ThresholdSlider" Minimum="0" Maximum="80" Value="64"
+                    SmallChange="1" LargeChange="8" ValueChanged="OnSliderChanged" Margin="0,0,0,12"/>
 
             <Border Height="1" Background="#444" Margin="0,0,0,10"/>
 
