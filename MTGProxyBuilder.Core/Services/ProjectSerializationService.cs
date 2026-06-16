@@ -44,7 +44,7 @@ namespace MTGProxyBuilder.Core.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Save project error: {ex.Message}");
+                Serilog.Log.Error(ex, "Save project error");
                 return false;
             }
         }
@@ -110,7 +110,7 @@ namespace MTGProxyBuilder.Core.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Load project error: {ex.Message}");
+                Serilog.Log.Error(ex, "Load project error");
                 return null;
             }
         }

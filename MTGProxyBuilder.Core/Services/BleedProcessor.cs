@@ -81,7 +81,7 @@ namespace MTGProxyBuilder.Core.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Bleed processing error: {ex.Message}");
+                Serilog.Log.Error(ex, "Bleed processing error");
                 return sourcePath; // Fall back to original
             }
         }
@@ -165,7 +165,7 @@ namespace MTGProxyBuilder.Core.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"MPCFill crop error: {ex.Message}");
+                Serilog.Log.Error(ex, "MPCFill crop error");
                 return null;
             }
         }

@@ -13,6 +13,7 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="PDFsharp" Version="6.1.1" />
+    <PackageReference Include="Serilog" Version="4.*" />
     <!-- SkiaSharp.NativeAssets.Linux.NoDependencies 3.119.4 exists on NuGet but
          its libSkiaSharp.so returns native version 88 at runtime (confirmed by
          diagnostic output). Pin managed SkiaSharp to 2.88.9 (minimum required by

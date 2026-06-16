@@ -60,7 +60,7 @@ namespace MTGProxyBuilder.Core.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Image cache error: {ex.Message}");
+                Serilog.Log.Error(ex, "Image cache error");
                 return null;
             }
         }

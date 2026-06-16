@@ -331,7 +331,7 @@ namespace MTGProxyBuilder.Core.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Art library load error: {ex.Message}");
+                Serilog.Log.Error(ex, "Art library load error");
                 _entries = new();
             }
         }
@@ -347,7 +347,7 @@ namespace MTGProxyBuilder.Core.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Art library save error: {ex.Message}");
+                Serilog.Log.Error(ex, "Art library save error");
             }
         }
     }

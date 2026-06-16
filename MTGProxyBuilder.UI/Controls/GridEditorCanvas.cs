@@ -235,7 +235,7 @@ namespace MTGProxyBuilder.UI.Controls
             try { await RedrawAsync(); }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Canvas redraw error: {ex.Message}");
+                Serilog.Log.Error(ex, "Canvas redraw error");
                 IsRendering = false;
                 RenderProgress = null;
             }

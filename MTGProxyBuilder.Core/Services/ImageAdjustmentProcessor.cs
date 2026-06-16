@@ -68,7 +68,7 @@ namespace MTGProxyBuilder.Core.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Image adjustment error: {ex.Message}");
+                Serilog.Log.Error(ex, "Image adjustment error");
                 return sourcePath; // Fall back to original
             }
         }

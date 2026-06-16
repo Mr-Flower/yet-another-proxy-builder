@@ -15,6 +15,8 @@ namespace MTGProxyBuilder.Core.Services
             {
                 try
                 {
+                    Serilog.Log.Information("PDF export started: {Project} ({Cards} cards) -> {Path}",
+                        project.ProjectName, project.Cards.Count, outputPath);
                     var document = new PdfDocument();
                     document.Info.Title = project.ProjectName;
 
@@ -79,11 +81,12 @@ namespace MTGProxyBuilder.Core.Services
                     }
 
                     document.Save(outputPath);
+                    Serilog.Log.Information("PDF export finished: {Pages} pages -> {Path}", document.PageCount, outputPath);
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"PDF generation error: {ex.Message}");
+                    Serilog.Log.Error(ex, "PDF generation error");
                     return false;
                 }
             });
@@ -437,7 +440,7 @@ namespace MTGProxyBuilder.Core.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error drawing card image: {ex.Message}");
+                Serilog.Log.Error(ex, "Error drawing card image");
                 gfx.DrawRectangle(XPens.Red, x, y, w, h);
             }
         }
