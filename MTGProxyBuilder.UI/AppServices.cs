@@ -20,8 +20,6 @@ public sealed class AppServices
     public PdfGeneratorService Pdf { get; }
     public ScryfallService Scryfall { get; }
     public YgoProDeckService Ygo { get; }
-    public MoxfieldService Moxfield { get; }
-    public ArchidektService Archidekt { get; }
     public DeckImportService DeckImport { get; }
     public MpcFillSourceManager MpcSources { get; }
     public MpcFillService MpcFill { get; }
@@ -40,8 +38,6 @@ public sealed class AppServices
         PdfGeneratorService pdf,
         ScryfallService scryfall,
         YgoProDeckService ygo,
-        MoxfieldService moxfield,
-        ArchidektService archidekt,
         DeckImportService deckImport,
         MpcFillSourceManager mpcSources,
         MpcFillService mpcFill,
@@ -59,8 +55,6 @@ public sealed class AppServices
         Pdf = pdf;
         Scryfall = scryfall;
         Ygo = ygo;
-        Moxfield = moxfield;
-        Archidekt = archidekt;
         DeckImport = deckImport;
         MpcSources = mpcSources;
         MpcFill = mpcFill;

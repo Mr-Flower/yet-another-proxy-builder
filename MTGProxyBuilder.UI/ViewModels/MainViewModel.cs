@@ -66,8 +66,6 @@ public partial class MainViewModel : ViewModelBase
     private readonly ImageCacheService _imageCacheService;
     private BackArtLibraryService _backArtLibraryService;
     private FrontArtLibraryService _frontArtLibraryService;
-    private readonly MoxfieldService _moxfieldService;
-    private readonly ArchidektService _archidektService;
     private readonly DeckImportService _deckImportService;
     private readonly MpcFillService _mpcFillService;
     private readonly MpcFillXmlImportService _mpcXmlImportService;
@@ -154,8 +152,6 @@ public partial class MainViewModel : ViewModelBase
         _updateService = services.UpdateCheck;
         _imageAdjust = services.ImageAdjust;
         _bulkData = services.BulkData;
-        _moxfieldService = services.Moxfield;
-        _archidektService = services.Archidekt;
         _deckImportService = services.DeckImport;
         MpcSourceManager = services.MpcSources;
         _mpcFillService = services.MpcFill;

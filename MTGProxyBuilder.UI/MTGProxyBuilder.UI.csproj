@@ -38,10 +38,4 @@
     <PackageReference Include="Serilog.Sinks.File" Version="6.*" />
   </ItemGroup>
 
-  <!-- Legacy WPF AssemblyInfo (kept on disk, excluded so the SDK auto-generates assembly attributes
-       instead). The rest of the old WPF *.xaml / *.xaml.cs set has been deleted. -->
-  <ItemGroup>
-    <Compile Remove="AssemblyInfo.cs" />
-  </ItemGroup>
-
 </Project>
