@@ -162,6 +162,10 @@ public partial class ArtSelectorWindow : Window
             return;
         }
 
+        // For double-faced cards ("Front // Back") search by the front face name — the combined name
+        // matches nothing on Scryfall/MPCFill. Single-faced cards are unaffected (FrontFaceName == Name).
+        string searchName = _card.FrontFaceName;
+
         var libraryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // 1. Library matches (★ green-bordered tiles, loaded before the online search)
@@ -200,7 +204,7 @@ public partial class ArtSelectorWindow : Window
             var scryfallTask = Task.Run(async () =>
             {
                 // every printing/version of this exact card (disk-cached across opens)
-                try { return await _scryfall.GetAllPrintingsAsync(_card.Name); }
+                try { return await _scryfall.GetAllPrintingsAsync(searchName); }
                 catch { return new List<ScryfallCard>(); }
             });
             var mpcTask = Task.Run(async () =>
@@ -208,8 +212,8 @@ public partial class ArtSelectorWindow : Window
                 try
                 {
                     var (results, _) = await _mpcFill.SearchAsync(
-                        _card.Name, fuzzySearch: false, sourcesOverride: _mpcSourcesOverride, options: mpcOpts);
-                    return results.Where(mc => mc.Name.Contains(_card.Name, StringComparison.OrdinalIgnoreCase)).ToList();
+                        searchName, fuzzySearch: false, sourcesOverride: _mpcSourcesOverride, options: mpcOpts);
+                    return results.Where(mc => mc.Name.Contains(searchName, StringComparison.OrdinalIgnoreCase)).ToList();
                 }
                 catch { return new List<MpcFillCard>(); }
             });
@@ -307,7 +311,7 @@ public partial class ArtSelectorWindow : Window
     private async Task AddLibraryMatchesAsync(HashSet<string> shown, HashSet<string> libraryNames)
     {
         if (_frontArtLibrary == null) return;
-        var libraryMatches = _frontArtLibrary.SearchByCardName(_card.Name);
+        var libraryMatches = _frontArtLibrary.SearchByCardName(_card.FrontFaceName);
         if (libraryMatches.Count == 0) return;
 
         StatusLabel.Text = $"Found {libraryMatches.Count} in library, searching online...";

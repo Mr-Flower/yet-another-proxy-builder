@@ -46,6 +46,29 @@ namespace MTGProxyBuilder.Core.Models
             set { _name = value; OnPropertyChanged(); }
         }
 
+        // Double-faced cards carry a "Front // Back" name. Art searches must use the individual face
+        // name, otherwise the combined string matches nothing on Scryfall/MPCFill. For single-faced
+        // cards both return the full name unchanged.
+        private const string DfcSeparator = " // ";
+        [Newtonsoft.Json.JsonIgnore]
+        public string FrontFaceName
+        {
+            get
+            {
+                int i = _name.IndexOf(DfcSeparator, StringComparison.Ordinal);
+                return i > 0 ? _name[..i] : _name;
+            }
+        }
+        [Newtonsoft.Json.JsonIgnore]
+        public string BackFaceName
+        {
+            get
+            {
+                int i = _name.IndexOf(DfcSeparator, StringComparison.Ordinal);
+                return i > 0 && i + DfcSeparator.Length < _name.Length ? _name[(i + DfcSeparator.Length)..] : _name;
+            }
+        }
+
         public string ArtworkPath
         {
             get => _artworkPath;
