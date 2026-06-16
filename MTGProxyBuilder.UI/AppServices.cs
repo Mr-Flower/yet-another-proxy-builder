@@ -31,6 +31,7 @@ public sealed class AppServices
     public CacheManager CacheManager { get; }
     public UpdateCheckService UpdateCheck { get; }
     public ImageAdjustmentService ImageAdjust { get; }
+    public ScryfallBulkDataService BulkData { get; }
 
     public AppServices(
         AppSettingsService settings,
@@ -49,7 +50,8 @@ public sealed class AppServices
         ImportCoordinator import,
         CacheManager cacheManager,
         UpdateCheckService updateCheck,
-        ImageAdjustmentService imageAdjust)
+        ImageAdjustmentService imageAdjust,
+        ScryfallBulkDataService bulkData)
     {
         Settings = settings;
         ImageCache = imageCache;
@@ -68,6 +70,7 @@ public sealed class AppServices
         CacheManager = cacheManager;
         UpdateCheck = updateCheck;
         ImageAdjust = imageAdjust;
+        BulkData = bulkData;
     }
 }
 
@@ -97,6 +100,7 @@ public static class ServiceRegistration
         services.AddSingleton<CacheManager>();
         services.AddSingleton<UpdateCheckService>();
         services.AddSingleton<ImageAdjustmentService>();
+        services.AddSingleton<ScryfallBulkDataService>();
         services.AddSingleton<AppServices>();
 
         services.AddSingleton<IDialogService, AvaloniaDialogService>();

@@ -150,6 +150,19 @@ public partial class MainViewModel
         try
         {
             PushUndo();
+
+            // Opt-in: validate pasted names against the offline Scryfall bulk index before the import,
+            // so typos are caught up front instead of after a long round of API lookups. Magic only.
+            var unrecognized = new List<string>();
+            if (_appSettings.Settings.UseScryfallBulkData && !IsYuGiOh)
+            {
+                BusyMessage = "Checking card database...";
+                await _bulkData.EnsureLoadedAsync(_appSettings.Settings.BulkDataRefreshDays, m => BusyMessage = m);
+                if (_bulkData.IsLoaded)
+                    unrecognized = deck.Entries.Where(e => _bulkData.FindCard(e.CardName) == null)
+                                               .Select(e => e.CardName).ToList();
+            }
+
             var result = IsYuGiOh
                 ? await _importCoordinator.ImportYuGiOhCardsAsync(
                     deck, Cards, IgnoreDuplicates,
@@ -173,6 +186,13 @@ public partial class MainViewModel
                 ? $"Import cancelled — kept {result.Cards.Count} card(s) fetched so far"
                 : $"Imported {result.Cards.Count} card(s) ({totalAdded} total) from the pasted list";
             if (result.Failed > 0) summary += $"\n{result.Failed} card(s) not found on {(IsYuGiOh ? "YGOPRODeck" : "Scryfall")}";
+            if (unrecognized.Count > 0)
+            {
+                summary += $"\n{unrecognized.Count} name(s) not in the card database (possible typos): "
+                           + string.Join(", ", unrecognized.Take(10));
+                Serilog.Log.Warning("Text import: {Count} unrecognized name(s): {Names}",
+                    unrecognized.Count, string.Join(", ", unrecognized));
+            }
             StatusText = summary;
             await _dialogService.ShowInfoAsync(summary, ct.IsCancellationRequested ? "Import cancelled" : "Import complete");
         }

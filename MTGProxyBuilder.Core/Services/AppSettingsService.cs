@@ -74,6 +74,14 @@ namespace MTGProxyBuilder.Core.Services
         // Sidebar accordion expanded state, keyed by section name. Persists which sections are open.
         [JsonProperty("sidebarSections")]
         public Dictionary<string, bool> SidebarSections { get; set; } = new();
+
+        // Opt-in: download Scryfall's bulk card database for fast offline name validation. Off by
+        // default because the download is hundreds of MB.
+        [JsonProperty("useScryfallBulkData")]
+        public bool UseScryfallBulkData { get; set; }
+
+        [JsonProperty("bulkDataRefreshDays")]
+        public int BulkDataRefreshDays { get; set; } = 1;
     }
 
     public class AppSettingsService

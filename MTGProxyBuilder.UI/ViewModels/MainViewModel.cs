@@ -78,6 +78,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly UpdateCheckService _updateService;
     private readonly AppSettingsService _appSettings;
     private readonly ImageAdjustmentService _imageAdjust; // fork-specific
+    private readonly ScryfallBulkDataService _bulkData;
     private bool _updateAvailable;
     private string _updateMessage = string.Empty;
     private string _updateDownloadUrl = string.Empty;
@@ -152,6 +153,7 @@ public partial class MainViewModel : ViewModelBase
         _cacheManager = services.CacheManager;
         _updateService = services.UpdateCheck;
         _imageAdjust = services.ImageAdjust;
+        _bulkData = services.BulkData;
         _moxfieldService = services.Moxfield;
         _archidektService = services.Archidekt;
         _deckImportService = services.DeckImport;

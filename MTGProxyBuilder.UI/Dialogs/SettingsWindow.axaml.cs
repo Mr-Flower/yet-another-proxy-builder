@@ -32,6 +32,8 @@ public partial class SettingsWindow : Window
         var s = _settingsService.Settings;
 
         UpdateCheckBox.IsChecked = s.CheckForUpdates;
+        UseBulkDataBox.IsChecked = s.UseScryfallBulkData;
+        BulkRefreshDaysBox.Text = s.BulkDataRefreshDays.ToString();
         UseFavoritesCheckBox.IsChecked = s.MpcFillUseFavoritesOnly;
 
         SelectComboByContent(PagePresetBox, s.DefaultPagePreset);
@@ -123,6 +125,8 @@ public partial class SettingsWindow : Window
         var s = _settingsService.Settings;
         s.DefaultPagePreset = GetComboContent(PagePresetBox) ?? "A4";
         s.CheckForUpdates = UpdateCheckBox.IsChecked == true;
+        s.UseScryfallBulkData = UseBulkDataBox.IsChecked == true;
+        if (int.TryParse(BulkRefreshDaysBox.Text, out var bulkDays) && bulkDays > 0) s.BulkDataRefreshDays = bulkDays;
         s.MpcFillUseFavoritesOnly = UseFavoritesCheckBox.IsChecked == true;
 
         if (int.TryParse(MaxSizeBox.Text, out var maxSize) && maxSize > 0) s.MpcFillMaximumSize = maxSize;

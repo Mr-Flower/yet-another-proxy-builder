@@ -91,6 +91,12 @@
                     <CheckBox x:Name="UpdateCheckBox" Content="Check for updates on startup" Margin="0,4,0,0"/>
                     <TextBlock Text="Downloaded artwork is cached for fast previews. The art library is yours to manage — add art to it explicitly from the artwork selector."
                                Foreground="#888" FontSize="10" TextWrapping="Wrap" Margin="0,8,0,0"/>
+
+                    <CheckBox x:Name="UseBulkDataBox" Content="Use Scryfall bulk data for offline name checking" Margin="0,12,0,0"/>
+                    <TextBlock Text="Downloads Scryfall's full card database (hundreds of MB) to validate pasted card names offline before importing. Downloaded on first text import."
+                               Foreground="#888" FontSize="10" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    <TextBlock Text="Refresh database every (days)" Classes="Label" Margin="0,6,0,0"/>
+                    <TextBox x:Name="BulkRefreshDaysBox" Classes="Field" Width="80" HorizontalAlignment="Left"/>
                 </StackPanel>
 
                 <!-- PAGE: Libraries -->
