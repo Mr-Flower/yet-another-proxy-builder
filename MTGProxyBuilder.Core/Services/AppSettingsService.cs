@@ -70,6 +70,10 @@ namespace MTGProxyBuilder.Core.Services
 
         [JsonProperty("backArtLibraryPath")]
         public string? BackArtLibraryPath { get; set; }
+
+        // Sidebar accordion expanded state, keyed by section name. Persists which sections are open.
+        [JsonProperty("sidebarSections")]
+        public Dictionary<string, bool> SidebarSections { get; set; } = new();
     }
 
     public class AppSettingsService

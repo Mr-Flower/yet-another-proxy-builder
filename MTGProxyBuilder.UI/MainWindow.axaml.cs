@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Microsoft.Extensions.DependencyInjection;
+using MTGProxyBuilder.Core.Services;
 using MTGProxyBuilder.Core.Models;
 using MTGProxyBuilder.UI.Controls;
 using MTGProxyBuilder.UI.Services;
@@ -41,7 +44,34 @@ public partial class MainWindow : Window
             };
 
             WireCanvasEvents();
+            WireSidebarPersistence();
         };
+    }
+
+    // Restore each sidebar accordion section's expanded state from settings, and persist on toggle.
+    private void WireSidebarPersistence()
+    {
+        var settings = App.Services.GetService<AppSettingsService>();
+        if (settings == null) return;
+        var dict = settings.Settings.SidebarSections;
+
+        void Wire(Expander exp, string key, bool defaultExpanded)
+        {
+            exp.IsExpanded = dict.TryGetValue(key, out var v) ? v : defaultExpanded;
+            exp.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == Expander.IsExpandedProperty)
+                {
+                    dict[key] = exp.IsExpanded;
+                    settings.Save();
+                }
+            };
+        }
+
+        Wire(SecImport, "Import", false);
+        Wire(SecCard, "Card", true);
+        Wire(SecLayout, "Layout", true);
+        Wire(SecStorage, "Storage", false);
     }
 
     // ================================================================
