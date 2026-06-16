@@ -80,8 +80,9 @@ namespace MTGProxyBuilder.Core.Services
                         SetPageSize(page, settings);
                     }
 
+                    int savedPages = document.PageCount; // read before Save — PdfSharp locks the doc afterwards
                     document.Save(outputPath);
-                    Serilog.Log.Information("PDF export finished: {Pages} pages -> {Path}", document.PageCount, outputPath);
+                    Serilog.Log.Information("PDF export finished: {Pages} pages -> {Path}", savedPages, outputPath);
                     return true;
                 }
                 catch (Exception ex)
