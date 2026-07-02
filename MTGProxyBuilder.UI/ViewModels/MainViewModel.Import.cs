@@ -72,8 +72,15 @@ public partial class MainViewModel
             await _dialogService.ShowWarningAsync(
                 "Unrecognized URL. Paste a deck URL from:\n\n" +
                 "- Moxfield (moxfield.com/decks/...)\n" +
-                "- Archidekt (archidekt.com/decks/...)",
+                "- Archidekt (archidekt.com/decks/...)\n" +
+                "- Piltover Archive (piltoverarchive.com/decks/view/...)",
                 "Invalid URL");
+            return;
+        }
+
+        if (source == DeckSource.PiltoverArchive)
+        {
+            await ImportRiftboundDeckAsync();
             return;
         }
 
@@ -122,6 +129,55 @@ public partial class MainViewModel
                 : $"Imported {result.Cards.Count} unique card(s) ({totalAdded} total) from \"{deck.Name}\" ({sourceName})";
             if (result.SkippedDupes > 0) summary += $"\n{result.SkippedDupes} duplicate(s) skipped";
             if (result.Failed > 0) summary += $"\n{result.Failed} card(s) could not be found on Scryfall";
+            StatusText = summary;
+            await _dialogService.ShowInfoAsync(summary, ct.IsCancellationRequested ? "Import cancelled" : "Import Complete");
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Import failed: {ex.Message}";
+            await _dialogService.ShowErrorAsync($"Import error:\n{ex.Message}", "Error");
+        }
+        finally { ClearBusy(); }
+    }
+
+    // Riftbound deck from Piltover Archive (ported from upstream). Card art comes straight from the
+    // site (official scans), so cards are flagged IsRiftbound and their front art is not swappable.
+    private async Task ImportRiftboundDeckAsync()
+    {
+        var ct = BeginCancellableBusy("Connecting to Piltover Archive...");
+        try
+        {
+            var (fetchedDeck, error) = await _importCoordinator.FetchRiftboundDeckAsync(ImportDeckUrl);
+            if (fetchedDeck is not { } deck || error != null)
+            {
+                ClearBusy();
+                await _dialogService.ShowErrorAsync($"Failed to fetch deck:\n{error}", "Piltover Archive Error");
+                return;
+            }
+
+            PushUndo();
+            var result = await _importCoordinator.ImportRiftboundCardsAsync(
+                deck, onProgress: msg => BusyMessage = msg, ct: ct);
+
+            BusyMessage = $"Adding {result.Cards.Count} cards to project...";
+            await Task.Delay(50);
+
+            Cards.CollectionChanged -= OnCardsCollectionChanged;
+            foreach (var c in result.Cards) { ApplyDefaultBackArt(c); Cards.Add(c); }
+            Cards.CollectionChanged += OnCardsCollectionChanged;
+
+            // Riftbound cards are standard poker size (63 x 88 mm) — auto-switch like upstream does
+            SelectedCardSize = FindCardSizePreset(63f, 88f);
+
+            _currentProject.PageSettings.CenterGrid();
+            ApplyFilterAndSort();
+            if (!ct.IsCancellationRequested) ImportDeckUrl = string.Empty;
+
+            int totalAdded = result.Cards.Sum(c => c.Quantity);
+            string summary = ct.IsCancellationRequested
+                ? $"Import cancelled — kept {result.Cards.Count} card(s) fetched so far"
+                : $"Imported {result.Cards.Count} unique card(s) ({totalAdded} total) from \"{result.DeckName}\" (Piltover Archive)";
+            if (result.Failed > 0) summary += $"\n{result.Failed} card image(s) failed to download";
             StatusText = summary;
             await _dialogService.ShowInfoAsync(summary, ct.IsCancellationRequested ? "Import cancelled" : "Import Complete");
         }

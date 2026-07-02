@@ -18,18 +18,21 @@ namespace MTGProxyBuilder.UI.ViewModels
         private readonly DeckImportService _deckImport;
         private readonly MpcFillXmlImportService _xmlImport;
         private readonly YgoProDeckService _ygo; // fork-specific: Yu-Gi-Oh! source
+        private readonly PiltoverArchiveService _piltoverArchive; // Riftbound source (ported from upstream)
         private readonly MTGProxyBuilder.UI.Services.ImageAdjustmentService _imageAdjust = new(); // fork-specific
 
         public ImportCoordinator(
             SearchCoordinator search,
             DeckImportService deckImport,
             MpcFillXmlImportService xmlImport,
-            YgoProDeckService ygo)
+            YgoProDeckService ygo,
+            PiltoverArchiveService piltoverArchive)
         {
             _search = search;
             _deckImport = deckImport;
             _xmlImport = xmlImport;
             _ygo = ygo;
+            _piltoverArchive = piltoverArchive;
         }
 
         private static readonly HashSet<string> BasicLands = new(StringComparer.OrdinalIgnoreCase)
@@ -316,6 +319,88 @@ namespace MTGProxyBuilder.UI.ViewModels
             var (fuzzy, _) = await _ygo.SearchCardAsync(name, fuzzy: true);
             return fuzzy.FirstOrDefault(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                    ?? fuzzy.FirstOrDefault();
+        }
+
+        // ================================================================
+        //  RIFTBOUND / PILTOVER ARCHIVE IMPORT  — ported from upstream
+        // ================================================================
+
+        public record RiftboundImportResult(
+            List<CardModel> Cards,
+            string DeckName,
+            int Downloaded,
+            int Failed);
+
+        public async Task<(RiftboundDeck? Deck, string? Error)> FetchRiftboundDeckAsync(string url)
+        {
+            return await _piltoverArchive.FetchDeckAsync(url);
+        }
+
+        /// <summary>
+        /// Downloads every card of a Piltover Archive deck (legend, champions, battlefields, runes,
+        /// main deck, sideboard, bench) with its chosen variant art. Unlike upstream (one CardModel per
+        /// physical copy) this fork keeps N copies as ONE CardModel with Quantity=N.
+        /// </summary>
+        public async Task<RiftboundImportResult> ImportRiftboundCardsAsync(
+            RiftboundDeck deck,
+            Action<string>? onProgress = null,
+            CancellationToken ct = default)
+        {
+            var importedCards = new List<CardModel>();
+            int downloaded = 0, failed = 0;
+
+            var allCards = deck.AllCards().ToList();
+
+            for (int i = 0; i < allCards.Count; i++)
+            {
+                if (ct.IsCancellationRequested) break;
+
+                var entry = allCards[i];
+                string cardName = entry.Card.Name;
+
+                onProgress?.Invoke($"Downloading {i + 1}/{allCards.Count}: {cardName}" +
+                    (entry.Quantity > 1 ? $" (x{entry.Quantity})" : "") + "...");
+
+                string? artPath = await _piltoverArchive.DownloadCardImageAsync(entry);
+                if (artPath == null)
+                {
+                    failed++;
+                    continue;
+                }
+
+                string colors = string.Join(", ",
+                    entry.Card.CardColors?.Select(cc => cc.Color.Name) ?? Enumerable.Empty<string>());
+                string tags = string.Join(", ", entry.Card.Tags ?? new List<string>());
+
+                var variant = entry.Card.CardVariants
+                    .FirstOrDefault(v => v.Id == entry.VariantId)
+                    ?? entry.Card.CardVariants.FirstOrDefault();
+
+                var card = new CardModel
+                {
+                    Name = cardName,
+                    ArtworkPath = artPath,
+                    Quantity = entry.Quantity,
+                    IsRiftbound = true,
+                    TypeLine = entry.Card.Super != null
+                        ? $"{entry.Card.Super} {entry.Card.Type}"
+                        : entry.Card.Type,
+                    OracleText = entry.Card.Description,
+                    Rarity = variant?.Rarity ?? string.Empty,
+                    Artist = variant?.Artist ?? string.Empty,
+                    Colors = colors,
+                    Keywords = tags,
+                    CollectorNumber = variant?.VariantNumber ?? string.Empty,
+                    DateAdded = DateTime.Now
+                };
+
+                _imageAdjust.AutoApply(card);
+                importedCards.Add(card);
+                downloaded++;
+                await Task.Delay(50, CancellationToken.None);
+            }
+
+            return new RiftboundImportResult(importedCards, deck.Name, downloaded, failed);
         }
 
         // ================================================================

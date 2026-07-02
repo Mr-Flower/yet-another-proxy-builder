@@ -20,6 +20,8 @@ namespace MTGProxyBuilder.Core.Models
         private bool _isCentering;
         private float _offsetXmm;
         private float _offsetYmm;
+        private float _backOffsetXmm;
+        private float _backOffsetYmm;
 
         public PageLayout()
         {
@@ -132,6 +134,24 @@ namespace MTGProxyBuilder.Core.Models
         {
             get => _offsetYmm;
             set { _offsetYmm = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>
+        /// EXTRA nudge (mm) applied only to BACK pages, on top of OffsetXmm/OffsetYmm. Compensates the
+        /// front-to-back misalignment of duplex printing: print the alignment test, measure how far the
+        /// back targets land from the front ones, and enter the correction here. Simplified port of
+        /// upstream's printer calibration (translation only, no rotation).
+        /// </summary>
+        public float BackOffsetXmm
+        {
+            get => _backOffsetXmm;
+            set { _backOffsetXmm = value; OnPropertyChanged(); }
+        }
+
+        public float BackOffsetYmm
+        {
+            get => _backOffsetYmm;
+            set { _backOffsetYmm = value; OnPropertyChanged(); }
         }
 
         // --- Computed properties ---

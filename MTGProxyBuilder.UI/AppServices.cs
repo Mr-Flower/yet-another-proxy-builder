@@ -87,6 +87,7 @@ public static class ServiceRegistration
         services.AddSingleton<MoxfieldService>();
         services.AddSingleton<ArchidektService>();
         services.AddSingleton<DeckImportService>();
+        services.AddSingleton<PiltoverArchiveService>();
         services.AddSingleton<MpcFillService>();
         services.AddSingleton<MpcFillXmlImportService>();
         services.AddSingleton<SearchCoordinator>();
