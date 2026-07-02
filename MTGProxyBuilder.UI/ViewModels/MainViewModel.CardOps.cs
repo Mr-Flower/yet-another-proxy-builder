@@ -47,6 +47,7 @@ public partial class MainViewModel
         var targets = cardIndices
             .Where(i => i >= 0 && i < Cards.Count)
             .Select(i => Cards[i])
+            .Where(c => !c.IsRiftbound) // Riftbound front art is fixed (official scan)
             .Distinct()
             .ToList();
         if (targets.Count == 0) return;
@@ -201,6 +202,16 @@ public partial class MainViewModel
 
     private async Task ShowArtSelectorAsync(CardModel card, ArtSelectorMode mode)
     {
+        // Riftbound front art is the official Piltover Archive scan — there is no Scryfall/MPCFill
+        // source to swap it with. Back art still goes through the normal selector.
+        if (mode == ArtSelectorMode.Front && card.IsRiftbound)
+        {
+            await _dialogService.ShowInfoAsync(
+                "Riftbound cards use the official scan from Piltover Archive; the front art cannot be changed.",
+                "Riftbound card");
+            return;
+        }
+
         var result = await _dialogService.ShowArtSelectorAsync(
             card, mode, _scryfallService, _mpcFillService, _imageCacheService,
             _backArtLibraryService, Cards.ToList(), GetMpcFillSources(),

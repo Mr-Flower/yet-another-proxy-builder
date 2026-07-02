@@ -33,6 +33,7 @@ namespace MTGProxyBuilder.Core.Models
         private DateTime _dateAdded = DateTime.Now;
         private string _overlayText = string.Empty;
         private CardSource _source = CardSource.Unknown; // fork-specific
+        private bool _isRiftbound;
 
         public string CardId
         {
@@ -104,6 +105,15 @@ namespace MTGProxyBuilder.Core.Models
         {
             get => _includeBack;
             set { _includeBack = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>True for Riftbound cards imported from Piltover Archive. The front art is the
+        /// official scan and cannot be swapped (no Scryfall/MPCFill source for it); the back art
+        /// works normally through the back-art library.</summary>
+        public bool IsRiftbound
+        {
+            get => _isRiftbound;
+            set { _isRiftbound = value; OnPropertyChanged(); }
         }
 
         // --- Scryfall metadata ---
@@ -271,7 +281,8 @@ namespace MTGProxyBuilder.Core.Models
             Keywords = Keywords,
             DateAdded = DateAdded,
             OverlayText = OverlayText,
-            Source = Source
+            Source = Source,
+            IsRiftbound = IsRiftbound
         };
 
         public event PropertyChangedEventHandler? PropertyChanged;

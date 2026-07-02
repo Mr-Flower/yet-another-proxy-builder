@@ -280,7 +280,8 @@ namespace MTGProxyBuilder.Core.Services
                 Toughness = c.Toughness,
                 Loyalty = c.Loyalty,
                 Keywords = c.Keywords,
-                DateAdded = c.DateAdded
+                DateAdded = c.DateAdded,
+                IsRiftbound = c.IsRiftbound
             };
         }
 

@@ -210,6 +210,7 @@ public partial class MainViewModel : ViewModelBase
         AddCardFromFileCommand = new AsyncRelayCommand(() => AddCardFromFileAsync());
         ExportPdfCommand = new AsyncRelayCommand(() => ExportPdfAsync());
         ExportSvgCommand = new AsyncRelayCommand(() => ExportSvgOnlyAsync());
+        ExportAlignmentTestCommand = new AsyncRelayCommand(() => ExportAlignmentTestAsync());
 
         _removeBackArtFromLibraryCmd = new AsyncRelayCommand(() => RemoveBackArtFromLibraryAsync(), () => SelectedBackArt != null);
         RemoveBackArtFromLibraryCommand = _removeBackArtFromLibraryCmd;
@@ -829,6 +830,7 @@ public partial class MainViewModel : ViewModelBase
     public ICommand UnlinkCardCopyCommand { get; } // fork-specific
     public ICommand ExportPdfCommand { get; }
     public ICommand ExportSvgCommand { get; }
+    public ICommand ExportAlignmentTestCommand { get; }
     public ICommand AddBackArtToLibraryCommand { get; }
     public ICommand RemoveBackArtFromLibraryCommand { get; }
     public ICommand ApplyBackArtToSelectedCommand { get; }

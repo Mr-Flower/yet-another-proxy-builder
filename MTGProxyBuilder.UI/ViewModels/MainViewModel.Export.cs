@@ -124,6 +124,43 @@ public partial class MainViewModel
         return swaps;
     }
 
+    // Duplex calibration sheet (ported from upstream): solid front + dashed back targets and rulers;
+    // measure the mismatch against the light and enter it as the Back page offset in the Layout panel.
+    private async Task ExportAlignmentTestAsync()
+    {
+        var path = await _dialogService.PickSaveFileAsync(
+            "Export Alignment Test PDF", "PDF Files (*.pdf)|*.pdf", "alignment_test.pdf");
+        if (path == null) return;
+
+        SetBusy("Generating alignment test...");
+        try
+        {
+            SyncCardsToProject();
+            if (await _pdfGeneratorService.GenerateAlignmentPdfAsync(_currentProject, path))
+            {
+                StatusText = $"Alignment test exported: {Path.GetFileName(path)}";
+                await _dialogService.ShowInfoAsync(
+                    "Alignment test exported!\n\n" +
+                    "1. Print it double-sided (flip on long edge), 100% scale.\n" +
+                    "2. Hold the sheet up to a light.\n" +
+                    "3. Measure how far the dashed (back) targets sit from the solid (front) ones.\n" +
+                    "4. Enter the correction in Layout > Back page offset and re-print to verify.\n\n" + path,
+                    "Export Complete");
+            }
+            else
+            {
+                StatusText = "Alignment test export failed";
+                await _dialogService.ShowErrorAsync("Failed to generate the alignment test PDF.", "Export Failed");
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Alignment test export failed: {ex.Message}";
+            await _dialogService.ShowErrorAsync($"PDF generation error:\n{ex.Message}", "Export Failed");
+        }
+        finally { ClearBusy(); }
+    }
+
     private async Task ExportSvgOnlyAsync()
     {
         var path = await _dialogService.PickSaveFileAsync(

@@ -1,6 +1,6 @@
 namespace MTGProxyBuilder.Core.Services
 {
-    public enum DeckSource { Unknown, Moxfield, Archidekt }
+    public enum DeckSource { Unknown, Moxfield, Archidekt, PiltoverArchive }
 
     public class DeckImportEntry
     {
@@ -39,6 +39,7 @@ namespace MTGProxyBuilder.Core.Services
 
             if (url.Contains("moxfield.com")) return DeckSource.Moxfield;
             if (url.Contains("archidekt.com")) return DeckSource.Archidekt;
+            if (url.Contains("piltoverarchive.com")) return DeckSource.PiltoverArchive;
 
             return DeckSource.Unknown;
         }
@@ -156,6 +157,8 @@ namespace MTGProxyBuilder.Core.Services
                     }, null);
                 }
 
+                // PiltoverArchive is handled by PiltoverArchiveService (different deck model);
+                // callers branch on DetectSource before reaching this method.
                 default:
                     return (null, "Unrecognized URL. Paste a deck URL from Moxfield or Archidekt.");
             }
